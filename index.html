@@ -461,6 +461,8 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 .doc-footer{margin-top:40px;padding-top:16px;border-top:1px solid #ddd;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;font-size:10.5px;color:#666;line-height:1.7}
 .doc-footer b{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;margin-bottom:4px}
 .doc-notes{font-size:12px;color:#444;background:#f8f7f4;padding:14px 16px;border-radius:4px;margin-bottom:20px;border-left:3px solid #f5c400}
+tr[onclick]:hover td { background:var(--yellow-bg); }
+tr[onclick] { transition:background .1s; }
 .doc-notes b{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:6px}
 
 /* ── LOGIN SCREEN ── */
@@ -1347,6 +1349,36 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
   </div>
 </div>
 
+<!-- KONFIGURATOR EDIT MODAL -->
+<div class="overlay" id="konf-edit-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h2>✏ Leistung bearbeiten</h2>
+      <button class="modal-close" onclick="closeModal('konf-edit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ke-edit-id">
+      <input type="hidden" id="ke-edit-kat">
+      <input type="hidden" id="ke-edit-idx">
+      <div class="form-grid">
+        <div class="field form-full"><label>Bezeichnung *</label><input id="ke-label" placeholder="z.B. Google Ads Setup" style="font-size:13px;font-weight:600"></div>
+        <div class="field form-full"><label>Beschreibung</label><textarea id="ke-desc" rows="2" placeholder="Kurze Beschreibung der Leistung"></textarea></div>
+        <div class="field"><label>Preis (€) *</label><input id="ke-preis" type="number" step="0.01" min="0" style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace"></div>
+        <div class="field"><label>Abrechnungsart</label>
+          <select id="ke-typ" style="font-family:'Sora',sans-serif;font-size:13px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="einmalig">Einmalig</option>
+            <option value="monatlich">Monatlich</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('konf-edit-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveKonfEdit()">✓ Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- CONTACT MODAL -->
 <div class="overlay" id="contact-modal">
   <div class="modal">
@@ -2086,7 +2118,7 @@ function renderContacts() {
     const rgs = DB.rechnungen.filter(r=>r.kundeId===c.id);
     const wert = rgs.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
     const lastUpdate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('de-DE') : '–';
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="openContactDetail('${c.id}')">
       <td class="bold"><div style="display:flex;align-items:center;gap:10px">
         ${c.photo
           ? `<img src="${c.photo}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
@@ -2096,11 +2128,11 @@ function renderContacts() {
       </div></td>
       <td><span class="badge ${brancheClass(c.branche)}" style="font-size:9px;padding:2px 7px">${brancheLabel(c.branche)}</span></td>
       <td>${c.plz||'–'}</td>
-      <td>${c.tel?`<a href="tel:${c.tel}" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
+      <td>${c.tel?`<a href="tel:${c.tel}" onclick="event.stopPropagation()" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
       <td>${getBadge(c.status)}</td>
       <td class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
       <td style="color:var(--muted);font-size:11px">${lastUpdate}</td>
-      <td class="actions">
+      <td class="actions" onclick="event.stopPropagation()">
         <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Angebot</button>
         <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal('${c.id}')" title="Erinnerung">🔔</button>
         <button class="btn-ghost btn-sm" onclick="openContactModal('${c.id}')">✏</button>
@@ -2199,16 +2231,16 @@ function renderAngebote() {
   tbody.innerHTML=list.map(a=>{
     const c=DB.contacts.find(x=>x.id===a.kundeId);
     const sum=sumPositions(a.positions);
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="printDoc('angebot','${a.id}')">
       <td class="mono" style="font-weight:600;color:var(--blue)">${a.nr||'–'}</td>
       <td class="bold">${c?.firma||'Unbekannt'}</td>
       <td>${a.betreff}</td>
       <td style="color:var(--muted)">${fmtDate(a.datum)}</td>
       <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td>${getBadge(a.status)}</td>
-      <td class="actions">
+      <td class="actions" onclick="event.stopPropagation()">
         <button class="btn-ghost btn-sm" onclick="angebotToRechnung('${a.id}')">→ Rechnung</button>
-        <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨</button>
+        <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨 PDF</button>
         <button class="btn-ghost btn-sm" onclick="openAngebotModal('${a.id}')">✏</button>
         <button class="btn-danger" onclick="deleteAngebot('${a.id}')">✕</button>
       </td>
@@ -2308,7 +2340,7 @@ function renderRechnungen(){
     const sum=sumPositions(r.positions);
     const isUeber=r.status==='offen-rg'&&r.faellig&&new Date(r.faellig)<new Date();
     if(isUeber&&r.status==='offen-rg'){r.status='ueberfaellig';}
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="printDoc('rechnung','${r.id}')">
       <td class="mono" style="font-weight:600;color:var(--blue)">${r.nr||'–'}</td>
       <td class="bold">${c?.firma||'Unbekannt'}</td>
       <td>${r.betreff}</td>
@@ -2316,9 +2348,9 @@ function renderRechnungen(){
       <td style="color:${isUeber?'var(--red)':'var(--muted)'};font-weight:${isUeber?'600':'400'}">${fmtDate(r.faellig)}</td>
       <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td>${getBadge(r.status)}</td>
-      <td class="actions">
+      <td class="actions" onclick="event.stopPropagation()">
         ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
-        <button class="btn-ghost btn-sm" onclick="printDoc('rechnung','${r.id}')">🖨</button>
+        <button class="btn-ghost btn-sm" onclick="printDoc('rechnung','${r.id}')">🖨 PDF</button>
         <button class="btn-ghost btn-sm" onclick="openRechnungModal('${r.id}')">✏</button>
         <button class="btn-danger" onclick="deleteRechnung('${r.id}')">✕</button>
       </td>
@@ -4365,7 +4397,7 @@ function renderKonfItems(containerId, items) {
     + '<div style="font-size:13px;font-weight:700;color:'+(konfSelected[item.id]?'var(--yellow2)':'var(--ink)')+'">'+fmtEur(item.preis)+'</div>'
     + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">'+item.typ+'</div>'
     + '</div>'
-    + '<button onclick="konfEditPrice(\''+item.id+'\','+item.preis+')" title="Preis bearbeiten" '
+    + '<button onclick="konfEditPrice(\''+item.id+'\')" title="Leistung bearbeiten" '
     + 'style="width:26px;height:26px;border-radius:4px;border:1px solid var(--border);background:var(--paper);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s" '
     + 'onmouseover="this.style.borderColor=\'var(--yellow)\';this.style.color=\'var(--yellow2)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted)\'">✏</button>'
     + '</div>'
@@ -4373,38 +4405,41 @@ function renderKonfItems(containerId, items) {
   ).join('');
 }
 
-function konfEditPrice(id, currentPrice) {
-  // Find item across all categories
-  let found = null;
-  let foundKat = null;
-  let foundIdx = -1;
+function konfEditPrice(id) {
+  let found = null, foundKat = null, foundIdx = -1;
   Object.entries(KONF_LEISTUNGEN).forEach(([kat, items]) => {
-    items.forEach((item, idx) => {
-      if(item.id === id) { found = item; foundKat = kat; foundIdx = idx; }
-    });
+    items.forEach((item, idx) => { if(item.id === id) { found=item; foundKat=kat; foundIdx=idx; } });
   });
   if(!found) return;
 
-  const newLabel = prompt('Bezeichnung:\n(leer lassen um nicht zu ändern)', found.label);
-  if(newLabel === null) return; // cancelled
-  const newPriceStr = prompt('Neuer Preis (€):', found.preis);
-  if(newPriceStr === null) return;
-  const newPrice = parseFloat(newPriceStr);
-  if(isNaN(newPrice)) { alert('Ungültiger Preis.'); return; }
+  // Set values in modal
+  document.getElementById('ke-label').value = found.label || '';
+  document.getElementById('ke-desc').value = found.desc || '';
+  document.getElementById('ke-preis').value = found.preis || 0;
+  document.getElementById('ke-typ').value = found.typ || 'einmalig';
+  document.getElementById('ke-edit-id').value = id;
+  document.getElementById('ke-edit-kat').value = foundKat;
+  document.getElementById('ke-edit-idx').value = foundIdx;
+  document.getElementById('konf-edit-modal').classList.add('open');
+}
 
-  // Update in KONF_LEISTUNGEN
-  if(newLabel.trim()) KONF_LEISTUNGEN[foundKat][foundIdx].label = newLabel.trim();
-  KONF_LEISTUNGEN[foundKat][foundIdx].preis = newPrice;
+function saveKonfEdit() {
+  const id = document.getElementById('ke-edit-id').value;
+  const kat = document.getElementById('ke-edit-kat').value;
+  const idx = parseInt(document.getElementById('ke-edit-idx').value);
+  const label = document.getElementById('ke-label').value.trim();
+  const desc = document.getElementById('ke-desc').value.trim();
+  const preis = parseFloat(document.getElementById('ke-preis').value) || 0;
+  const typ = document.getElementById('ke-typ').value;
+  if(!label) { alert('Bezeichnung darf nicht leer sein.'); return; }
 
-  // Also save to DB.leistungen for persistence
+  KONF_LEISTUNGEN[kat][idx] = { ...KONF_LEISTUNGEN[kat][idx], label, desc, preis, typ };
   if(!DB.leistungen) DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
-  if(DB.leistungen[foundKat] && DB.leistungen[foundKat][foundIdx]) {
-    if(newLabel.trim()) DB.leistungen[foundKat][foundIdx].label = newLabel.trim();
-    DB.leistungen[foundKat][foundIdx].preis = newPrice;
+  if(DB.leistungen[kat] && DB.leistungen[kat][idx]) {
+    DB.leistungen[kat][idx] = { ...DB.leistungen[kat][idx], label, desc, preis, typ };
   }
   save();
-
-  // Re-render
+  closeModal('konf-edit-modal');
   renderKonfItems('konf-google-items',   KONF_LEISTUNGEN.google);
   renderKonfItems('konf-meta-items',     KONF_LEISTUNGEN.meta);
   renderKonfItems('konf-retainer-items', KONF_LEISTUNGEN.retainer);
