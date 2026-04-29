@@ -3361,16 +3361,17 @@ async function sha256(text) {
 
 // Default password hash – "viraloutlaws2024"
 // Change via Einstellungen → Passwort ändern
-const DEFAULT_PW_HASH = 'b2d3e4a1f5c6789012345678901234567890abcdef1234567890abcdef123456';
+const DEFAULT_PW_HASH = '412070269545963ddec8968cdac73cd5d6e761f1a080edb1ba941c37a95a5102';
 
 function getStoredHash() {
   return DB.settings?.pwHash || null;
 }
 
 async function initLogin() {
-  // First time: set default hash
-  if(!DB.settings.pwHash) {
-    DB.settings.pwHash = await sha256('viraloutlaws2024');
+  // Set default hash if not set yet, or if still set to old default
+  const oldDefault = await sha256('viraloutlaws2024');
+  if(!DB.settings.pwHash || DB.settings.pwHash === oldDefault) {
+    DB.settings.pwHash = DEFAULT_PW_HASH;
     save();
   }
   // Check session (stays logged in for 8 hours)
@@ -3392,7 +3393,7 @@ async function doLogin() {
   if(!pw) { errEl.textContent='Bitte Passwort eingeben.'; return; }
 
   const hash = await sha256(pw);
-  const stored = DB.settings?.pwHash || await sha256('viraloutlaws2024');
+  const stored = DB.settings?.pwHash || DEFAULT_PW_HASH;
 
   if(hash === stored) {
     sessionStorage.setItem('vo_auth','ok');
@@ -3424,7 +3425,7 @@ async function changePassword() {
   const current = prompt('Aktuelles Passwort:');
   if(!current) return;
   const currentHash = await sha256(current);
-  const stored = DB.settings?.pwHash || await sha256('viraloutlaws2024');
+  const stored = DB.settings?.pwHash || DEFAULT_PW_HASH;
   if(currentHash !== stored) { alert('❌ Falsches aktuelles Passwort.'); return; }
 
   const newPw = prompt('Neues Passwort (min. 8 Zeichen):');
