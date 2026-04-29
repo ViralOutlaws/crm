@@ -629,13 +629,13 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       </div>
     </div>
 
-    <!-- GOOGLE SHEETS SYNC -->
+    <!-- GOOGLE DRIVE SYNC -->
     <div class="dash-card" style="grid-column:1/-1;border-left:3px solid #0ea271">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div style="width:36px;height:36px;background:#0ea271;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📊</div>
+        <div style="width:36px;height:36px;background:#0ea271;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☁</div>
         <div>
-          <h3 style="margin-bottom:2px">Google Sheets Synchronisierung</h3>
-          <div style="font-size:11px;color:var(--muted)">Alle Daten automatisch in Google Sheets speichern – von jedem Gerät abrufbar</div>
+          <h3 style="margin-bottom:2px">Google Drive Sync</h3>
+          <div style="font-size:11px;color:var(--muted)">Direkt mit Google Drive verbinden – kein Server, kein Umweg</div>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
           <div id="sync-status-dot" style="width:10px;height:10px;border-radius:50%;background:#ccc;flex-shrink:0"></div>
@@ -643,32 +643,28 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:14px">
-        <div class="field">
-          <label>Cloudflare Worker URL</label>
-          <input id="s-gsurl" placeholder="https://vo-crm-sync.DEINNAME.workers.dev" style="font-family:'DM Mono',monospace;font-size:11px">
+      <!-- Not connected state -->
+      <div id="drive-connect-area">
+        <div style="text-align:center;padding:20px 0">
+          <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px">Einmalig mit Google einloggen</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.6">
+            Klicke auf den Button, logge dich mit deinem Google Account ein und erteile Zugriff auf Google Drive. Danach speichert das CRM automatisch – für immer.
+          </div>
+          <button class="btn-yellow" onclick="driveConnect()" style="font-size:14px;padding:12px 28px">
+            🔑 Mit Google Drive verbinden
+          </button>
+          <div style="font-size:10px;color:var(--muted);margin-top:12px">Einmalig · Nur dein Drive · Jederzeit widerrufbar</div>
         </div>
-        <button class="btn-ghost" onclick="testConnection()" style="white-space:nowrap;height:38px">🔌 Verbindung testen</button>
       </div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-        <button class="btn-primary" onclick="syncToSheets()" id="btn-sync-up">☁ Jetzt hochladen</button>
-        <button class="btn-ghost" onclick="loadFromSheets()" id="btn-sync-down">⬇ Von Sheets laden</button>
-        <button class="btn-ghost" onclick="toggleAutoSync()" id="btn-autosync">🔄 Auto-Sync: Aus</button>
-        <button class="btn-ghost" onclick="openUrlInBrowser()" style="color:var(--blue);border-color:var(--blue)">🔗 URL im Browser testen</button>
-      </div>
-
-      <div style="background:var(--bg);border-radius:4px;padding:14px 16px;font-size:11px;line-height:1.9;color:var(--ink2)">
-        <strong style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px">📋 Einrichtung in 5 Schritten</strong>
-        <div>1. Gehe zu <a href="https://script.google.com" target="_blank" style="color:var(--blue)">script.google.com</a> → Neues Projekt</div>
-        <div>2. Code einfügen (aus <strong>apps-script.gs</strong>) → Speichern</div>
-        <div>3. <strong>Bereitstellen → Neue Bereitstellung → Web-App</strong></div>
-        <div>4. Ausführen als: <strong>Ich</strong> · Zugriff: <strong>Jeder</strong> → Bereitstellen → Berechtigungen erteilen</div>
-        <div>5. URL kopieren → oben einfügen → Speichern → Testen</div>
-        <div style="margin-top:10px;padding:10px 12px;background:var(--yellow-bg);border-radius:4px;border-left:3px solid var(--yellow)">
-          <strong style="display:block;margin-bottom:3px">💡 Sync klappt nicht? Beste Lösung:</strong>
-          Lade die CRM-Datei in <a href="https://drive.google.com" target="_blank" style="color:var(--blue)">Google Drive</a> hoch und öffne sie von dort im Browser. Dann funktioniert der Sync direkt ohne Umweg über Proxy-Server.
+      <!-- Connected state -->
+      <div id="drive-connected-area" style="display:none">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn-primary" onclick="driveSave()" id="btn-sync-up">☁ Jetzt speichern</button>
+          <button class="btn-ghost" onclick="driveLoad()" id="btn-sync-down">⬇ Von Drive laden</button>
+          <button class="btn-ghost" onclick="driveDisconnect()" style="color:var(--red);border-color:var(--red)">Trennen</button>
         </div>
+        <div id="drive-file-info" style="font-size:11px;color:var(--muted)"></div>
       </div>
     </div>
   </div>
@@ -1254,9 +1250,9 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 <div id="print-area"></div>
 
 <script>
-// ═══════════════════════════════════════════
+// ==================================================
 // STATE & PERSISTENCE
-// ═══════════════════════════════════════════
+// ==================================================
 let DB = {
   contacts: [], angebote: [], rechnungen: [], wiedervorlagen: [],
   settings: { name:'Viral Outlaws', inhaber:'', str:'', plz:'87780 Woringen', tel:'', email:'kim@viraloutlaws.de', web:'viraloutlaws.de', steuer:'', ust:'', iban:'', bic:'', bank:'', mwst:'19', zahlung:'14', footer:'Vielen Dank für Ihr Vertrauen!' },
@@ -1273,9 +1269,9 @@ function save() { try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } ca
 
 load();
 
-// ═══════════════════════════════════════════
+// ==================================================
 // NAVIGATION
-// ═══════════════════════════════════════════
+// ==================================================
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1292,9 +1288,9 @@ function showPage(id) {
   if(id==='ziele') renderZiele();
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // UTILS
-// ═══════════════════════════════════════════
+// ==================================================
 function fmtEur(n) { return Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
 function fmtDate(d) { if(!d) return '–'; try { return new Date(d).toLocaleDateString('de-DE'); } catch(e) { return d; } }
 function today() { return new Date().toISOString().split('T')[0]; }
@@ -1319,9 +1315,9 @@ function getBadge(status) {
 function getMwst() { return parseFloat(DB.settings.mwst||19)/100; }
 function getZahlung() { return parseInt(DB.settings.zahlung||14); }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // POSITIONS
-// ═══════════════════════════════════════════
+// ==================================================
 function addPosition(containerId, prefix) {
   const c = document.getElementById(containerId);
   const posid = uid();
@@ -1428,9 +1424,9 @@ function sumPositions(positions) {
   return { netto, mwst, brutto: netto+mwst };
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // CONTACTS
-// ═══════════════════════════════════════════
+// ==================================================
 function openContactModal(id) {
   editId = id || null;
   const c = id ? DB.contacts.find(x=>x.id===id) : null;
@@ -1553,9 +1549,9 @@ function populateKundenSelect(selId) {
   if(cur) sel.value = cur;
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // ANGEBOTE
-// ═══════════════════════════════════════════
+// ==================================================
 function openAngebotModal(id) {
   editId = id||null;
   populateKundenSelect('a-kunde');
@@ -1659,9 +1655,9 @@ function angebotToRechnung(aid) {
   },150);
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // RECHNUNGEN
-// ═══════════════════════════════════════════
+// ==================================================
 function openRechnungModal(id) {
   editId=id||null;
   populateKundenSelect('r-kunde');
@@ -1754,9 +1750,9 @@ function renderRechnungen(){
   }).join('');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // PRINT / PDF
-// ═══════════════════════════════════════════
+// ==================================================
 function printDoc(type, id) {
   const s = DB.settings;
   const isAngebot = type === 'angebot';
@@ -1901,9 +1897,9 @@ function printDoc(type, id) {
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // DASHBOARD
-// ═══════════════════════════════════════════
+// ==================================================
 let activityLog = [];
 function addActivity(text, color) {
   activityLog.unshift({ text, color: color||'blue', time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) });
@@ -1965,12 +1961,12 @@ function renderDashboard() {
     </div>`).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">Noch keine Aktivitäten</div>';
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // SETTINGS
-// ═══════════════════════════════════════════
+// ==================================================
 function loadSettings() {
   const s=DB.settings;
-  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer','gsurl'].forEach(k=>{
+  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer'].forEach(k=>{
     const el=document.getElementById('s-'+k); if(el) el.value=s[k]||'';
   });
   const ku=document.getElementById('s-kleinunternehmer');
@@ -1991,7 +1987,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer','gsurl'].forEach(k=>{
+  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer'].forEach(k=>{
     const el=document.getElementById('s-'+k); if(el) DB.settings[k]=el.value;
   });
   const ku=document.getElementById('s-kleinunternehmer');
@@ -2032,188 +2028,250 @@ function handleImport(e) {
   reader.readAsText(file);
 }
 
-// ═══════════════════════════════════════════
-// GOOGLE SHEETS SYNC
-// ═══════════════════════════════════════════
-let autoSyncEnabled = false;
-let autoSyncTimer = null;
+// ==================================================
+// ==================================================
+// GOOGLE DRIVE SYNC (OAuth via GIS + Drive API)
+// ==================================================
+const DRIVE_CLIENT_ID = ''; // Set via Settings
+const DRIVE_FILE_NAME = 'ViralOutlaws_CRM_Data.json';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
-function getGsUrl() { return (DB.settings.gsurl||'').trim(); }
+let _driveToken = null;
+let _driveFileId = null;
+let _driveConnected = false;
+
+// Load saved token from localStorage
+function driveLoadToken() {
+  try {
+    const t = localStorage.getItem('vo_drive_token');
+    const fi = localStorage.getItem('vo_drive_file_id');
+    if(t) { _driveToken = t; _driveFileId = fi||null; _driveConnected = true; driveUpdateUI(); }
+  } catch(e){}
+}
+
+function driveSaveToken(token, fileId) {
+  _driveToken = token; _driveFileId = fileId||null; _driveConnected = true;
+  try { localStorage.setItem('vo_drive_token', token); if(fileId) localStorage.setItem('vo_drive_file_id', fileId); } catch(e){}
+  driveUpdateUI();
+}
+
+function driveUpdateUI() {
+  const ca = document.getElementById('drive-connect-area');
+  const cd = document.getElementById('drive-connected-area');
+  const dot = document.getElementById('sync-status-dot');
+  const txt = document.getElementById('sync-status-txt');
+  if(_driveConnected) {
+    if(ca) ca.style.display='none';
+    if(cd) cd.style.display='block';
+    if(dot) dot.style.background='#1f9e5a';
+    if(txt) txt.textContent='Verbunden mit Google Drive';
+  } else {
+    if(ca) ca.style.display='block';
+    if(cd) cd.style.display='none';
+    if(dot) dot.style.background='#ccc';
+    if(txt) txt.textContent='Nicht verbunden';
+  }
+}
 
 function setSyncStatus(state) {
   const dot = document.getElementById('sync-status-dot');
   const txt = document.getElementById('sync-status-txt');
   if(!dot||!txt) return;
-  const map = {
-    connected:  { color:'#1f9e5a', text:'Verbunden' },
-    syncing:    { color:'#f5c400', text:'Synchronisiert…' },
-    error:      { color:'#d63030', text:'Fehler – URL prüfen' },
-    offline:    { color:'#ccc',    text:'Nicht verbunden' },
-    saved:      { color:'#1f9e5a', text:'Gespeichert ✓' },
-  };
-  const s = map[state]||map.offline;
-  dot.style.background = s.color;
-  txt.textContent = s.text;
+  const map = { connected:{color:'#1f9e5a',text:'Verbunden'}, syncing:{color:'#f5c400',text:'Speichert…'}, error:{color:'#d63030',text:'Fehler'}, offline:{color:'#ccc',text:'Nicht verbunden'}, saved:{color:'#1f9e5a',text:'Gespeichert ✓'} };
+  const s=map[state]||map.offline; dot.style.background=s.color; txt.textContent=s.text;
 }
 
-async function gsRequest(action, payload) {
-  const url = getGsUrl();
-  if(!url) throw new Error('Keine URL konfiguriert');
-  // POST to Cloudflare Worker (handles CORS)
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, payload: payload||{} }),
-    signal: AbortSignal.timeout(25000),
-  });
-  if(!r.ok) throw new Error('HTTP ' + r.status);
-  return await r.json();
-}
-
-
-function parseGsResponse(raw) {
-  if(typeof raw === 'object') return raw;
-  const text = String(raw).trim();
-  // Strip JSONP: callback({...}) or callback([...])
-  const stripped = text.replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
-  return JSON.parse(stripped || text);
-}
-
-async function testConnection() {
-  const url = getGsUrl();
-  if(!url) { alert('Bitte zuerst die Apps Script URL eintragen und Einstellungen speichern.'); return; }
-  setSyncStatus('syncing');
-  try {
-    const r = await gsRequest('ping', {});
-    if(r.ok) { setSyncStatus('connected'); alert('✅ Verbindung erfolgreich! Google Sheets ist bereit.'); }
-    else throw new Error(r.error||'Unbekannter Fehler');
-  } catch(e) { setSyncStatus('error'); alert('❌ Verbindung fehlgeschlagen:\n' + e.message + '\n\nBitte prüfe die URL und ob die Web-App korrekt bereitgestellt wurde.'); }
-}
-
-function setAutoSaveIndicator(state) {
-  const dot = document.getElementById('autosave-dot');
-  const txt = document.getElementById('autosave-txt');
-  if(!dot||!txt) return;
-  if(state==='saving') {
-    dot.style.background='#f5c400'; txt.textContent='Speichert…';
-  } else if(state==='saved') {
-    dot.style.background='#1f9e5a'; txt.textContent='Gesichert ✓';
-    setTimeout(()=>{ dot.style.background='rgba(255,255,255,.2)'; txt.textContent=''; }, 3000);
-  } else if(state==='error') {
-    dot.style.background='#d63030'; txt.textContent='Sync fehlgeschlagen';
-    setTimeout(()=>{ dot.style.background='rgba(255,255,255,.2)'; txt.textContent=''; }, 5000);
+function driveConnect() {
+  const clientId = DB.settings.driveClientId || '';
+  if(!clientId) {
+    const id = prompt(
+      'Einmalige Einrichtung (1 Minute):\n\n' +
+      '1. console.cloud.google.com\n' +
+      '2. Neues Projekt: "VO CRM"\n' +
+      '3. APIs & Dienste > Google Drive API aktivieren\n' +
+      '4. Anmeldedaten > OAuth 2.0-Client-ID\n' +
+      '   Typ: Webanwendung\n' +
+      '   JS-Quellen: https://crm.viraloutlaws.de\n' +
+      '5. Client-ID hier einfuegen:\n'
+    );
+    if(!id || !id.includes('.apps.googleusercontent.com')) {
+      alert('Ungueltige Client-ID. Muss auf .apps.googleusercontent.com enden.');
+      return;
+    }
+    DB.settings.driveClientId = id.trim();
+    save();
   }
+  driveOAuth();
 }
 
-async function syncToSheets(silent=false) {
-  const url = getGsUrl();
-  if(!url) {
-    if(!silent) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); }
-    return;
+function driveOAuth() {
+  const clientId = DB.settings.driveClientId;
+  if(!clientId) { driveConnect(); return; }
+
+  // Open Google OAuth popup
+  const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+  const scope = encodeURIComponent(DRIVE_SCOPE);
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=consent`;
+
+  const popup = window.open(url, 'google-auth', 'width=500,height=600,left=200,top=100');
+
+  // Listen for token in URL hash when popup redirects back
+  const interval = setInterval(() => {
+    try {
+      if(!popup || popup.closed) { clearInterval(interval); return; }
+      const hash = popup.location.hash;
+      if(hash && hash.includes('access_token')) {
+        clearInterval(interval);
+        popup.close();
+        const params = new URLSearchParams(hash.slice(1));
+        const token = params.get('access_token');
+        if(token) {
+          driveSaveToken(token, null);
+          alert('✅ Google Drive verbunden! Klicke jetzt auf "☁ Jetzt speichern".');
+        }
+      }
+    } catch(e) {} // cross-origin error before redirect – normal
+  }, 500);
+
+  setTimeout(() => clearInterval(interval), 120000);
+}
+
+function driveDisconnect() {
+  _driveToken=null; _driveFileId=null; _driveConnected=false;
+  try { localStorage.removeItem('vo_drive_token'); localStorage.removeItem('vo_drive_file_id'); } catch(e){}
+  driveUpdateUI();
+}
+
+async function driveSave(silent=false) {
+  if(!_driveConnected || !_driveToken) {
+    if(!silent) { driveConnect(); } return;
   }
   setSyncStatus('syncing');
   setAutoSaveIndicator('saving');
-  const btn = document.getElementById('btn-sync-up');
-  if(btn&&!silent) { btn.disabled=true; btn.textContent='☁ Wird hochgeladen…'; }
+  const btn=document.getElementById('btn-sync-up');
+  if(btn&&!silent){btn.disabled=true;btn.textContent='☁ Wird gespeichert…';}
   try {
-    const r = await gsRequest('save', { data: JSON.stringify(DB) });
-    if(r.ok) {
-      setSyncStatus('saved');
-      setAutoSaveIndicator('saved');
-      DB.settings.lastSync = new Date().toISOString();
-      localStorage.setItem('vo_crm', JSON.stringify(DB)); // save without triggering another sync
-      if(btn&&!silent) { btn.textContent='✅ Hochgeladen'; setTimeout(()=>{ btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; },2000); }
-    } else throw new Error(r.error||'Fehler beim Speichern');
+    const data = JSON.stringify(DB);
+    const blob = new Blob([data], {type:'application/json'});
+
+    let resp;
+    if(_driveFileId) {
+      // Update existing file
+      resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${_driveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Authorization': 'Bearer '+_driveToken, 'Content-Type': 'application/json' },
+        body: data,
+      });
+    } else {
+      // Create new file
+      const meta = JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: 'application/json' });
+      const form = new FormData();
+      form.append('metadata', new Blob([meta], {type:'application/json'}));
+      form.append('file', blob);
+      resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer '+_driveToken },
+        body: form,
+      });
+    }
+
+    if(resp.status === 401) {
+      // Token expired – reconnect
+      _driveToken=null; _driveConnected=false;
+      localStorage.removeItem('vo_drive_token');
+      driveUpdateUI();
+      if(!silent) { alert('Google Drive Session abgelaufen. Bitte erneut verbinden.'); driveOAuth(); }
+      return;
+    }
+
+    if(!resp.ok) throw new Error('Drive API HTTP ' + resp.status);
+
+    const result = await resp.json();
+    if(result.id) {
+      _driveFileId = result.id;
+      localStorage.setItem('vo_drive_file_id', result.id);
+    }
+    DB.settings.lastSync = new Date().toISOString();
+    localStorage.setItem('vo_crm', JSON.stringify(DB));
+    setSyncStatus('saved');
+    setAutoSaveIndicator('saved');
+    const fi=document.getElementById('drive-file-info');
+    if(fi) fi.textContent='Zuletzt gespeichert: '+new Date().toLocaleTimeString('de-DE');
+    if(btn&&!silent){btn.textContent='✅ Gespeichert';setTimeout(()=>{btn.disabled=false;btn.textContent='☁ Jetzt speichern';},2000);}
   } catch(e) {
     setSyncStatus('error');
     setAutoSaveIndicator('error');
-    if(btn&&!silent) { btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; }
-    if(!silent) alert('❌ Sync fehlgeschlagen:\n' + e.message);
+    if(btn&&!silent){btn.disabled=false;btn.textContent='☁ Jetzt speichern';}
+    if(!silent) alert('❌ Speichern fehlgeschlagen:\n'+e.message);
   }
 }
 
-async function loadFromSheets() {
-  const url = getGsUrl();
-  if(!url) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); return; }
-  if(!confirm('Alle lokalen Daten werden mit den Daten aus Google Sheets überschrieben. Fortfahren?')) return;
+async function driveLoad() {
+  if(!_driveConnected||!_driveToken){driveConnect();return;}
+  if(!confirm('Alle lokalen Daten mit Google Drive Daten überschreiben?')) return;
   setSyncStatus('syncing');
-  const btn = document.getElementById('btn-sync-down');
-  if(btn) { btn.disabled=true; btn.textContent='⬇ Wird geladen…'; }
+  const btn=document.getElementById('btn-sync-down');
+  if(btn){btn.disabled=true;btn.textContent='⬇ Wird geladen…';}
   try {
-    const r = await gsRequest('load', {});
-    if(r.ok && r.data) {
-      const loaded = JSON.parse(r.data);
-      DB = Object.assign(DB, loaded);
-      save();
-      setSyncStatus('connected');
-      if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
-      alert('✅ Daten erfolgreich aus Google Sheets geladen!');
-      location.reload();
-    } else if(r.ok && !r.data) {
-      setSyncStatus('connected');
-      if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
-      alert('ℹ️ Noch keine Daten in Google Sheets vorhanden. Lade zuerst die aktuellen Daten hoch.');
-    } else throw new Error(r.error||'Fehler beim Laden');
+    // Find file by name if no ID
+    if(!_driveFileId) {
+      const search = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'&fields=files(id,name)`, {
+        headers:{'Authorization':'Bearer '+_driveToken}
+      });
+      const {files} = await search.json();
+      if(!files||!files.length) { alert('Keine gespeicherten Daten in Google Drive gefunden.'); if(btn){btn.disabled=false;btn.textContent='⬇ Von Drive laden';} return; }
+      _driveFileId = files[0].id;
+      localStorage.setItem('vo_drive_file_id', _driveFileId);
+    }
+    const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${_driveFileId}?alt=media`, {
+      headers:{'Authorization':'Bearer '+_driveToken}
+    });
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const loaded = await resp.json();
+    DB = Object.assign(DB, loaded);
+    localStorage.setItem('vo_crm', JSON.stringify(DB));
+    setSyncStatus('connected');
+    if(btn){btn.disabled=false;btn.textContent='⬇ Von Drive laden';}
+    alert('✅ Daten erfolgreich aus Google Drive geladen!');
+    location.reload();
   } catch(e) {
     setSyncStatus('error');
-    if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
-    alert('❌ Laden fehlgeschlagen:\n' + e.message);
+    if(btn){btn.disabled=false;btn.textContent='⬇ Von Drive laden';}
+    alert('❌ Laden fehlgeschlagen:\n'+e.message);
   }
 }
 
-function openUrlInBrowser() {
-  const url = getGsUrl();
-  if(!url) { alert('Bitte zuerst die URL eintragen.'); return; }
-  const testUrl = url + '?action=ping';
-  window.open(testUrl, '_blank');
-  setTimeout(()=>{
-    alert('Ein neuer Tab wurde geöffnet.\n\nDu solltest folgendes sehen:\n{"ok":true,"message":"Viral Outlaws CRM aktiv ✓",...}\n\nFalls du das siehst → Verbindung ist OK, dann nochmal "Jetzt hochladen" versuchen.\nFalls du eine Fehlermeldung siehst → Bereitstellung in Apps Script prüfen.');
-  }, 500);
+// Stubs für alte Funktionen (werden nicht mehr gebraucht aber verhindern Fehler)
+function getGsUrl() { return ''; }
+async function syncToSheets(silent=false) { return driveSave(silent); }
+async function loadFromSheets() { return driveLoad(); }
+async function testConnection() { alert('Nutze Google Drive – kein separater Test nötig.'); }
+function toggleAutoSync() {}
+function openUrlInBrowser() {}
+
+function setAutoSaveIndicator(state) {
+  const dot=document.getElementById('autosave-dot');
+  const txt=document.getElementById('autosave-txt');
+  if(!dot||!txt) return;
+  if(state==='saving'){dot.style.background='#f5c400';txt.textContent='Speichert…';}
+  else if(state==='saved'){dot.style.background='#1f9e5a';txt.textContent='Gesichert ✓';setTimeout(()=>{dot.style.background='rgba(255,255,255,.2)';txt.textContent='';},3000);}
+  else if(state==='error'){dot.style.background='#d63030';txt.textContent='Sync fehlgeschlagen';setTimeout(()=>{dot.style.background='rgba(255,255,255,.2)';txt.textContent='';},5000);}
 }
 
-function toggleAutoSync() {
-  autoSyncEnabled = !autoSyncEnabled;
-  const btn = document.getElementById('btn-autosync');
-  if(autoSyncEnabled) {
-    btn.textContent = '🔄 Auto-Sync: An (5 min)';
-    btn.style.background = 'var(--green-bg)';
-    btn.style.borderColor = 'var(--green)';
-    btn.style.color = 'var(--green)';
-    autoSyncTimer = setInterval(() => { if(getGsUrl()) syncToSheets(); }, 5 * 60 * 1000);
-  } else {
-    btn.textContent = '🔄 Auto-Sync: Aus';
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    clearInterval(autoSyncTimer);
-  }
-}
-
-// patch save() to also auto-sync if enabled
+// patch save() – auto-sync to Drive 4s after every change
 const _origSave = save;
 function save() {
   try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
-  // Silent debounced sync – fires 4 seconds after last save() call
-  // This means every contact, invoice, note etc. auto-syncs without any manual action
-  if(getGsUrl()) {
+  if(_driveConnected && _driveToken) {
     clearTimeout(window._autoSyncDebounce);
-    window._autoSyncDebounce = setTimeout(() => {
-      syncToSheets(true).catch(()=>{}); // silent – no error popup
-    }, 4000);
-  }
-}
-// override global save with auto-sync awareness
-window._saveAndMaybeSync = function() {
-  save();
-  if(autoSyncEnabled && getGsUrl()) {
-    clearTimeout(window._syncDebounce);
-    window._syncDebounce = setTimeout(syncToSheets, 3000);
+    window._autoSyncDebounce = setTimeout(() => driveSave(true).catch(()=>{}), 4000);
   }
 }
 
-// ═══════════════════════════════════════════
+
+// ==================================================
 // WIEDERVORLAGEN / ERINNERUNGEN
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.wiedervorlagen) DB.wiedervorlagen = [];
 
 function openWiedervorlageModal(contactId, wvId) {
@@ -2337,9 +2395,9 @@ function renderTodoSection() {
   }
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // E-MAIL VORLAGEN
-// ═══════════════════════════════════════════
+// ==================================================
 let currentEmailTab = 'erstkontakt';
 
 const EMAIL_TEMPLATES = {
@@ -2489,9 +2547,9 @@ document.querySelectorAll('.overlay').forEach(o=>{
   });
 });
 
-// ═══════════════════════════════════════════
+// ==================================================
 // KALENDER
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.kalEvents) DB.kalEvents = [];
 
 let kalYear  = new Date().getFullYear();
@@ -2820,9 +2878,9 @@ function deleteKalEvent(id) {
   save(); closeModal('kal-event-modal'); renderKalender();
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // DARK MODE
-// ═══════════════════════════════════════════
+// ==================================================
 function toggleDarkMode() {
   document.body.classList.toggle('dark-mode');
   const isDark = document.body.classList.contains('dark-mode');
@@ -2831,9 +2889,9 @@ function toggleDarkMode() {
 }
 try { if(localStorage.getItem('vo_darkmode')==='1'){ document.body.classList.add('dark-mode'); setTimeout(()=>{const b=document.getElementById('dark-toggle');if(b)b.textContent='☀';},0); } } catch(e){}
 
-// ═══════════════════════════════════════════
+// ==================================================
 // RETAINER TRACKER
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.retainer) DB.retainer = [];
 
 function openRetainerModal(id) {
@@ -2896,9 +2954,9 @@ function renderRetainerTable() {
   }).join('');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // ZIELE & FORTSCHRITT
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.ziele) DB.ziele = { mrrZiel:4500, kundenZiel:15, kundenDatum:'', meilensteine:[] };
 
 function saveZiele() {
@@ -2967,9 +3025,9 @@ function deleteMeilenstein(id) {
   save(); renderMeilensteine();
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // KANBAN / AUFGABEN
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.kanban) DB.kanban = [];
 
 function openKanbanTaskModal(id) {
@@ -3056,9 +3114,9 @@ function renderKanban() {
   }).join('');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // KONTAKT-BILD & LOGO-UPLOAD
-// ═══════════════════════════════════════════
+// ==================================================
 function setupContactPhotoUpload() {
   const inp = document.getElementById('c-photo-input');
   if(!inp) return;
@@ -3092,9 +3150,9 @@ function setupLogoUpload() {
   };
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // GLOBAL SEARCH
-// ═══════════════════════════════════════════
+// ==================================================
 let _gsSelectedIdx=-1, _gsResults=[];
 
 document.addEventListener('keydown', e=>{
@@ -3156,9 +3214,9 @@ function gsKeyNav(e){
   if(_gsSelectedIdx>=0) items[_gsSelectedIdx]?.scrollIntoView({block:'nearest'});
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // FLOATING ACTION BUTTON
-// ═══════════════════════════════════════════
+// ==================================================
 function toggleFab(){
   document.getElementById('fab-main').classList.toggle('open');
   document.getElementById('fab-menu').classList.toggle('open');
@@ -3172,9 +3230,9 @@ document.addEventListener('click',e=>{
   if(fab&&!fab.contains(e.target)) closeFab();
 });
 
-// ═══════════════════════════════════════════
+// ==================================================
 // MINI CALENDAR (DASHBOARD)
-// ═══════════════════════════════════════════
+// ==================================================
 let miniCalYear=new Date().getFullYear(), miniCalMonth=new Date().getMonth();
 function miniCalPrev(){miniCalMonth--;if(miniCalMonth<0){miniCalMonth=11;miniCalYear--;}renderMiniCal();}
 function miniCalNext(){miniCalMonth++;if(miniCalMonth>11){miniCalMonth=0;miniCalYear++;}renderMiniCal();}
@@ -3221,9 +3279,9 @@ function renderDashCalEvents(){
   }).join('');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // SUMMARY STRIPS
-// ═══════════════════════════════════════════
+// ==================================================
 function renderAngeboteSummary(){
   const el=document.getElementById('angebote-summary');
   if(!el) return;
@@ -3256,9 +3314,9 @@ function renderRechnungenSummary(){
     ${s.sub?`<div style="font-size:11px;color:${s.color};font-weight:600;margin-top:3px">${s.sub}</div>`:''}</div>`).join('');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // MONATSBERICHT
-// ═══════════════════════════════════════════
+// ==================================================
 function exportMonatsbericht(){
   const now=new Date(), year=now.getFullYear(), month=now.getMonth();
   const monthName=KAL_MONTHS[month];
@@ -3291,9 +3349,9 @@ function exportMonatsbericht(){
   window.print();
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // LOGIN / AUTH
-// ═══════════════════════════════════════════
+// ==================================================
 
 // SHA-256 hash helper (Web Crypto API – built into all browsers)
 async function sha256(text) {
@@ -3380,9 +3438,9 @@ async function changePassword() {
   alert('✅ Passwort erfolgreich geändert!');
 }
 
-// ═══════════════════════════════════════════
+// ==================================================
 // INIT
-// ═══════════════════════════════════════════
+// ==================================================
 if(!DB.kalEvents) DB.kalEvents=[];
 if(!DB.kanban) DB.kanban=[];
 if(!DB.retainer) DB.retainer=[];
@@ -3394,6 +3452,7 @@ renderDashCalEvents();
 
 // Init login AFTER app renders (so DB is loaded)
 initLogin();
+driveLoadToken(); // Restore Google Drive connection if previously logged in
 
 // ── PWA: Service Worker ──
 if('serviceWorker' in navigator) {
