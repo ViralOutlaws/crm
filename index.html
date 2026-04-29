@@ -553,6 +553,10 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       <span class="nav-item-icon">🎯</span>
       <span class="nav-item-label">Ziele & MRR</span>
     </div>
+    <div class="nav-item" onclick="showPage('rechner')" data-page="rechner">
+      <span class="nav-item-icon">🧮</span>
+      <span class="nav-item-label">Performance-Rechner</span>
+    </div>
   </nav>
 
   <div id="sidebar-bottom">
@@ -1002,6 +1006,159 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
     <button class="btn-ghost btn-sm" onclick="showPage('contacts')" style="margin-bottom:12px">← Zurück</button>
   </div>
   <div id="contact-detail-content"></div>
+</div>
+
+<!-- ════════════════════════════════════════
+     PERFORMANCE RECHNER
+════════════════════════════════════════ -->
+<div class="page" id="page-rechner">
+  <div class="sec-header">
+    <div class="sec-title">Performance-Rechner</div>
+    <button class="btn-ghost" onclick="rechnerReset()">↺ Zurücksetzen</button>
+    <button class="btn-primary" onclick="rechnerPDF()">📄 Als PDF speichern</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start" id="rechner-layout">
+
+    <!-- LEFT: INPUTS -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Branche -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">🏢 Branche & Unternehmen</h3>
+        <div class="field" style="margin-bottom:10px">
+          <label>Branche</label>
+          <select id="rc-branche" onchange="rechnerBrancheChange()" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="handwerk">🔧 Handwerk</option>
+            <option value="arzt">🏥 Arzt / Zahnarzt</option>
+            <option value="gastro">🍽 Gastronomie</option>
+            <option value="immobilien">🏠 Immobilien</option>
+            <option value="fitness">💪 Fitness / Wellness</option>
+            <option value="rechtsanwalt">⚖ Rechtsanwalt</option>
+            <option value="ecommerce">🛒 E-Commerce</option>
+            <option value="custom">✏ Benutzerdefiniert</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Unternehmensname (für PDF)</label>
+          <input id="rc-firma" placeholder="z.B. Müller Elektro GmbH" style="font-size:12px">
+        </div>
+      </div>
+
+      <!-- Kanäle -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">📡 Werbekanäle</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:500">
+            <input type="checkbox" id="rc-google" checked onchange="rechnerCalc()" style="width:16px;height:16px;accent-color:var(--yellow)">
+            <span>🔵 Google Ads (Search)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:500">
+            <input type="checkbox" id="rc-meta" checked onchange="rechnerCalc()" style="width:16px;height:16px;accent-color:var(--yellow)">
+            <span>🟣 Meta Ads (Facebook/Instagram)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Budget -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">💰 Werbebudget / Monat</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field" id="rc-google-budget-wrap">
+            <label>Google Ads (€)</label>
+            <input id="rc-google-budget" type="number" value="500" min="0" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+          <div class="field" id="rc-meta-budget-wrap">
+            <label>Meta Ads (€)</label>
+            <input id="rc-meta-budget" type="number" value="500" min="0" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:4px">📊 Kampagnen-KPIs</h3>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:14px">Benchmarks automatisch vorbelegt – manuell überschreibbar</div>
+
+        <div style="display:flex;flex-direction:column;gap:0" id="rc-google-kpis">
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);padding:8px 0 4px;border-bottom:2px solid var(--blue);margin-bottom:10px">Google Ads</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div class="field">
+              <label>CPC – Ø Klickpreis (€)</label>
+              <input id="rc-g-cpc" type="number" step="0.01" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>CTR – Klickrate (%)</label>
+              <input id="rc-g-ctr" type="number" step="0.1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>CVR – Conversion-Rate (%)</label>
+              <input id="rc-g-cvr" type="number" step="0.1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>Abschlussquote (%)</label>
+              <input id="rc-g-abschluss" type="number" step="1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:0" id="rc-meta-kpis">
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8040b0;padding:8px 0 4px;border-bottom:2px solid #8040b0;margin-bottom:10px">Meta Ads</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div class="field">
+              <label>CPM – Tausenderkontakt (€)</label>
+              <input id="rc-m-cpm" type="number" step="0.1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>CTR – Klickrate (%)</label>
+              <input id="rc-m-ctr" type="number" step="0.1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>CVR – Conversion-Rate (%)</label>
+              <input id="rc-m-cvr" type="number" step="0.1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+            <div class="field">
+              <label>Abschlussquote (%)</label>
+              <input id="rc-m-abschluss" type="number" step="1" oninput="rechnerCalc()" style="font-size:12px">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Geschäftswerte -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">🏷 Geschäftswerte</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field">
+            <label>Ø Auftragswert (€)</label>
+            <input id="rc-auftragswert" type="number" value="2000" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+          <div class="field">
+            <label>Marge (%)</label>
+            <input id="rc-marge" type="number" value="40" min="0" max="100" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+          <div class="field">
+            <label>Agentur-Fee / Monat (€)</label>
+            <input id="rc-fee" type="number" value="500" min="0" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+          <div class="field">
+            <label>Laufzeit (Monate)</label>
+            <input id="rc-monate" type="number" value="3" min="1" max="24" oninput="rechnerCalc()" style="font-size:12px">
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /inputs -->
+
+    <!-- RIGHT: RESULTS -->
+    <div id="rechner-results" style="display:flex;flex-direction:column;gap:14px">
+      <div style="text-align:center;padding:60px 20px;color:var(--muted)">
+        <div style="font-size:32px;margin-bottom:12px">🧮</div>
+        <div style="font-size:14px">Fülle die Felder links aus –<br>die Auswertung erscheint hier automatisch.</div>
+      </div>
+    </div>
+
+  </div><!-- /rechner-layout -->
 </div>
 
 <!-- ════════════════════════════════════════
@@ -1478,7 +1635,8 @@ load();
 const PAGE_TITLES = {
   dashboard:'Dashboard', contacts:'Kontakte', kalender:'Kalender',
   angebote:'Angebote', rechnungen:'Rechnungen', kanban:'Aufgaben',
-  ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt'
+  ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
+  rechner:'Performance-Rechner'
 };
 
 function showPage(id) {
@@ -1509,6 +1667,7 @@ function showPage(id) {
   if(id==='kalender') renderKalender();
   if(id==='kanban') renderKanban();
   if(id==='ziele') renderZiele();
+  if(id==='rechner') rechnerCalc();
 }
 
 function toggleSidebar() {
@@ -3672,8 +3831,270 @@ async function changePassword() {
 }
 
 // ==================================================
-// INIT
+// PERFORMANCE RECHNER
 // ==================================================
+
+// Branchen-Benchmarks
+const RECHNER_BENCHMARKS = {
+  handwerk:    { gCpc:2.50, gCtr:4.5, gCvr:8.0,  gAbschluss:30, mCpm:8,  mCtr:1.2, mCvr:3.0, mAbschluss:20, auftrag:3500, marge:45 },
+  arzt:        { gCpc:4.00, gCtr:5.0, gCvr:12.0, gAbschluss:60, mCpm:10, mCtr:1.0, mCvr:4.0, mAbschluss:50, auftrag:800,  marge:60 },
+  gastro:      { gCpc:1.20, gCtr:3.5, gCvr:5.0,  gAbschluss:40, mCpm:6,  mCtr:1.8, mCvr:4.0, mAbschluss:30, auftrag:120,  marge:35 },
+  immobilien:  { gCpc:6.00, gCtr:3.0, gCvr:5.0,  gAbschluss:15, mCpm:12, mCtr:0.8, mCvr:2.5, mAbschluss:10, auftrag:8000, marge:30 },
+  fitness:     { gCpc:1.80, gCtr:4.0, gCvr:7.0,  gAbschluss:35, mCpm:7,  mCtr:2.0, mCvr:5.0, mAbschluss:25, auftrag:600,  marge:50 },
+  rechtsanwalt:{ gCpc:8.00, gCtr:4.0, gCvr:8.0,  gAbschluss:25, mCpm:15, mCtr:0.7, mCvr:2.0, mAbschluss:20, auftrag:2500, marge:55 },
+  ecommerce:   { gCpc:0.80, gCtr:3.0, gCvr:3.0,  gAbschluss:100,mCpm:5,  mCtr:2.5, mCvr:2.5, mAbschluss:100,auftrag:150,  marge:30 },
+  custom:      { gCpc:2.00, gCtr:4.0, gCvr:8.0,  gAbschluss:30, mCpm:8,  mCtr:1.5, mCvr:4.0, mAbschluss:25, auftrag:2000, marge:40 },
+};
+
+function rechnerBrancheChange() {
+  const b = document.getElementById('rc-branche').value;
+  const bm = RECHNER_BENCHMARKS[b];
+  if(!bm) return;
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val; };
+  set('rc-g-cpc', bm.gCpc);
+  set('rc-g-ctr', bm.gCtr);
+  set('rc-g-cvr', bm.gCvr);
+  set('rc-g-abschluss', bm.gAbschluss);
+  set('rc-m-cpm', bm.mCpm);
+  set('rc-m-ctr', bm.mCtr);
+  set('rc-m-cvr', bm.mCvr);
+  set('rc-m-abschluss', bm.mAbschluss);
+  set('rc-auftragswert', bm.auftrag);
+  set('rc-marge', bm.marge);
+  rechnerCalc();
+}
+
+function rechnerReset() {
+  document.getElementById('rc-branche').value = 'handwerk';
+  document.getElementById('rc-firma').value = '';
+  document.getElementById('rc-google').checked = true;
+  document.getElementById('rc-meta').checked = true;
+  document.getElementById('rc-google-budget').value = 500;
+  document.getElementById('rc-meta-budget').value = 500;
+  document.getElementById('rc-monate').value = 3;
+  document.getElementById('rc-fee').value = 500;
+  rechnerBrancheChange();
+}
+
+function getV(id) { return parseFloat(document.getElementById(id)?.value)||0; }
+function getB(id) { return document.getElementById(id)?.checked||false; }
+
+function rechnerCalc() {
+  const useGoogle = getB('rc-google');
+  const useMeta   = getB('rc-meta');
+
+  // Show/hide KPI sections
+  document.getElementById('rc-google-kpis').style.display = useGoogle ? 'flex' : 'none';
+  document.getElementById('rc-meta-kpis').style.display   = useMeta   ? 'flex' : 'none';
+  document.getElementById('rc-google-budget-wrap').style.display = useGoogle ? 'block' : 'none';
+  document.getElementById('rc-meta-budget-wrap').style.display   = useMeta   ? 'block' : 'none';
+
+  const budgetG   = getV('rc-google-budget');
+  const budgetM   = getV('rc-meta-budget');
+  const auftrag   = getV('rc-auftragswert');
+  const marge     = getV('rc-marge') / 100;
+  const fee       = getV('rc-fee');
+  const monate    = getV('rc-monate') || 1;
+
+  // Scenarios: [worst, realistic, best] multipliers
+  const scenarios = [
+    { name:'Pessimistisch', key:'worst',    mult:0.6,  color:'#d63030', bg:'#fdf0ee', icon:'📉' },
+    { name:'Realistisch',   key:'realistic',mult:1.0,  color:'#2563b8', bg:'#eef3fb', icon:'📊', highlight:true },
+    { name:'Optimistisch',  key:'best',     mult:1.5,  color:'#1f9e5a', bg:'#eef7f2', icon:'📈' },
+  ];
+
+  const calcChannel = (budget, cpc, ctr, cvr, abschluss, mult) => {
+    if(budget <= 0) return { klicks:0, impressionen:0, leads:0, abschluesse:0, cpl:0, umsatz:0, gewinn:0, roas:0 };
+    const klicks       = Math.round((budget / (cpc||1)) * mult);
+    const impressionen = Math.round(klicks / ((ctr||1)/100));
+    const leads        = Math.round(klicks * ((cvr||1)/100) * mult);
+    const abschluesse  = Math.round(leads * ((abschluss||1)/100));
+    const cpl          = leads > 0 ? budget / leads : 0;
+    const umsatz       = abschluesse * auftrag;
+    const deckung      = umsatz * marge;
+    const gewinn       = deckung - budget - fee;
+    const roas         = budget > 0 ? umsatz / budget : 0;
+    return { klicks, impressionen, leads, abschluesse, cpl, umsatz, gewinn, roas, deckung };
+  };
+
+  const calcMeta = (budget, cpm, ctr, cvr, abschluss, mult) => {
+    if(budget <= 0) return { klicks:0, impressionen:0, leads:0, abschluesse:0, cpl:0, umsatz:0, gewinn:0, roas:0 };
+    const impressionen = Math.round((budget / (cpm||1)) * 1000 * mult);
+    const klicks       = Math.round(impressionen * ((ctr||1)/100));
+    const leads        = Math.round(klicks * ((cvr||1)/100) * mult);
+    const abschluesse  = Math.round(leads * ((abschluss||1)/100));
+    const cpl          = leads > 0 ? budget / leads : 0;
+    const umsatz       = abschluesse * auftrag;
+    const deckung      = umsatz * marge;
+    const gewinn       = deckung - budget - fee;
+    const roas         = budget > 0 ? umsatz / budget : 0;
+    return { klicks, impressionen, leads, abschluesse, cpl, umsatz, gewinn, roas, deckung };
+  };
+
+  const fE = n => Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}) + ' €';
+  const fP = n => Number(n||0).toFixed(1) + ' %';
+  const fN = n => Math.round(n||0).toLocaleString('de-DE');
+  const fR = n => Number(n||0).toFixed(1) + 'x';
+
+  // Build results HTML
+  let html = '';
+
+  // Total budget info
+  const totalBudget = (useGoogle?budgetG:0) + (useMeta?budgetM:0);
+  const totalMonthly = totalBudget + fee;
+  html += `<div class="dash-card" style="border-left:3px solid var(--yellow)">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
+      <div><div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Werbebudget/Monat</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--ink)">${fE(totalBudget)}</div></div>
+      <div><div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Agentur-Fee</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--ink)">${fE(fee)}</div></div>
+      <div><div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Gesamtkosten/Monat</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--yellow2)">${fE(totalMonthly)}</div></div>
+    </div>
+  </div>`;
+
+  // Scenario cards
+  html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">`;
+
+  scenarios.forEach(sc => {
+    const gData = useGoogle ? calcChannel(budgetG, getV('rc-g-cpc'), getV('rc-g-ctr'), getV('rc-g-cvr'), getV('rc-g-abschluss'), sc.mult) : null;
+    const mData = useMeta   ? calcMeta(budgetM, getV('rc-m-cpm'), getV('rc-m-ctr'), getV('rc-m-cvr'), getV('rc-m-abschluss'), sc.mult) : null;
+
+    const totLeads      = (gData?.leads||0) + (mData?.leads||0);
+    const totAbschluss  = (gData?.abschluesse||0) + (mData?.abschluesse||0);
+    const totUmsatz     = totAbschluss * auftrag;
+    const totDeckung    = totUmsatz * marge;
+    const totGewinn     = totDeckung - totalBudget - fee;
+    const totROAS       = totalBudget > 0 ? totUmsatz / totalBudget : 0;
+    const totCPL        = totLeads > 0 ? totalBudget / totLeads : 0;
+    const gewinnClass   = totGewinn >= 0 ? '#1f9e5a' : '#d63030';
+
+    html += `<div style="background:${sc.highlight?sc.bg:'var(--paper)'};border:${sc.highlight?'2px':'1px'} solid ${sc.highlight?sc.color:'var(--border)'};border-radius:8px;overflow:hidden;${sc.highlight?'box-shadow:0 4px 20px rgba(37,99,184,.15)':''}">
+      <div style="background:${sc.color};padding:10px 14px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">${sc.icon}</span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:#fff">${sc.name}</span>
+        ${sc.highlight?'<span style="background:rgba(255,255,255,.2);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:auto">EMPFOHLEN</span>':''}
+      </div>
+      <div style="padding:14px">
+        <div style="text-align:center;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Leads / Monat</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;color:${sc.color};line-height:1">${fN(totLeads)}</div>
+        </div>
+        ${[
+          ['Abschlüsse/Monat', fN(totAbschluss), ''],
+          ['Ø Cost per Lead', fE(totCPL), ''],
+          ['Erwarteter Umsatz', fE(totUmsatz), 'color:var(--green);font-weight:700'],
+          ['Deckungsbeitrag', fE(totDeckung), ''],
+          ['Gewinn nach Kosten', fE(totGewinn), `color:${gewinnClass};font-weight:700`],
+          ['ROAS', fR(totROAS), totROAS>=3?'color:var(--green)':totROAS>=1?'color:var(--orange)':'color:var(--red)'],
+        ].map(([l,v,s])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <span style="color:var(--muted)">${l}</span>
+          <span style="${s||''}">${v}</span>
+        </div>`).join('')}
+        ${useGoogle && gData ? `
+        <div style="margin-top:10px;padding-top:8px;border-top:2px solid var(--border)">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#2563b8;margin-bottom:6px">Google Ads</div>
+          ${[['Klicks',fN(gData.klicks)],['Leads',fN(gData.leads)],['CPL',fE(gData.cpl)]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--muted)"><span>${l}</span><span style="color:var(--ink);font-weight:600">${v}</span></div>`).join('')}
+        </div>` : ''}
+        ${useMeta && mData ? `
+        <div style="margin-top:10px;padding-top:8px;border-top:2px solid var(--border)">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8040b0;margin-bottom:6px">Meta Ads</div>
+          ${[['Klicks',fN(mData.klicks)],['Leads',fN(mData.leads)],['CPL',fE(mData.cpl)]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--muted)"><span>${l}</span><span style="color:var(--ink);font-weight:600">${v}</span></div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`;
+  });
+
+  html += `</div>`;
+
+  // 3-Monats Hochrechnung
+  html += `<div class="dash-card">
+    <h3 style="margin-bottom:14px">📅 ${monate}-Monats-Hochrechnung (Realistisches Szenario)</h3>`;
+
+  const rG = useGoogle ? calcChannel(budgetG, getV('rc-g-cpc'), getV('rc-g-ctr'), getV('rc-g-cvr'), getV('rc-g-abschluss'), 1.0) : null;
+  const rM = useMeta   ? calcMeta(budgetM, getV('rc-m-cpm'), getV('rc-m-ctr'), getV('rc-m-cvr'), getV('rc-m-abschluss'), 1.0) : null;
+  const mLeads     = (rG?.leads||0) + (rM?.leads||0);
+  const mAbschluss = (rG?.abschluesse||0) + (rM?.abschluesse||0);
+  const mUmsatz    = mAbschluss * auftrag;
+  const mGewinn    = mUmsatz * marge - totalBudget - fee;
+
+  html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+    ${[
+      ['Leads gesamt', fN(mLeads*monate), 'var(--blue)'],
+      ['Abschlüsse', fN(mAbschluss*monate), 'var(--green)'],
+      ['Umsatz', fE(mUmsatz*monate), 'var(--green)'],
+      ['Gewinn', fE(mGewinn*monate), mGewinn>=0?'var(--green)':'var(--red)'],
+    ].map(([l,v,c])=>`<div style="background:var(--bg);border-radius:6px;padding:12px">
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${l}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${c}">${v}</div>
+    </div>`).join('')}
+  </div>
+  <div style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center">
+    Gesamtinvestition über ${monate} Monate: <strong style="color:var(--ink)">${fE(totalMonthly*monate)}</strong>
+    · Gesamtumsatz: <strong style="color:var(--green)">${fE(mUmsatz*monate)}</strong>
+    · ROI: <strong style="color:${mGewinn*monate>=0?'var(--green)':'var(--red)'}">${fE(mGewinn*monate)}</strong>
+  </div>
+  </div>`;
+
+  // Hinweis
+  html += `<div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px;padding:14px 16px;font-size:11px;color:var(--ink2);line-height:1.7">
+    <strong style="display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow2);margin-bottom:4px">⚠ Hinweis</strong>
+    Diese Hochrechnung basiert auf Branchen-Benchmarks und ist als Orientierungswert zu verstehen. Tatsächliche Ergebnisse hängen von Angebot, Wettbewerb, Landingpage-Qualität und Marktbedingungen ab. Realistische Ergebnisse zeigen sich erfahrungsgemäß nach 60–90 Tagen Kampagnenlaufzeit.
+  </div>`;
+
+  document.getElementById('rechner-results').innerHTML = html;
+  window._rechnerLastCalc = { html, firma: document.getElementById('rc-firma').value };
+}
+
+function rechnerPDF() {
+  if(!window._rechnerLastCalc) { alert('Bitte zuerst einen Kanal und Budget eingeben.'); return; }
+  const firma = document.getElementById('rc-firma').value || 'Analyse';
+  const branche = document.getElementById('rc-branche').options[document.getElementById('rc-branche').selectedIndex].text;
+  const datum = new Date().toLocaleDateString('de-DE');
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+  <title>Performance-Analyse ${firma}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:12mm 14mm;font-size:12px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f5c400}
+    .logo{font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:3px}
+    .logo span{color:#f5c400}
+    h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:16px}
+    .meta{font-size:12px;color:#666;text-align:right}
+    .results-wrap{margin-top:0}
+    @media print{body{padding:8mm};@page{margin:0;size:A4}}
+  </style>
+  </head><body>
+  <div class="header">
+    <div>
+      <div class="logo">VIRAL <span>OUTLAWS</span></div>
+      <div style="font-size:11px;color:#666;margin-top:4px">Performance Marketing · Allgäu</div>
+    </div>
+    <div class="meta">
+      <strong style="font-size:14px">${firma}</strong><br>
+      ${branche}<br>
+      ${datum}
+    </div>
+  </div>
+  <h2>Performance-Prognose</h2>
+  <div class="results-wrap">${window._rechnerLastCalc.html}</div>
+  <div style="margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#aaa;text-align:center">
+    Erstellt von Viral Outlaws · crm.viraloutlaws.de · ${datum}
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
+// Init Rechner with default values
+function initRechner() {
+  rechnerBrancheChange();
+}
 if(!DB.kalEvents) DB.kalEvents=[];
 if(!DB.kanban) DB.kanban=[];
 if(!DB.retainer) DB.retainer=[];
@@ -3689,6 +4110,7 @@ if(_logoEl2) _logoEl2.src = VO_LOGO;
 renderDashboard();
 renderMiniCal();
 renderDashCalEvents();
+initRechner();
 initLogin();
 driveLoadToken();
 
