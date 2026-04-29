@@ -3222,7 +3222,6 @@ let _deferredInstall = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   _deferredInstall = e;
-  // Show install button in topbar
   const btn = document.createElement('button');
   btn.className = 'btn-settings';
   btn.textContent = '📲 App installieren';
@@ -3236,6 +3235,39 @@ window.addEventListener('beforeinstallprompt', e => {
     _deferredInstall = null;
   };
   document.querySelector('.topbar-right')?.prepend(btn);
+});
+
+// ── Auto-Save beim Schließen / Wechseln des Tabs ──
+// 1. Beim Schließen des Tabs / Fensters → sync auslösen
+window.addEventListener('beforeunload', () => {
+  if(!getGsUrl()) return;
+  // Synchronous beacon as last resort (fire and forget)
+  try {
+    const data = JSON.stringify({ action:'save', payload:{ data: JSON.stringify(DB) } });
+    // Use sendBeacon for reliable delivery on tab close
+    const url = getGsUrl() + '?action=save&payload=' + encodeURIComponent(JSON.stringify({ data: JSON.stringify(DB) }));
+    navigator.sendBeacon(url);
+  } catch(e) {}
+});
+
+// 2. Wenn Tab in den Hintergrund geht (z.B. Handy sperrt, andere App)
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden' && getGsUrl()) {
+    // Silent background sync
+    syncToSheets().catch(()=>{});
+  }
+});
+
+// 3. Seiten-Focus verloren (Fenster minimiert, anderen Tab geöffnet)
+let _lastFocusSync = 0;
+window.addEventListener('blur', () => {
+  if(!getGsUrl()) return;
+  const now = Date.now();
+  // Max einmal pro Minute beim Fokus verlieren
+  if(now - _lastFocusSync > 60000) {
+    _lastFocusSync = now;
+    syncToSheets().catch(()=>{});
+  }
 });
 </script>
 </body>
