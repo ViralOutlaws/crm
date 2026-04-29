@@ -841,6 +841,42 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       </div>
     </div>
 
+    <!-- LEISTUNGSVERWALTUNG -->
+    <div class="dash-card" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h3>🛒 Leistungen & Preise (Angebots-Konfigurator)</h3>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Passe Bezeichnungen und Preise an – werden im Konfigurator verwendet</div>
+        </div>
+        <button class="btn-yellow" onclick="saveLeistungen()">💾 Preise speichern</button>
+      </div>
+      <div id="leistungen-editor"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Neue Leistung hinzufügen</div>
+        <div style="display:grid;grid-template-columns:1fr 140px 120px 120px auto;gap:10px;align-items:end">
+          <div class="field" style="margin:0"><label>Bezeichnung</label><input id="nl-name" placeholder="z.B. TikTok Ads Setup" style="font-size:12px"></div>
+          <div class="field" style="margin:0"><label>Preis (€)</label><input id="nl-preis" type="number" placeholder="500" style="font-size:12px"></div>
+          <div class="field" style="margin:0"><label>Typ</label>
+            <select id="nl-typ" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+              <option value="einmalig">Einmalig</option>
+              <option value="monatlich">Monatlich</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0"><label>Kategorie</label>
+            <select id="nl-kat" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+              <option value="google">Google Ads</option>
+              <option value="meta">Meta Ads</option>
+              <option value="retainer">Retainer</option>
+              <option value="web">Webdesign</option>
+              <option value="extras">Extras</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="addLeistung()" style="height:38px;white-space:nowrap">+ Hinzufügen</button>
+        </div>
+        <div class="field" style="margin-top:10px"><label>Beschreibung (optional)</label><input id="nl-desc" placeholder="Kurze Beschreibung der Leistung" style="font-size:12px"></div>
+      </div>
+    </div>
+
     <!-- GOOGLE DRIVE SYNC -->
     <div class="dash-card" style="grid-column:1/-1;border-left:3px solid #0ea271">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
@@ -2513,6 +2549,9 @@ function loadSettings() {
   if(ku) ku.checked = !!s.kleinunternehmer;
   // Show saved logo
   if(s.logo){ const lp=document.getElementById('s-logo-preview'); if(lp){lp.src=s.logo;lp.style.display='block';} }
+  // Load saved leistungen into KONF_LEISTUNGEN
+  if(DB.leistungen) { Object.keys(DB.leistungen).forEach(k=>{ if(KONF_LEISTUNGEN[k]) KONF_LEISTUNGEN[k]=DB.leistungen[k]; }); }
+  renderLeistungenEditor();
   // Show sync status
   if(s.gsurl) setSyncStatus('connected');
   else setSyncStatus('offline');
@@ -4295,6 +4334,8 @@ let konfSelected = {};
 let konfCustom = [];
 
 function initKonfigurator() {
+  // Sync prices from DB if saved
+  if(DB.leistungen) { Object.keys(DB.leistungen).forEach(k=>{ if(KONF_LEISTUNGEN[k]) KONF_LEISTUNGEN[k]=DB.leistungen[k]; }); }
   const sel = document.getElementById('konf-kunde');
   if(sel) {
     sel.innerHTML = '<option value="">-- Kontakt waehlen oder manuell --</option>';
@@ -4625,6 +4666,89 @@ function wettbPDF() {
   const url=URL.createObjectURL(blob);
   window.open(url,'_blank');
   setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+
+// ==================================================
+// LEISTUNGSVERWALTUNG (Einstellungen)
+// ==================================================
+
+// Initialize custom leistungen from DB or use defaults
+function getKonfLeistungen() {
+  if(DB.leistungen && Object.keys(DB.leistungen).length) return DB.leistungen;
+  return KONF_LEISTUNGEN;
+}
+
+function renderLeistungenEditor() {
+  const el = document.getElementById('leistungen-editor');
+  if(!el) return;
+  const leistungen = getKonfLeistungen();
+  const katLabels = { google:'Google Ads', meta:'Meta Ads', retainer:'Retainer', web:'Webdesign', extras:'Extras' };
+  const katColors = { google:'var(--blue)', meta:'#8040b0', retainer:'var(--green)', web:'var(--orange)', extras:'var(--yellow2)' };
+
+  el.innerHTML = Object.entries(leistungen).map(([kat, items]) => `
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${katColors[kat]||'var(--muted)'};padding:8px 0 6px;border-bottom:2px solid ${katColors[kat]||'var(--border)'};margin-bottom:8px">${katLabels[kat]||kat}</div>
+      ${items.map((item,i) => `
+        <div style="display:grid;grid-template-columns:1fr 110px 110px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+          <input type="text" value="${(item.label||'').replace(/"/g,'&quot;')}" onchange="updateLeistung('${kat}',${i},'label',this.value)"
+            style="font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--paper);color:var(--ink);outline:none;font-family:'Sora',sans-serif">
+          <input type="number" value="${item.preis||0}" onchange="updateLeistung('${kat}',${i},'preis',parseFloat(this.value)||0)"
+            style="font-size:12px;font-weight:700;border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--paper);color:var(--ink);outline:none;font-family:'DM Mono',monospace;text-align:right">
+          <select onchange="updateLeistung('${kat}',${i},'typ',this.value)"
+            style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--paper);color:var(--ink);outline:none;font-family:'Sora',sans-serif">
+            <option value="einmalig" ${item.typ==='einmalig'?'selected':''}>Einmalig</option>
+            <option value="monatlich" ${item.typ==='monatlich'?'selected':''}>Monatlich</option>
+          </select>
+          <button class="btn-danger" onclick="deleteLeistung('${kat}',${i})" style="padding:4px 10px;font-size:11px">✕</button>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function updateLeistung(kat, idx, field, val) {
+  if(!DB.leistungen) DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
+  if(DB.leistungen[kat] && DB.leistungen[kat][idx]) {
+    DB.leistungen[kat][idx][field] = val;
+  }
+}
+
+function deleteLeistung(kat, idx) {
+  if(!confirm('Leistung wirklich loeschen?')) return;
+  if(!DB.leistungen) DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
+  DB.leistungen[kat].splice(idx, 1);
+  save(); renderLeistungenEditor();
+}
+
+function addLeistung() {
+  const name = document.getElementById('nl-name').value.trim();
+  const preis = parseFloat(document.getElementById('nl-preis').value)||0;
+  const typ = document.getElementById('nl-typ').value;
+  const kat = document.getElementById('nl-kat').value;
+  const desc = document.getElementById('nl-desc').value.trim();
+  if(!name) { alert('Bitte Bezeichnung eingeben.'); return; }
+  if(!DB.leistungen) DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
+  if(!DB.leistungen[kat]) DB.leistungen[kat] = [];
+  DB.leistungen[kat].push({ id:'custom_'+uid(), label:name, preis, typ, desc: desc||name });
+  document.getElementById('nl-name').value = '';
+  document.getElementById('nl-preis').value = '';
+  document.getElementById('nl-desc').value = '';
+  save(); renderLeistungenEditor();
+  alert('Leistung "'+name+'" hinzugefuegt!');
+}
+
+function saveLeistungen() {
+  if(!DB.leistungen) DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
+  save();
+  // Update KONF_LEISTUNGEN reference so Konfigurator uses new prices
+  Object.keys(DB.leistungen).forEach(k => { KONF_LEISTUNGEN[k] = DB.leistungen[k]; });
+  alert('Preise gespeichert!');
+}
+
+function resetLeistungen() {
+  if(!confirm('Wirklich zuruecksetzen? Alle eigenen Anpassungen gehen verloren.')) return;
+  DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
+  save(); renderLeistungenEditor();
 }
 
 // Inject logo
