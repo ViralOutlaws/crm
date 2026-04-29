@@ -190,6 +190,7 @@ body.dark-mode #sidebar{background:#000;}
 
 /* ── PAGES ── */
 .dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.kpi-grid-5{grid-template-columns:repeat(5,1fr)}
 .kpi{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:18px 20px;box-shadow:var(--shadow);position:relative;overflow:hidden}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .kpi.yellow::before{background:var(--yellow)}
@@ -352,10 +353,74 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
-  .dash-grid{grid-template-columns:1fr 1fr}
-  .dash-row,.dash-row.three{grid-template-columns:1fr}
-  .form-grid,.form-grid.three{grid-template-columns:1fr}
-  .nav-btn span{display:none}
+  /* Layout */
+  #sidebar{transform:translateX(-100%)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-overlay.open{display:block}
+  #main-content{margin-left:0}
+  #mobile-menu-btn{display:block}
+  #bottom-nav{display:flex}
+  .page{padding:12px 12px 90px}
+  #top-header{padding:0 12px;height:50px}
+  #page-title{font-size:17px}
+
+  /* KPI grid: 2x2 on mobile */
+  .dash-grid,.kpi-grid-5{grid-template-columns:1fr 1fr !important;gap:10px}
+  .kpi{padding:14px}
+  .kpi-val{font-size:28px}
+  .kpi-icon{font-size:20px}
+
+  /* All dash rows stack vertically */
+  .dash-row,.dash-row.three{grid-template-columns:1fr !important}
+
+  /* Forms stack */
+  .form-grid,.form-grid.three{grid-template-columns:1fr !important}
+
+  /* Tables: horizontal scroll */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:500px}
+  th,td{padding:8px 10px;font-size:11px}
+
+  /* Summary strips: 2x2 */
+  #angebote-summary,#rechnungen-summary{grid-template-columns:1fr 1fr !important}
+
+  /* Kanban: single column */
+  #kanban-board{grid-template-columns:1fr !important}
+
+  /* Kalender: no side panel */
+  #kal-bottom{grid-template-columns:1fr !important}
+
+  /* Competitor grid: stack */
+  .comp-grid{grid-template-columns:1fr !important}
+  .pot-grid{grid-template-columns:1fr 1fr !important}
+
+  /* Section headers */
+  .sec-header{flex-wrap:wrap;gap:8px}
+  .sec-header .btn-primary{margin-left:0}
+
+  /* Modal: full screen on mobile */
+  .overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:16px 16px 0 0;max-height:92vh;max-width:100%}
+
+  /* Hide less important header buttons */
+  #header-right .header-btn:not(#dark-toggle){display:none}
+
+  /* Mini calendar full width */
+  .mini-cal-grid{gap:3px}
+  .mini-cal-cell{font-size:12px;min-height:32px}
+
+  /* FAB position */
+  #fab{bottom:80px;right:16px}
+
+  /* Global search */
+  #global-search-box{max-width:100%;border-radius:12px 12px 0 0}
+  #global-search-overlay{align-items:flex-end;padding:0}
+}
+
+/* Extra small phones */
+@media(max-width:380px){
+  .dash-grid{grid-template-columns:1fr !important}
+  .kpi-val{font-size:24px}
 }
 
 /* ── EMPTY STATE ── */
@@ -523,15 +588,15 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
   <button class="bottom-nav-item active" onclick="showPage('dashboard')" data-page="dashboard"><span class="bni">📊</span>Dashboard</button>
   <button class="bottom-nav-item" onclick="showPage('contacts')" data-page="contacts"><span class="bni">👥</span>Kontakte</button>
   <button class="bottom-nav-item" onclick="showPage('kalender')" data-page="kalender"><span class="bni">📅</span>Kalender</button>
-  <button class="bottom-nav-item" onclick="showPage('rechnungen')" data-page="rechnungen"><span class="bni">🧾</span>Rechnungen</button>
-  <button class="bottom-nav-item" onclick="showPage('settings')" data-page="settings"><span class="bni">⚙</span>Mehr</button>
+  <button class="bottom-nav-item" onclick="showPage('rechnungen')" data-page="rechnungen"><span class="bni">🧾</span>Finanzen</button>
+  <button class="bottom-nav-item" onclick="toggleSidebar()"><span class="bni">☰</span>Mehr</button>
 </div>
 
 <!-- ════════════════════════════════════════
      DASHBOARD
 ════════════════════════════════════════ -->
 <div class="page active" id="page-dashboard">
-  <div class="dash-grid" style="grid-template-columns:repeat(5,1fr)">
+  <div class="dash-grid kpi-grid-5">
     <div class="kpi yellow">
       <div class="kpi-label">MRR (Retainer)</div>
       <div class="kpi-val" id="kpi-mrr">0 €</div>
