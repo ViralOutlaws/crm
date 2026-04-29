@@ -645,8 +645,8 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 
       <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:14px">
         <div class="field">
-          <label>Apps Script Web App URL</label>
-          <input id="s-gsurl" placeholder="https://script.google.com/macros/s/…/exec" style="font-family:'DM Mono',monospace;font-size:11px">
+          <label>Cloudflare Worker URL</label>
+          <input id="s-gsurl" placeholder="https://vo-crm-sync.DEINNAME.workers.dev" style="font-family:'DM Mono',monospace;font-size:11px">
         </div>
         <button class="btn-ghost" onclick="testConnection()" style="white-space:nowrap;height:38px">🔌 Verbindung testen</button>
       </div>
@@ -2059,43 +2059,15 @@ function setSyncStatus(state) {
 async function gsRequest(action, payload) {
   const url = getGsUrl();
   if(!url) throw new Error('Keine URL konfiguriert');
-
-  // Try POST first (works from https:// with updated Apps Script v4)
-  try {
-    const r = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({ action, payload: payload||{} }),
-      signal: AbortSignal.timeout(20000),
-    });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const text = await r.text();
-    const clean = text.trim().replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
-    return JSON.parse(clean || text);
-  } catch(postErr) {
-    // Fallback: JSONP GET
-    return new Promise((resolve, reject) => {
-      const cbName = '_gsCb_' + Date.now();
-      const to = setTimeout(() => {
-        delete window[cbName];
-        document.getElementById(cbName)?.remove();
-        reject(new Error('Zeitüberschreitung – Apps Script URL prüfen'));
-      }, 20000);
-      window[cbName] = data => {
-        clearTimeout(to); delete window[cbName];
-        document.getElementById(cbName)?.remove();
-        resolve(data);
-      };
-      const p = new URLSearchParams({ action, callback: cbName });
-      if(payload && Object.keys(payload).length) p.set('payload', JSON.stringify(payload));
-      const s = document.createElement('script');
-      s.id = cbName; s.src = url + '?' + p.toString();
-      s.onerror = () => {
-        clearTimeout(to); delete window[cbName]; s.remove();
-        reject(new Error('Verbindung fehlgeschlagen – Apps Script auf v4 updaten (doPost hinzufügen)'));
-      };
-      document.head.appendChild(s);
-    });
-  }
+  // POST to Cloudflare Worker (handles CORS)
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, payload: payload||{} }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  return await r.json();
 }
 
 
