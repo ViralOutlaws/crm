@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#0f0f0f"/>
+  <text x="96" y="72" font-family="Arial Black,Arial" font-weight="900" font-size="52" fill="#f5c400" text-anchor="middle">VO</text>
+  <text x="96" y="128" font-family="Arial,sans-serif" font-size="18" fill="#ffffff" text-anchor="middle" letter-spacing="3">CRM</text>
+  <rect x="36" y="140" width="120" height="3" fill="#f5c400" rx="2"/>
+</svg>

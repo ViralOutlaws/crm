@@ -1,0 +1,14 @@
+{
+  "name": "Viral Outlaws CRM",
+  "short_name": "VO CRM",
+  "description": "Performance Marketing CRM für Viral Outlaws",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#f5c400",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

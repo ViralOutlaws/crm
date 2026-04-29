@@ -1,0 +1,3242 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Viral Outlaws CRM</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#f5c400">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VO CRM">
+<link rel="apple-touch-icon" href="/icon-512.svg">
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f3f1ec; --paper:#fff; --ink:#0f0f0f; --ink2:#3a3a3a; --muted:#8a8a8a;
+  --border:#e2dfd9; --border2:#ccc9c2;
+  --yellow:#f5c400; --yellow2:#e6b800; --yellow-bg:rgba(245,196,0,.10);
+  --red:#d63030; --green:#1f9e5a; --blue:#2563b8; --orange:#d97706;
+  --red-bg:rgba(214,48,48,.08); --green-bg:rgba(31,158,90,.08);
+  --blue-bg:rgba(37,99,184,.08); --orange-bg:rgba(217,119,6,.08);
+  --shadow:0 1px 4px rgba(0,0,0,.06),0 4px 20px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.12);
+}
+body.dark-mode {
+  --bg:#111; --paper:#1a1a1a; --ink:#f0ede8; --ink2:#bbb; --muted:#666;
+  --border:#2a2a2a; --border2:#333;
+  --shadow:0 1px 4px rgba(0,0,0,.3),0 4px 20px rgba(0,0,0,.2);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.5);
+}
+body.dark-mode .topbar { background:#000; }
+body.dark-mode .doc-paper { background:#fff; color:#111; }
+
+/* ── GLOBAL SEARCH ── */
+#global-search-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:none;align-items:flex-start;justify-content:center;padding-top:80px;
+}
+#global-search-overlay.open { display:flex; }
+#global-search-box {
+  background:var(--paper);border-radius:8px;width:100%;max-width:600px;box-shadow:var(--shadow-lg);overflow:hidden;
+}
+#global-search-input {
+  width:100%;border:none;outline:none;padding:18px 20px;font-family:'Sora',sans-serif;font-size:16px;color:var(--ink);background:var(--paper);border-bottom:2px solid var(--border);
+}
+#global-search-results { max-height:420px;overflow-y:auto;padding:8px 0; }
+.gs-result {
+  display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background .1s;
+}
+.gs-result:hover { background:var(--bg); }
+.gs-result-icon { font-size:16px;width:28px;text-align:center;flex-shrink:0; }
+.gs-result-main { flex:1;min-width:0; }
+.gs-result-title { font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.gs-result-sub { font-size:11px;color:var(--muted);margin-top:1px; }
+.gs-result-badge { font-size:10px;font-weight:600;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:10px;flex-shrink:0; }
+.gs-section-label { font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:8px 20px 4px;border-top:1px solid var(--border);margin-top:4px; }
+
+/* ── FLOATING BUTTON ── */
+#fab {
+  position:fixed;bottom:28px;right:28px;z-index:300;
+}
+#fab-main {
+  width:52px;height:52px;border-radius:50%;background:var(--yellow);color:var(--ink);border:none;font-size:24px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(245,196,0,.4);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;justify-content:center;
+}
+#fab-main:hover { transform:scale(1.08);box-shadow:0 6px 28px rgba(245,196,0,.5); }
+#fab-main.open { transform:rotate(45deg); }
+#fab-menu {
+  position:absolute;bottom:62px;right:0;display:flex;flex-direction:column;gap:8px;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;transform:translateY(10px);
+}
+#fab-menu.open { opacity:1;pointer-events:all;transform:translateY(0); }
+.fab-item {
+  display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--border);border-radius:20px;padding:7px 14px 7px 10px;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;box-shadow:var(--shadow);white-space:nowrap;transition:background .12s;
+}
+.fab-item:hover { background:var(--yellow-bg); }
+.fab-icon { font-size:15px; }
+
+/* ── MINI CALENDAR (dashboard) ── */
+.mini-cal-grid { display:grid;grid-template-columns:repeat(7,1fr);gap:2px; }
+.mini-cal-day-hdr { font-size:9px;font-weight:700;letter-spacing:1px;text-align:center;color:var(--muted);padding:2px 0; }
+.mini-cal-cell { min-height:28px;border-radius:3px;font-size:11px;font-weight:500;text-align:center;padding:3px 1px;cursor:pointer;transition:background .1s;position:relative;color:var(--ink2); }
+.mini-cal-cell:hover { background:var(--yellow-bg); }
+.mini-cal-cell.today { background:var(--yellow);color:var(--ink);font-weight:700;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;margin:auto; }
+.mini-cal-cell.has-event::after { content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--blue); }
+.mini-cal-cell.empty { pointer-events:none; }
+.mini-cal-cell.other-month { color:var(--border2); }
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);font-family:'Sora',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+.topbar{background:var(--ink);padding:0;position:sticky;top:0;z-index:200;box-shadow:0 2px 20px rgba(0,0,0,.4)}
+.topbar-inner{max-width:1280px;margin:0 auto;padding:0 24px;display:flex;align-items:center;height:52px;gap:0}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;white-space:nowrap}
+.logo span{color:var(--yellow)}
+.logo-sep{width:1px;height:22px;background:rgba(255,255,255,.15);margin:0 18px}
+.nav{display:flex;gap:2px;flex:1}
+.nav-btn{background:transparent;border:none;padding:6px 14px;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.45);cursor:pointer;border-radius:4px;transition:all .15s;white-space:nowrap}
+.nav-btn:hover{color:#fff;background:rgba(255,255,255,.07)}
+.nav-btn.active{color:var(--yellow);background:rgba(245,196,0,.12)}
+.topbar-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.btn-settings{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);border-radius:4px;padding:5px 12px;font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-settings:hover{color:#fff;background:rgba(255,255,255,.14)}
+
+/* ── PAGES ── */
+.page{display:none;max-width:1280px;margin:0 auto;padding:28px 24px 80px;width:100%}
+.page.active{display:block}
+
+/* ── DASHBOARD ── */
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.kpi{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:18px 20px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.yellow::before{background:var(--yellow)}
+.kpi.green::before{background:var(--green)}
+.kpi.blue::before{background:var(--blue)}
+.kpi.orange::before{background:var(--orange)}
+.kpi-label{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.kpi-val{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:1px;color:var(--ink);line-height:1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:5px}
+.kpi-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:28px;opacity:.12}
+
+.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.dash-row.three{grid-template-columns:2fr 1fr 1fr}
+.dash-card{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:20px;box-shadow:var(--shadow)}
+.dash-card h3{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+
+.pipeline-bars{display:flex;flex-direction:column;gap:8px}
+.pipe-row{display:flex;align-items:center;gap:10px}
+.pipe-label{font-size:11px;font-weight:600;color:var(--ink2);min-width:90px}
+.pipe-track{flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden}
+.pipe-fill{height:100%;border-radius:4px;transition:width .5s ease}
+.pipe-count{font-size:11px;font-weight:700;color:var(--ink);min-width:20px;text-align:right;font-family:'DM Mono',monospace}
+
+.recent-list{display:flex;flex-direction:column;gap:8px}
+.recent-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.recent-item:last-child{border-bottom:none}
+.recent-name{font-size:12px;font-weight:600;color:var(--ink);flex:1}
+.recent-amt{font-size:12px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace;white-space:nowrap}
+.recent-date{font-size:10px;color:var(--muted);white-space:nowrap}
+
+.activity-list{display:flex;flex-direction:column;gap:6px}
+.activity-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border)}
+.activity-item:last-child{border-bottom:none}
+.activity-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.activity-text{font-size:12px;color:var(--ink2);line-height:1.4}
+.activity-time{font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto;padding-top:2px}
+
+/* ── SECTION HEADER ── */
+.sec-header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--ink)}
+.sec-count{font-size:11px;font-weight:600;background:var(--yellow-bg);color:#7a6200;padding:3px 10px;border-radius:12px;border:1px solid var(--yellow)}
+.btn-primary{background:var(--ink);color:#fff;border:none;padding:8px 18px;border-radius:4px;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.3px;margin-left:auto;transition:background .15s}
+.btn-primary:hover{background:#2a2a2a}
+.btn-yellow{background:var(--yellow);color:var(--ink);border:none;padding:8px 18px;border-radius:4px;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:background .15s}
+.btn-yellow:hover{background:var(--yellow2)}
+.btn-ghost{background:transparent;color:var(--ink2);border:1.5px solid var(--border);padding:7px 14px;border-radius:4px;font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-ghost:hover{border-color:var(--ink);color:var(--ink)}
+.btn-sm{padding:4px 10px;font-size:10px;border-radius:3px}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red);padding:4px 10px;border-radius:3px;font-family:'Sora',sans-serif;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-danger:hover{background:var(--red);color:#fff}
+
+/* ── FILTERS ── */
+.filters-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-chip{background:transparent;border:1.5px solid var(--border);color:var(--ink2);padding:4px 12px;border-radius:16px;font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.filter-chip:hover{border-color:var(--ink);color:var(--ink)}
+.filter-chip.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.search-box{margin-left:auto;position:relative}
+.search-box input{background:var(--paper);border:1.5px solid var(--border);border-radius:16px;padding:5px 12px 5px 30px;font-family:'Sora',sans-serif;font-size:11px;color:var(--ink);width:180px;outline:none;transition:border-color .15s}
+.search-box input:focus{border-color:var(--yellow)}
+.search-box::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:11px;pointer-events:none}
+
+/* ── TABLE ── */
+.table-wrap{background:var(--paper);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--bg);border-bottom:2px solid var(--border)}
+th{padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#faf9f6}
+td{padding:11px 14px;font-size:12px;color:var(--ink2);vertical-align:middle}
+td.bold{font-weight:600;color:var(--ink)}
+td.mono{font-family:'DM Mono',monospace;font-size:11px}
+td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end;align-items:center}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;letter-spacing:.5px;padding:3px 8px;border-radius:12px;white-space:nowrap}
+.badge-offen{background:#f0ede7;color:#666}
+.badge-kontakt{background:var(--yellow-bg);color:#7a6200;border:1px solid rgba(245,196,0,.3)}
+.badge-termin{background:var(--blue-bg);color:var(--blue)}
+.badge-angebot{background:var(--orange-bg);color:var(--orange)}
+.badge-kunde{background:var(--green-bg);color:var(--green)}
+.badge-absage{background:var(--red-bg);color:var(--red)}
+.badge-entwurf{background:#f0ede7;color:#666}
+.badge-gesendet{background:var(--blue-bg);color:var(--blue)}
+.badge-akzeptiert{background:var(--green-bg);color:var(--green)}
+.badge-abgelehnt{background:var(--red-bg);color:var(--red)}
+.badge-offen-rg{background:var(--orange-bg);color:var(--orange)}
+.badge-bezahlt{background:var(--green-bg);color:var(--green)}
+.badge-ueberfaellig{background:var(--red-bg);color:var(--red)}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--paper);border-radius:8px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.modal-header h2{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--ink);flex:1}
+.modal-close{background:transparent;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:2px 6px;border-radius:4px}
+.modal-close:hover{color:var(--ink);background:var(--bg)}
+.modal-body{padding:20px 24px}
+.modal-footer{padding:14px 24px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+
+/* ── FORM ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid.three{grid-template-columns:1fr 1fr 1fr}
+.form-full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.field input,.field select,.field textarea{background:var(--bg);border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;font-family:'Sora',sans-serif;font-size:12px;color:var(--ink);outline:none;transition:border-color .15s;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--yellow);background:#fff}
+.field textarea{resize:vertical;min-height:70px}
+.field select{cursor:pointer}
+.form-sep{grid-column:1/-1;height:1px;background:var(--border);margin:4px 0}
+.form-section-title{grid-column:1/-1;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding-top:6px}
+
+/* ── POSITION LINES ── */
+.positions-wrap{border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:4px}
+.pos-header{display:grid;grid-template-columns:22px 1fr 70px 80px 80px 28px;gap:8px;padding:7px 10px;background:var(--bg);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.pos-item{border-top:1px solid var(--border);background:#fff}
+.pos-row{display:grid;grid-template-columns:22px 1fr 70px 80px 80px 28px;gap:8px;padding:7px 10px;align-items:center}
+.pos-row input{border:1px solid var(--border);border-radius:3px;padding:4px 7px;font-family:'Sora',sans-serif;font-size:11px;background:#fff;outline:none;width:100%;transition:border-color .15s}
+.pos-row input:focus{border-color:var(--yellow)}
+.pos-toggle{background:transparent;border:1px solid var(--border);border-radius:3px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--muted);flex-shrink:0;transition:all .15s;padding:0}
+.pos-toggle:hover{border-color:var(--yellow);color:var(--yellow)}
+.pos-toggle.open{background:var(--yellow-bg);border-color:var(--yellow);color:var(--yellow2)}
+.pos-detail{display:none;padding:0 10px 8px 52px}
+.pos-detail.open{display:block}
+.pos-detail textarea{width:100%;border:1px solid var(--border);border-radius:3px;padding:6px 8px;font-family:'Sora',sans-serif;font-size:11px;color:var(--ink2);background:var(--bg);outline:none;resize:vertical;min-height:52px;line-height:1.5;transition:border-color .15s}
+.pos-detail textarea:focus{border-color:var(--yellow);background:#fff}
+.pos-detail-hint{font-size:10px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.pos-total{font-size:11px;font-weight:700;color:var(--ink);font-family:'DM Mono',monospace;text-align:right}
+.pos-remove{background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:3px}
+.pos-remove:hover{background:var(--red-bg)}
+.btn-add-pos{width:100%;padding:7px;background:transparent;border:none;border-top:1px solid var(--border);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;color:var(--blue);cursor:pointer;transition:background .15s}
+.btn-add-pos:hover{background:var(--blue-bg)}
+.pos-sum{display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:var(--bg);border-top:2px solid var(--border)}
+.pos-sum-row{display:flex;justify-content:space-between;align-items:center}
+.pos-sum-row .lbl{font-size:11px;color:var(--muted);font-weight:500}
+.pos-sum-row .val{font-size:12px;font-weight:700;color:var(--ink);font-family:'DM Mono',monospace}
+.pos-sum-row.total .lbl{font-size:13px;color:var(--ink);font-weight:700}
+.pos-sum-row.total .val{font-size:15px;color:var(--green)}
+
+/* ── CONTACT DETAIL ── */
+.detail-header{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:22px 24px;box-shadow:var(--shadow);margin-bottom:14px;display:flex;align-items:flex-start;gap:20px}
+.detail-avatar{width:52px;height:52px;border-radius:6px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--yellow);flex-shrink:0}
+.detail-info{flex:1}
+.detail-name{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;color:var(--ink);line-height:1}
+.detail-sub{font-size:12px;color:var(--muted);margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
+.detail-sub span{display:flex;align-items:center;gap:4px}
+.detail-actions{display:flex;gap:8px;align-items:flex-start;flex-shrink:0}
+
+/* ── PRINT STYLES ── */
+@media print{
+  .topbar,.nav,.filters-bar,.sec-header,.btn-primary,.btn-yellow,.btn-ghost,.btn-sm,.btn-danger,.modal,.overlay,.no-print{display:none!important}
+  .page{display:block!important;padding:0;max-width:100%}
+  body{background:#fff}
+  .print-doc{display:block!important}
+}
+
+.print-doc{display:none}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .dash-grid{grid-template-columns:1fr 1fr}
+  .dash-row,.dash-row.three{grid-template-columns:1fr}
+  .form-grid,.form-grid.three{grid-template-columns:1fr}
+  .nav-btn span{display:none}
+}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state .emo{font-size:40px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+
+/* ── DOCUMENT PRINT ── */
+#print-area{display:none}
+@media print{
+  #print-area{display:block;padding:20mm}
+  body > *:not(#print-area){display:none!important}
+}
+.doc-paper{font-family:'Sora',sans-serif;color:#111;max-width:210mm;margin:0 auto}
+.doc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
+.doc-logo-txt{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:#111}
+.doc-logo-txt span{color:#c49b00}
+.doc-type{font-size:28px;font-weight:700;text-align:right;margin-bottom:4px}
+.doc-num{font-size:13px;color:#666}
+.doc-addresses{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:28px}
+.doc-from,.doc-to{font-size:12px;line-height:1.7}
+.doc-from-label,.doc-to-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:6px;font-weight:700}
+.doc-meta-row{display:flex;gap:32px;margin-bottom:28px;padding:14px 16px;background:#f8f7f4;border-radius:4px}
+.doc-meta-item{font-size:12px}
+.doc-meta-item b{display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:3px}
+.doc-table{width:100%;border-collapse:collapse;margin-bottom:20px}
+.doc-table th{background:#f0ede7;padding:9px 12px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#666;text-align:left;border-bottom:2px solid #ddd}
+.doc-table td{padding:10px 12px;font-size:12px;border-bottom:1px solid #eee}
+.doc-table tr:last-child td{border-bottom:none}
+.doc-table .right{text-align:right}
+.doc-totals{display:flex;flex-direction:column;gap:5px;align-items:flex-end;margin-bottom:28px}
+.doc-total-row{display:flex;gap:48px;font-size:12px}
+.doc-total-row .lbl{color:#666}
+.doc-total-row .val{font-weight:600;min-width:80px;text-align:right;font-family:'DM Mono',monospace}
+.doc-total-row.big .lbl{font-weight:700;font-size:14px;color:#111}
+.doc-total-row.big .val{font-size:15px;color:#1f9e5a}
+.doc-divider{border:none;border-top:2px solid #111;margin-bottom:24px}
+.doc-footer{margin-top:40px;padding-top:16px;border-top:1px solid #ddd;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;font-size:10.5px;color:#666;line-height:1.7}
+.doc-footer b{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;margin-bottom:4px}
+.doc-notes{font-size:12px;color:#444;background:#f8f7f4;padding:14px 16px;border-radius:4px;margin-bottom:20px;border-left:3px solid #f5c400}
+.doc-notes b{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">VIRAL <span>OUTLAWS</span></div>
+    <div class="logo-sep"></div>
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showPage('dashboard')">📊 Dashboard</button>
+      <button class="nav-btn" onclick="showPage('contacts')">👥 Kontakte</button>
+      <button class="nav-btn" onclick="showPage('kalender')">📅 Kalender</button>
+      <button class="nav-btn" onclick="showPage('angebote')">📋 Angebote</button>
+      <button class="nav-btn" onclick="showPage('rechnungen')">🧾 Rechnungen</button>
+      <button class="nav-btn" onclick="showPage('kanban')">🗂 Aufgaben</button>
+      <button class="nav-btn" onclick="showPage('ziele')">🎯 Ziele</button>
+    </nav>
+    <div class="topbar-right">
+      <button class="btn-settings" onclick="openEmailModal()">✉ E-Mail Vorlagen</button>
+      <button class="btn-settings" onclick="openGlobalSearch()" title="Strg+K">🔍 Suche</button>
+      <button class="btn-settings" onclick="exportMonatsbericht()">📊 Monatsbericht</button>
+      <button class="btn-settings" id="dark-toggle" onclick="toggleDarkMode()">🌙</button>
+      <button class="btn-settings" onclick="showPage('settings')">⚙ Einstellungen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+  <div class="dash-grid" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpi yellow">
+      <div class="kpi-label">MRR (Retainer)</div>
+      <div class="kpi-val" id="kpi-mrr">0 €</div>
+      <div class="kpi-sub" id="kpi-mrr-sub">0 aktive Retainer</div>
+      <div class="kpi-icon">🔄</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Umsatz (bezahlt)</div>
+      <div class="kpi-val" id="kpi-umsatz">0 €</div>
+      <div class="kpi-sub" id="kpi-umsatz-sub">0 Rechnungen bezahlt</div>
+      <div class="kpi-icon">✅</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-label">Aktive Kunden</div>
+      <div class="kpi-val" id="kpi-kunden">0</div>
+      <div class="kpi-sub" id="kpi-kunden-sub">von 0 Kontakten</div>
+      <div class="kpi-icon">👥</div>
+    </div>
+    <div class="kpi orange">
+      <div class="kpi-label">Offene Pipeline</div>
+      <div class="kpi-val" id="kpi-pipeline">0 €</div>
+      <div class="kpi-sub" id="kpi-pipeline-sub">0 Angebote offen</div>
+      <div class="kpi-icon">💰</div>
+    </div>
+    <div class="kpi" style="border-top:3px solid var(--red)">
+      <div class="kpi-label">Offen / Überfällig</div>
+      <div class="kpi-val" id="kpi-offen">0 €</div>
+      <div class="kpi-sub" id="kpi-offen-sub">0 Rechnungen ausstehend</div>
+      <div class="kpi-icon">⏰</div>
+    </div>
+  </div>
+
+  <div class="dash-row three">
+    <div class="dash-card">
+      <h3>Pipeline nach Status</h3>
+      <div class="pipeline-bars" id="dash-pipeline"></div>
+    </div>
+    <div class="dash-card">
+      <h3>Letzte Rechnungen</h3>
+      <div class="recent-list" id="dash-recent-rg"></div>
+    </div>
+    <div class="dash-card">
+      <h3>Letzte Aktivität</h3>
+      <div class="activity-list" id="dash-activity"></div>
+    </div>
+  </div>
+
+  <!-- MINI CALENDAR ROW -->
+  <div class="dash-row" style="grid-template-columns:260px 1fr;margin-bottom:0">
+    <div class="dash-card" style="padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h3 id="mini-cal-label" style="font-size:11px"></h3>
+        <div style="display:flex;gap:4px">
+          <button class="btn-ghost btn-sm" style="padding:2px 7px" onclick="miniCalPrev()">◀</button>
+          <button class="btn-ghost btn-sm" style="padding:2px 7px" onclick="miniCalNext()">▶</button>
+        </div>
+      </div>
+      <div class="mini-cal-grid" id="mini-cal-grid"></div>
+    </div>
+    <div class="dash-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3>📅 Termine heute & morgen</h3>
+        <button class="btn-ghost btn-sm" onclick="showPage('kalender')">Kalender öffnen →</button>
+      </div>
+      <div id="dash-cal-events"></div>
+    </div>
+  </div>
+
+  <!-- TODAY / WIEDERVORLAGEN -->
+  <div class="dash-row" style="grid-template-columns:1fr 1fr;margin-top:0">
+    <div class="dash-card" style="border-left:3px solid var(--red)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="color:var(--red)">🔔 Heute zu tun <span id="todo-badge" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px">0</span></h3>
+        <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal()">+ Erinnerung</button>
+      </div>
+      <div id="dash-todo"></div>
+    </div>
+    <div class="dash-card" style="border-left:3px solid var(--yellow)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3>📅 Kommende Erinnerungen</h3>
+      </div>
+      <div id="dash-upcoming"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     KONTAKTE
+════════════════════════════════════════ -->
+<div class="page" id="page-contacts">
+  <div class="sec-header">
+    <div class="sec-title">Kontakte</div>
+    <div class="sec-count" id="contacts-count">0</div>
+    <button class="btn-primary" onclick="openContactModal()">+ Neuer Kontakt</button>
+  </div>
+  <div class="filters-bar">
+    <button class="filter-chip active" data-cf="alle" onclick="setContactFilter('alle',this)">Alle</button>
+    <button class="filter-chip" data-cf="offen" onclick="setContactFilter('offen',this)">◌ Offen</button>
+    <button class="filter-chip" data-cf="kontakt" onclick="setContactFilter('kontakt',this)">📞 Kontaktiert</button>
+    <button class="filter-chip" data-cf="termin" onclick="setContactFilter('termin',this)">📅 Termin</button>
+    <button class="filter-chip" data-cf="angebot" onclick="setContactFilter('angebot',this)">📋 Angebot</button>
+    <button class="filter-chip" data-cf="kunde" onclick="setContactFilter('kunde',this)">✅ Kunde</button>
+    <button class="filter-chip" data-cf="absage" onclick="setContactFilter('absage',this)">✗ Absage</button>
+    <div class="search-box"><input id="contact-search" placeholder="Suchen…" oninput="renderContacts()"></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Name / Firma</th><th>Branche</th><th>Ort</th><th>Telefon</th><th>Status</th><th>Wert</th><th>Letzte Aktivität</th><th></th>
+      </tr></thead>
+      <tbody id="contacts-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     ANGEBOTE
+════════════════════════════════════════ -->
+<div class="page" id="page-angebote">
+  <div class="sec-header">
+    <div class="sec-title">Angebote</div>
+    <div class="sec-count" id="angebote-count">0</div>
+    <button class="btn-primary" onclick="openAngebotModal()">+ Neues Angebot</button>
+  </div>
+  <!-- Summary strip -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="angebote-summary"></div>
+  <div class="filters-bar">
+    <button class="filter-chip active" data-af="alle" onclick="setAngebotFilter('alle',this)">Alle</button>
+    <button class="filter-chip" data-af="entwurf" onclick="setAngebotFilter('entwurf',this)">Entwurf</button>
+    <button class="filter-chip" data-af="gesendet" onclick="setAngebotFilter('gesendet',this)">Gesendet</button>
+    <button class="filter-chip" data-af="akzeptiert" onclick="setAngebotFilter('akzeptiert',this)">Akzeptiert</button>
+    <button class="filter-chip" data-af="abgelehnt" onclick="setAngebotFilter('abgelehnt',this)">Abgelehnt</button>
+    <div class="search-box"><input id="angebot-search" placeholder="Suchen…" oninput="renderAngebote()"></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Nr.</th><th>Kunde</th><th>Betreff</th><th>Datum</th><th>Betrag</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="angebote-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     RECHNUNGEN
+════════════════════════════════════════ -->
+<div class="page" id="page-rechnungen">
+  <div class="sec-header">
+    <div class="sec-title">Rechnungen</div>
+    <div class="sec-count" id="rechnungen-count">0</div>
+    <button class="btn-primary" onclick="openRechnungModal()">+ Neue Rechnung</button>
+  </div>
+  <!-- Summary strip -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="rechnungen-summary"></div>
+  <div class="filters-bar">
+    <button class="filter-chip active" data-rf="alle" onclick="setRechnungFilter('alle',this)">Alle</button>
+    <button class="filter-chip" data-rf="offen-rg" onclick="setRechnungFilter('offen-rg',this)">Offen</button>
+    <button class="filter-chip" data-rf="bezahlt" onclick="setRechnungFilter('bezahlt',this)">Bezahlt</button>
+    <button class="filter-chip" data-rf="ueberfaellig" onclick="setRechnungFilter('ueberfaellig',this)">Überfällig</button>
+    <div class="search-box"><input id="rechnung-search" placeholder="Suchen…" oninput="renderRechnungen()"></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Nr.</th><th>Kunde</th><th>Betreff</th><th>Datum</th><th>Fällig</th><th>Betrag</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="rechnungen-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SETTINGS
+════════════════════════════════════════ -->
+<div class="page" id="page-settings">
+  <div class="sec-header"><div class="sec-title">Einstellungen</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px">
+    <div class="dash-card">
+      <h3 style="margin-bottom:16px">Meine Agentur</h3>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="field"><label>Firmenname</label><input id="s-name" placeholder="Viral Outlaws"></div>
+        <div class="field"><label>Inhaber</label><input id="s-inhaber" placeholder="Kim Mustermann"></div>
+        <!-- Logo upload -->
+        <div class="field form-full" style="display:flex;align-items:center;gap:14px">
+          <img id="s-logo-preview" src="" style="height:44px;object-fit:contain;display:none;border:1px solid var(--border);border-radius:4px;padding:4px;background:#fff">
+          <div style="flex:1">
+            <label style="display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)">Agentur-Logo (erscheint auf Rechnungen & Angeboten)</label>
+            <input type="file" id="s-logo-input" accept="image/*" style="font-size:11px;color:var(--muted);width:100%">
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">Empfohlen: PNG mit Transparenz, max. 300 KB</div>
+          </div>
+        </div>
+        <div class="field"><label>Straße & Nr.</label><input id="s-str" placeholder="Musterstraße 1"></div>
+        <div class="field"><label>PLZ & Ort</label><input id="s-plz" placeholder="87780 Woringen"></div>
+        <div class="field"><label>Telefon</label><input id="s-tel" placeholder="+49 8331 …"></div>
+        <div class="field"><label>E-Mail</label><input id="s-email" placeholder="kim@viraloutlaws.de"></div>
+        <div class="field"><label>Website</label><input id="s-web" placeholder="viraloutlaws.de"></div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <h3 style="margin-bottom:16px">Bankverbindung & Steuer</h3>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="field"><label>Steuernummer</label><input id="s-steuer" placeholder="12/345/67890"></div>
+        <div class="field"><label>USt-IdNr. (optional)</label><input id="s-ust" placeholder="DE123456789"></div>
+        <div class="field"><label>IBAN</label><input id="s-iban" placeholder="DE89 3704 0044 0532 0130 00"></div>
+        <div class="field"><label>BIC</label><input id="s-bic" placeholder="COBADEFFXXX"></div>
+        <div class="field"><label>Bank</label><input id="s-bank" placeholder="Commerzbank"></div>
+        <div class="field"><label>MwSt.-Satz (%)</label><input id="s-mwst" placeholder="19" type="number"></div>
+        <div class="field"><label>Zahlungsziel (Tage)</label><input id="s-zahlung" placeholder="14" type="number"></div>
+        <div class="field" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--ink2)">
+            <input type="checkbox" id="s-kleinunternehmer" style="width:16px;height:16px;accent-color:var(--yellow);cursor:pointer">
+            Kleinunternehmerregelung § 19 UStG aktiv
+          </label>
+          <div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5">
+            Wenn aktiv: Keine MwSt. auf Rechnungen & Angeboten. Der gesetzliche Pflichthinweis wird automatisch eingefügt.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dash-card" style="grid-column:1/-1">
+      <h3 style="margin-bottom:16px">Standard-Fußnote auf Dokumenten</h3>
+      <div class="field"><textarea id="s-footer" rows="3" placeholder="Vielen Dank für Ihr Vertrauen. Bei Fragen stehen wir Ihnen jederzeit zur Verfügung."></textarea></div>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-yellow" onclick="saveSettings()">Einstellungen speichern</button>
+        <button class="btn-ghost" onclick="exportData()">📤 Daten exportieren</button>
+        <button class="btn-ghost" onclick="importData()">📥 Daten importieren</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+      </div>
+    </div>
+
+    <!-- GOOGLE SHEETS SYNC -->
+    <div class="dash-card" style="grid-column:1/-1;border-left:3px solid #0ea271">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="width:36px;height:36px;background:#0ea271;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📊</div>
+        <div>
+          <h3 style="margin-bottom:2px">Google Sheets Synchronisierung</h3>
+          <div style="font-size:11px;color:var(--muted)">Alle Daten automatisch in Google Sheets speichern – von jedem Gerät abrufbar</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <div id="sync-status-dot" style="width:10px;height:10px;border-radius:50%;background:#ccc;flex-shrink:0"></div>
+          <span id="sync-status-txt" style="font-size:11px;color:var(--muted)">Nicht verbunden</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:14px">
+        <div class="field">
+          <label>Apps Script Web App URL</label>
+          <input id="s-gsurl" placeholder="https://script.google.com/macros/s/…/exec" style="font-family:'DM Mono',monospace;font-size:11px">
+        </div>
+        <button class="btn-ghost" onclick="testConnection()" style="white-space:nowrap;height:38px">🔌 Verbindung testen</button>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn-primary" onclick="syncToSheets()" id="btn-sync-up">☁ Jetzt hochladen</button>
+        <button class="btn-ghost" onclick="loadFromSheets()" id="btn-sync-down">⬇ Von Sheets laden</button>
+        <button class="btn-ghost" onclick="toggleAutoSync()" id="btn-autosync">🔄 Auto-Sync: Aus</button>
+        <button class="btn-ghost" onclick="openUrlInBrowser()" style="color:var(--blue);border-color:var(--blue)">🔗 URL im Browser testen</button>
+      </div>
+
+      <div style="background:var(--bg);border-radius:4px;padding:14px 16px;font-size:11px;line-height:1.9;color:var(--ink2)">
+        <strong style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px">📋 Einrichtung in 5 Schritten</strong>
+        <div>1. Gehe zu <a href="https://script.google.com" target="_blank" style="color:var(--blue)">script.google.com</a> → Neues Projekt</div>
+        <div>2. Code einfügen (aus <strong>apps-script.gs</strong>) → Speichern</div>
+        <div>3. <strong>Bereitstellen → Neue Bereitstellung → Web-App</strong></div>
+        <div>4. Ausführen als: <strong>Ich</strong> · Zugriff: <strong>Jeder</strong> → Bereitstellen → Berechtigungen erteilen</div>
+        <div>5. URL kopieren → oben einfügen → Speichern → Testen</div>
+        <div style="margin-top:10px;padding:10px 12px;background:var(--yellow-bg);border-radius:4px;border-left:3px solid var(--yellow)">
+          <strong style="display:block;margin-bottom:3px">💡 Sync klappt nicht? Beste Lösung:</strong>
+          Lade die CRM-Datei in <a href="https://drive.google.com" target="_blank" style="color:var(--blue)">Google Drive</a> hoch und öffne sie von dort im Browser. Dann funktioniert der Sync direkt ohne Umweg über Proxy-Server.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     KALENDER
+════════════════════════════════════════ -->
+<div class="page" id="page-kalender">
+  <div class="sec-header">
+    <div class="sec-title">Kalender</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:0">
+      <button class="btn-ghost" onclick="kalenderPrevMonth()">◀</button>
+      <span id="kal-month-label" style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;min-width:180px;text-align:center"></span>
+      <button class="btn-ghost" onclick="kalenderNextMonth()">▶</button>
+      <button class="btn-ghost btn-sm" onclick="kalenderGoToday()">Heute</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-left:auto">
+      <button class="filter-chip active" id="kal-view-month" onclick="setKalView('month',this)">Monat</button>
+      <button class="filter-chip" id="kal-view-week" onclick="setKalView('week',this)">Woche</button>
+    </div>
+    <button class="btn-primary" onclick="openKalEventModal()">+ Termin</button>
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#2563b8;display:inline-block"></span>Termin</span>
+    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#d97706;display:inline-block"></span>Erinnerung</span>
+    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#d63030;display:inline-block"></span>Fällige Rechnung</span>
+    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#1f9e5a;display:inline-block"></span>Retainer-Abrechnung</span>
+  </div>
+
+  <div id="kal-grid" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:var(--shadow)"></div>
+
+  <!-- Side: upcoming events -->
+  <div style="display:grid;grid-template-columns:1fr 280px;gap:14px;margin-top:14px;align-items:start" id="kal-bottom">
+    <div></div>
+    <div class="dash-card">
+      <h3 style="margin-bottom:12px">📋 Nächste Termine</h3>
+      <div id="kal-upcoming-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     AUFGABEN / KANBAN
+════════════════════════════════════════ -->
+<div class="page" id="page-kanban">
+  <div class="sec-header">
+    <div class="sec-title">Aufgaben-Board</div>
+    <select id="kanban-filter-contact" onchange="renderKanban()" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
+      <option value="">Alle Kontakte</option>
+    </select>
+    <button class="btn-primary" onclick="openKanbanTaskModal()">+ Neue Aufgabe</button>
+  </div>
+  <div id="kanban-board" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start"></div>
+</div>
+
+<!-- ════════════════════════════════════════
+     ZIELE & FORTSCHRITT
+════════════════════════════════════════ -->
+<div class="page" id="page-ziele">
+  <div class="sec-header"><div class="sec-title">Ziele & 2-Jahres-Plan</div>
+    <button class="btn-primary" onclick="saveZiele()">💾 Speichern</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px">
+
+    <!-- MRR Ziel-Fortschritt -->
+    <div class="dash-card" style="border-left:3px solid var(--yellow)">
+      <h3 style="margin-bottom:16px">🎯 MRR-Ziel Fortschritt</h3>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Aktueller MRR</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--green)" id="z-mrr-current">0 €</div>
+        </div>
+        <div style="font-size:24px;color:var(--border)">→</div>
+        <div style="flex:1;text-align:right">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Ziel (Kündigungsziel)</div>
+          <div class="field" style="margin:0"><input id="z-mrr-ziel" type="number" placeholder="4500" style="font-size:18px;font-weight:700;text-align:right"></div>
+        </div>
+      </div>
+      <div style="height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin-bottom:8px">
+        <div id="z-mrr-bar" style="height:100%;background:linear-gradient(90deg,var(--yellow),var(--green));border-radius:6px;transition:width .5s;width:0%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+        <span id="z-mrr-pct">0%</span>
+        <span id="z-mrr-missing">fehlen: 0 €</span>
+      </div>
+    </div>
+
+    <!-- Kunden-Ziel -->
+    <div class="dash-card" style="border-left:3px solid var(--blue)">
+      <h3 style="margin-bottom:16px">👥 Kunden-Ziel</h3>
+      <div style="display:flex;gap:16px;margin-bottom:14px">
+        <div class="field" style="flex:1"><label>Ziel: Anzahl Kunden</label><input id="z-kunden-ziel" type="number" placeholder="15"></div>
+        <div class="field" style="flex:1"><label>Bis wann</label><input id="z-kunden-datum" type="date"></div>
+      </div>
+      <div style="height:10px;background:var(--bg);border-radius:5px;overflow:hidden;margin-bottom:6px">
+        <div id="z-kunden-bar" style="height:100%;background:var(--blue);border-radius:5px;transition:width .5s;width:0%"></div>
+      </div>
+      <div id="z-kunden-info" style="font-size:11px;color:var(--muted)">0 von 0 Kunden</div>
+    </div>
+
+    <!-- Meilensteine -->
+    <div class="dash-card" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>🏁 Meilensteine</h3>
+        <button class="btn-ghost btn-sm" onclick="addMeilenstein()">+ Meilenstein</button>
+      </div>
+      <div id="meilensteine-list"></div>
+    </div>
+
+    <!-- Retainer Übersicht -->
+    <div class="dash-card" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>🔄 Retainer-Übersicht</h3>
+        <button class="btn-primary" onclick="openRetainerModal()">+ Retainer</button>
+      </div>
+      <div class="table-wrap" style="box-shadow:none;border:1px solid var(--border)">
+        <table>
+          <thead><tr><th>Kunde</th><th>Paket</th><th>Betrag/Monat</th><th>Start</th><th>Status</th><th></th></tr></thead>
+          <tbody id="retainer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     KONTAKT DETAIL
+════════════════════════════════════════ -->
+<div class="page" id="page-contact-detail">
+  <div style="margin-bottom:16px">
+    <button class="btn-ghost btn-sm" onclick="showPage('contacts')" style="margin-bottom:12px">← Zurück</button>
+  </div>
+  <div id="contact-detail-content"></div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MODALS
+════════════════════════════════════════ -->
+
+<!-- CONTACT MODAL -->
+<div class="overlay" id="contact-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="contact-modal-title">Neuer Kontakt</h2>
+      <button class="modal-close" onclick="closeModal('contact-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full"><label>Firmenname *</label><input id="c-firma" placeholder="Muster GmbH"></div>
+        <!-- Photo upload -->
+        <div class="field form-full" style="display:flex;align-items:center;gap:14px">
+          <img id="c-photo-preview" src="" style="width:52px;height:52px;border-radius:6px;object-fit:cover;display:none;border:2px solid var(--border)">
+          <div>
+            <label style="display:block;margin-bottom:4px">Logo / Foto</label>
+            <input type="file" id="c-photo-input" accept="image/*" style="font-size:11px;color:var(--muted)">
+            <input type="hidden" id="c-photo-data">
+          </div>
+        </div>
+        <div class="field"><label>Ansprechpartner</label><input id="c-person" placeholder="Max Mustermann"></div>
+        <div class="field"><label>Branche</label>
+          <select id="c-branche">
+            <option value="handwerk">Handwerk</option>
+            <option value="arzt">Arzt / Praxis</option>
+            <option value="gastro">Gastronomie</option>
+            <option value="dienst">Dienstleister</option>
+            <option value="sonstige">Sonstige</option>
+          </select>
+        </div>
+        <div class="field"><label>Straße & Nr.</label><input id="c-str" placeholder="Hauptstr. 1"></div>
+        <div class="field"><label>PLZ & Ort</label><input id="c-plz" placeholder="87700 Memmingen"></div>
+        <div class="field"><label>Telefon</label><input id="c-tel" placeholder="08331 / …"></div>
+        <div class="field"><label>E-Mail</label><input id="c-email" placeholder="info@firma.de"></div>
+        <div class="field"><label>Website</label><input id="c-web" placeholder="firma.de"></div>
+        <div class="field"><label>Instagram</label><input id="c-instagram" placeholder="@firma"></div>
+        <div class="field"><label>Facebook</label><input id="c-facebook" placeholder="facebook.com/firma"></div>
+        <div class="field"><label>Google Business URL</label><input id="c-gbusiness" placeholder="g.page/firma"></div>
+        <div class="field"><label>Status</label>
+          <select id="c-status">
+            <option value="offen">◌ Offen</option>
+            <option value="kontakt">📞 Kontaktiert</option>
+            <option value="termin">📅 Termin vereinbart</option>
+            <option value="angebot">📋 Angebot erstellt</option>
+            <option value="kunde">✅ Kunde</option>
+            <option value="absage">✗ Absage</option>
+          </select>
+        </div>
+        <div class="field"><label>Analyse / Notiz</label><textarea id="c-ana" placeholder="Keine Website, veralteter Auftritt…"></textarea></div>
+        <div class="field form-full"><label>Interne Notizen</label><textarea id="c-notes" placeholder="Gesprächsverlauf, nächste Schritte…"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('contact-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveContact()">Kontakt speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ANGEBOT MODAL -->
+<div class="overlay" id="angebot-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <h2 id="angebot-modal-title">Neues Angebot</h2>
+      <button class="modal-close" onclick="closeModal('angebot-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Kunde *</label>
+          <select id="a-kunde"><option value="">— Kunde wählen —</option></select>
+        </div>
+        <div class="field"><label>Datum</label><input id="a-datum" type="date"></div>
+        <div class="field form-full"><label>Betreff *</label><input id="a-betreff" placeholder="Webdesign & Performance Marketing Paket"></div>
+        <div class="field form-full"><label>Positionen</label>
+          <div class="positions-wrap">
+            <div class="pos-header"><span></span><span>Beschreibung</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
+            <div id="a-positions"></div>
+            <button class="btn-add-pos" onclick="addPosition('a-positions','a')">+ Position hinzufügen</button>
+            <div class="pos-sum" id="a-sum">
+              <div class="pos-sum-row"><span class="lbl">Netto</span><span class="val" id="a-netto">0,00 €</span></div>
+              <div class="pos-sum-row" id="a-mwst-row"><span class="lbl" id="a-mwst-lbl">MwSt. 19%</span><span class="val" id="a-mwst-val">0,00 €</span></div>
+              <div class="pos-sum-row total"><span class="lbl">Gesamt</span><span class="val" id="a-brutto">0,00 €</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="field form-full"><label>Anmerkungen</label><textarea id="a-notes" placeholder="Optionale Hinweise zum Angebot…"></textarea></div>
+        <div class="field"><label>Status</label>
+          <select id="a-status">
+            <option value="entwurf">Entwurf</option>
+            <option value="gesendet">Gesendet</option>
+            <option value="akzeptiert">Akzeptiert</option>
+            <option value="abgelehnt">Abgelehnt</option>
+          </select>
+        </div>
+        <div class="field"><label>Gültig bis</label><input id="a-valid" type="date"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('angebot-modal')">Abbrechen</button>
+      <button class="btn-ghost" onclick="saveAngebot('entwurf')">Als Entwurf</button>
+      <button class="btn-yellow" onclick="saveAngebot()">Speichern & Vorschau</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECHNUNG MODAL -->
+<div class="overlay" id="rechnung-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <h2 id="rechnung-modal-title">Neue Rechnung</h2>
+      <button class="modal-close" onclick="closeModal('rechnung-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Kunde *</label>
+          <select id="r-kunde"><option value="">— Kunde wählen —</option></select>
+        </div>
+        <div class="field"><label>Datum</label><input id="r-datum" type="date"></div>
+        <div class="field form-full"><label>Betreff *</label><input id="r-betreff" placeholder="Webdesign & Performance Marketing"></div>
+        <div class="field form-full"><label>Positionen</label>
+          <div class="positions-wrap">
+            <div class="pos-header"><span></span><span>Beschreibung</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
+            <div id="r-positions"></div>
+            <button class="btn-add-pos" onclick="addPosition('r-positions','r')">+ Position hinzufügen</button>
+            <div class="pos-sum" id="r-sum">
+              <div class="pos-sum-row"><span class="lbl">Netto</span><span class="val" id="r-netto">0,00 €</span></div>
+              <div class="pos-sum-row" id="r-mwst-row"><span class="lbl" id="r-mwst-lbl">MwSt. 19%</span><span class="val" id="r-mwst-val">0,00 €</span></div>
+              <div class="pos-sum-row total"><span class="lbl">Gesamt</span><span class="val" id="r-brutto">0,00 €</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="field form-full"><label>Anmerkungen</label><textarea id="r-notes" placeholder="Zahlungshinweise, Projektdetails…"></textarea></div>
+        <div class="field"><label>Fälligkeitsdatum</label><input id="r-faellig" type="date"></div>
+        <div class="field"><label>Status</label>
+          <select id="r-status">
+            <option value="offen-rg">Offen</option>
+            <option value="bezahlt">Bezahlt</option>
+            <option value="ueberfaellig">Überfällig</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('rechnung-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveRechnung()">Speichern & Vorschau</button>
+    </div>
+  </div>
+</div>
+
+<!-- KALENDER EVENT MODAL -->
+<div class="overlay" id="kal-event-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h2 id="kal-modal-title">Neuer Termin</h2>
+      <button class="modal-close" onclick="closeModal('kal-event-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full"><label>Titel *</label><input id="ke-titel" placeholder="z.B. Kundengespräch Müller GmbH"></div>
+        <div class="field"><label>Datum *</label><input id="ke-datum" type="date"></div>
+        <div class="field"><label>Uhrzeit</label><input id="ke-zeit" type="time" placeholder="09:00"></div>
+        <div class="field"><label>Bis (optional)</label><input id="ke-bis" type="time" placeholder="10:00"></div>
+        <div class="field"><label>Typ</label>
+          <select id="ke-typ">
+            <option value="termin">📅 Termin</option>
+            <option value="anruf">📞 Anruf</option>
+            <option value="aufgabe">📋 Aufgabe</option>
+            <option value="sonstiges">📌 Sonstiges</option>
+          </select>
+        </div>
+        <div class="field"><label>Kontakt</label>
+          <select id="ke-kontakt"><option value="">— Kein Kontakt —</option></select>
+        </div>
+        <div class="field form-full"><label>Notiz</label>
+          <textarea id="ke-notiz" rows="3" placeholder="Details zum Termin…"></textarea>
+        </div>
+        <div class="field form-full" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="ke-reminder" style="width:16px;height:16px;accent-color:var(--yellow);cursor:pointer">
+          <label for="ke-reminder" style="font-size:12px;font-weight:600;color:var(--ink2);text-transform:none;letter-spacing:0;cursor:pointer">Erinnerung 1 Tag vorher setzen</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('kal-event-modal')">Abbrechen</button>
+      <button class="btn-ghost btn-danger" id="kal-delete-btn" style="display:none" onclick="deleteKalEvent(editId)">Löschen</button>
+      <button class="btn-yellow" onclick="saveKalEvent()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- KANBAN TASK MODAL -->
+<div class="overlay" id="kanban-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2 id="kanban-modal-title">Neue Aufgabe</h2>
+      <button class="modal-close" onclick="closeModal('kanban-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full"><label>Aufgabe *</label><input id="kt-text" placeholder="z.B. Google Ads einrichten"></div>
+        <div class="field"><label>Kontakt</label>
+          <select id="kt-kontakt"><option value="">— Kein Kontakt —</option></select>
+        </div>
+        <div class="field"><label>Spalte</label>
+          <select id="kt-col">
+            <option value="todo">📋 Offen</option>
+            <option value="doing">⚡ In Arbeit</option>
+            <option value="done">✅ Erledigt</option>
+          </select>
+        </div>
+        <div class="field"><label>Priorität</label>
+          <select id="kt-prio">
+            <option value="normal">Normal</option>
+            <option value="hoch">🔴 Hoch</option>
+            <option value="niedrig">🔵 Niedrig</option>
+          </select>
+        </div>
+        <div class="field"><label>Fällig am</label><input id="kt-datum" type="date"></div>
+        <div class="field form-full"><label>Notiz</label><textarea id="kt-notiz" rows="2" placeholder="Details…"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('kanban-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveKanbanTask()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETAINER MODAL -->
+<div class="overlay" id="retainer-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2 id="retainer-modal-title">Neuer Retainer</h2>
+      <button class="modal-close" onclick="closeModal('retainer-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full"><label>Kunde *</label>
+          <select id="ret-kunde"><option value="">— Kunde wählen —</option></select>
+        </div>
+        <div class="field form-full"><label>Paketbezeichnung</label><input id="ret-paket" placeholder="z.B. Performance Marketing Basis"></div>
+        <div class="field"><label>Betrag / Monat (€) *</label><input id="ret-betrag" type="number" placeholder="500"></div>
+        <div class="field"><label>Startdatum</label><input id="ret-start" type="date"></div>
+        <div class="field form-full"><label>Enthaltene Leistungen</label><textarea id="ret-leistungen" rows="3" placeholder="• Google Ads&#10;• Meta Ads&#10;• Monatliches Reporting"></textarea></div>
+        <div class="field"><label>Status</label>
+          <select id="ret-status">
+            <option value="aktiv">✅ Aktiv</option>
+            <option value="pausiert">⏸ Pausiert</option>
+            <option value="gekuendigt">✗ Gekündigt</option>
+          </select>
+        </div>
+        <div class="field"><label>Nächste Rechnung</label><input id="ret-next" type="date"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('retainer-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveRetainer()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIZ MODAL (Timeline) -->
+<div class="overlay" id="notiz-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2>Notiz hinzufügen</h2>
+      <button class="modal-close" onclick="closeModal('notiz-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Typ</label>
+          <select id="n-typ">
+            <option value="anruf">📞 Anruf</option>
+            <option value="email">✉ E-Mail</option>
+            <option value="termin">📅 Termin</option>
+            <option value="notiz">📝 Notiz</option>
+            <option value="angebot">📋 Angebot</option>
+          </select>
+        </div>
+        <div class="field"><label>Datum</label><input id="n-datum" type="date"></div>
+        <div class="field form-full"><label>Inhalt *</label><textarea id="n-text" rows="4" placeholder="Was wurde besprochen? Was ist der nächste Schritt?"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('notiz-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveNotiz()">Notiz speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOC UPLOAD MODAL -->
+<div class="overlay" id="doc-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h2>Dokument hinzufügen</h2>
+      <button class="modal-close" onclick="closeModal('doc-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full"><label>Bezeichnung *</label><input id="doc-name" placeholder="z.B. Vertrag 2024, Logo, Briefing"></div>
+        <div class="field form-full"><label>Datei auswählen</label>
+          <input type="file" id="doc-file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt" style="background:var(--bg);border:1.5px solid var(--border);border-radius:4px;padding:8px;font-family:'Sora',sans-serif;font-size:11px;width:100%">
+        </div>
+        <div class="field form-full" id="doc-preview-wrap" style="display:none">
+          <div id="doc-preview" style="font-size:12px;color:var(--green);padding:8px;background:var(--green-bg);border-radius:4px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('doc-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveDoc()">Dokument speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEBSITE CHECK MODAL -->
+<div class="overlay" id="check-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h2>🔍 Website & Social Check</h2>
+      <button class="modal-close" onclick="closeModal('check-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="check-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('check-modal')">Schließen</button>
+      <button class="btn-yellow" onclick="saveCheck()">Check als erledigt markieren</button>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="wv-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2 id="wv-modal-title">Erinnerung erstellen</h2>
+      <button class="modal-close" onclick="closeModal('wv-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full">
+          <label>Kontakt</label>
+          <select id="wv-kontakt"><option value="">— Kontakt wählen (optional) —</option></select>
+        </div>
+        <div class="field form-full">
+          <label>Aufgabe *</label>
+          <input id="wv-text" placeholder="z.B. Nochmal anrufen wegen Angebot">
+        </div>
+        <div class="field">
+          <label>Fällig am *</label>
+          <input id="wv-datum" type="date">
+        </div>
+        <div class="field">
+          <label>Typ</label>
+          <select id="wv-typ">
+            <option value="anruf">📞 Anruf</option>
+            <option value="email">✉ E-Mail</option>
+            <option value="termin">📅 Termin</option>
+            <option value="angebot">📋 Angebot nachfassen</option>
+            <option value="sonstiges">📌 Sonstiges</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Notiz</label>
+          <textarea id="wv-notiz" placeholder="Gesprächsverlauf, was besprochen wurde…" rows="3"></textarea>
+        </div>
+      </div>
+      <!-- Quick date buttons -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);align-self:center">Schnell:</span>
+        <button class="btn-ghost btn-sm" onclick="setWvDate(1)">Morgen</button>
+        <button class="btn-ghost btn-sm" onclick="setWvDate(3)">In 3 Tagen</button>
+        <button class="btn-ghost btn-sm" onclick="setWvDate(7)">In 1 Woche</button>
+        <button class="btn-ghost btn-sm" onclick="setWvDate(14)">In 2 Wochen</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('wv-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveWiedervorlage()">Erinnerung speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- E-MAIL VORLAGEN MODAL -->
+<div class="overlay" id="email-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h2>✉ E-Mail Vorlagen</h2>
+      <button class="modal-close" onclick="closeModal('email-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="filter-chip active" onclick="setEmailTab('erstkontakt',this)">👋 Erstkontakt</button>
+        <button class="filter-chip" onclick="setEmailTab('angebot',this)">📋 Angebot senden</button>
+        <button class="filter-chip" onclick="setEmailTab('nachfassen',this)">🔔 Nachfassen</button>
+        <button class="filter-chip" onclick="setEmailTab('willkommen',this)">🎉 Neuer Kunde</button>
+        <button class="filter-chip" onclick="setEmailTab('rechnung',this)">🧾 Rechnung</button>
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>An (Kontakt)</label>
+        <select id="email-kontakt" onchange="updateEmailPreview()">
+          <option value="">— Kontakt wählen —</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Betreff</label>
+        <input id="email-subject" readonly style="background:var(--bg)">
+      </div>
+      <div class="field">
+        <label>Vorschau / Text anpassen</label>
+        <textarea id="email-body" rows="10" style="font-size:12px;line-height:1.7"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('email-modal')">Schließen</button>
+      <button class="btn-ghost" onclick="copyEmailText()">📋 Text kopieren</button>
+      <button class="btn-yellow" onclick="openMailClient()">✉ In Mail öffnen</button>
+    </div>
+  </div>
+</div>
+
+<!-- GLOBAL SEARCH -->
+<div id="global-search-overlay" onclick="if(event.target===this)closeGlobalSearch()">
+  <div id="global-search-box">
+    <input id="global-search-input" placeholder="🔍  Suchen… Kontakte, Angebote, Rechnungen" oninput="runGlobalSearch(this.value)" onkeydown="gsKeyNav(event)">
+    <div id="global-search-results"></div>
+  </div>
+</div>
+
+<!-- FLOATING ACTION BUTTON -->
+<div id="fab">
+  <div id="fab-menu">
+    <div class="fab-item" onclick="closeFab();openContactModal()"><span class="fab-icon">👤</span> Neuer Kontakt</div>
+    <div class="fab-item" onclick="closeFab();openWiedervorlageModal()"><span class="fab-icon">🔔</span> Erinnerung</div>
+    <div class="fab-item" onclick="closeFab();openKalEventModal()"><span class="fab-icon">📅</span> Termin</div>
+    <div class="fab-item" onclick="closeFab();openAngebotModal()"><span class="fab-icon">📋</span> Angebot</div>
+    <div class="fab-item" onclick="closeFab();openRechnungModal()"><span class="fab-icon">🧾</span> Rechnung</div>
+    <div class="fab-item" onclick="closeFab();openKanbanTaskModal()"><span class="fab-icon">🗂</span> Aufgabe</div>
+  </div>
+  <button id="fab-main" onclick="toggleFab()">+</button>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE & PERSISTENCE
+// ═══════════════════════════════════════════
+let DB = {
+  contacts: [], angebote: [], rechnungen: [], wiedervorlagen: [],
+  settings: { name:'Viral Outlaws', inhaber:'', str:'', plz:'87780 Woringen', tel:'', email:'kim@viraloutlaws.de', web:'viraloutlaws.de', steuer:'', ust:'', iban:'', bic:'', bank:'', mwst:'19', zahlung:'14', footer:'Vielen Dank für Ihr Vertrauen!' },
+  nextAngebotNr: 1, nextRechnungNr: 1
+};
+
+let editId = null;
+let contactFilter = 'alle', angebotFilter = 'alle', rechnungFilter = 'alle';
+
+function load() {
+  try { const d = JSON.parse(localStorage.getItem('vo_crm')); if(d) DB = Object.assign(DB, d); } catch(e){}
+}
+function save() { try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){} }
+
+load();
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const page = document.getElementById('page-'+id);
+  if(page) { page.classList.add('active'); }
+  document.querySelectorAll('.nav-btn').forEach(b => { if(b.textContent.toLowerCase().includes(id) || (id==='dashboard' && b.textContent.includes('Dashboard'))) b.classList.add('active'); });
+  if(id==='dashboard') { renderDashboard(); renderMiniCal(); renderDashCalEvents(); }
+  if(id==='contacts') renderContacts();
+  if(id==='angebote') { populateKundenSelect('a-kunde'); renderAngebote(); renderAngeboteSummary(); }
+  if(id==='rechnungen') { populateKundenSelect('r-kunde'); renderRechnungen(); renderRechnungenSummary(); }
+  if(id==='settings') { loadSettings(); setupLogoUpload(); }
+  if(id==='kalender') renderKalender();
+  if(id==='kanban') renderKanban();
+  if(id==='ziele') renderZiele();
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function fmtEur(n) { return Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+function fmtDate(d) { if(!d) return '–'; try { return new Date(d).toLocaleDateString('de-DE'); } catch(e) { return d; } }
+function today() { return new Date().toISOString().split('T')[0]; }
+function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().split('T')[0]; }
+function uid() { return Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function initials(s) { if(!s) return '?'; const w=s.trim().split(' '); return w.length>1?(w[0][0]+w[w.length-1][0]).toUpperCase():s.slice(0,2).toUpperCase(); }
+
+function getBadge(status) {
+  const map = {
+    offen:'badge-offen ◌ Offen', kontakt:'badge-kontakt 📞 Kontaktiert', termin:'badge-termin 📅 Termin',
+    angebot:'badge-angebot 📋 Angebot', kunde:'badge-kunde ✅ Kunde', absage:'badge-absage ✗ Absage',
+    entwurf:'badge-entwurf ✏ Entwurf', gesendet:'badge-gesendet 📤 Gesendet',
+    akzeptiert:'badge-akzeptiert ✅ Akzeptiert', abgelehnt:'badge-abgelehnt ✗ Abgelehnt',
+    'offen-rg':'badge-offen-rg ⏳ Offen', bezahlt:'badge-bezahlt ✅ Bezahlt',
+    ueberfaellig:'badge-ueberfaellig 🔴 Überfällig'
+  };
+  const v = map[status]||('badge-offen '+status);
+  const [cls,...rest] = v.split(' ');
+  return `<span class="badge ${cls}">${rest.join(' ')}</span>`;
+}
+
+function getMwst() { return parseFloat(DB.settings.mwst||19)/100; }
+function getZahlung() { return parseInt(DB.settings.zahlung||14); }
+
+// ═══════════════════════════════════════════
+// POSITIONS
+// ═══════════════════════════════════════════
+function addPosition(containerId, prefix) {
+  const c = document.getElementById(containerId);
+  const posid = uid();
+  const item = document.createElement('div');
+  item.className = 'pos-item';
+  item.dataset.posid = posid;
+  item.innerHTML = `
+    <div class="pos-row">
+      <button class="pos-toggle" title="Detail-Beschreibung ein-/ausblenden" onclick="togglePosDetail('${posid}')">+</button>
+      <input type="text" placeholder="Positionstitel (z.B. Performance Marketing Paket)" class="pos-desc">
+      <input type="number" value="1" min="0.01" step="0.01" class="pos-qty" onchange="calcTotals('${prefix}')">
+      <input type="number" value="" placeholder="0.00" class="pos-price" onchange="calcTotals('${prefix}')">
+      <span class="pos-total">0,00 €</span>
+      <button class="pos-remove" onclick="this.closest('.pos-item').remove();calcTotals('${prefix}')">✕</button>
+    </div>
+    <div class="pos-detail" id="detail-${posid}">
+      <div class="pos-detail-hint">📝 Detail-Beschreibung (erscheint auf dem Dokument unter dem Titel)</div>
+      <textarea placeholder="z.B.: • Google Business Optimierung&#10;• Meta Ads Verwaltung (bis 300 €/Monat Budget)&#10;• Monatliches Reporting&#10;• 1x Strategiegespräch pro Monat"></textarea>
+    </div>`;
+  c.appendChild(item);
+  calcTotals(prefix);
+}
+
+function togglePosDetail(posid) {
+  const detail = document.getElementById('detail-'+posid);
+  const btn = detail?.previousElementSibling?.querySelector('.pos-toggle');
+  if(!detail) return;
+  const isOpen = detail.classList.toggle('open');
+  if(btn) { btn.classList.toggle('open', isOpen); btn.textContent = isOpen ? '−' : '+'; }
+}
+
+function calcTotals(prefix) {
+  const items = document.querySelectorAll(`#${prefix}-positions .pos-item`);
+  let netto = 0;
+  items.forEach(item => {
+    const qty = parseFloat(item.querySelector('.pos-qty').value)||0;
+    const price = parseFloat(item.querySelector('.pos-price').value)||0;
+    const total = qty * price;
+    item.querySelector('.pos-total').textContent = fmtEur(total);
+    netto += total;
+  });
+  const isKU = !!DB.settings.kleinunternehmer;
+  const mwstRate = isKU ? 0 : getMwst();
+  const mwst = netto * mwstRate;
+  const brutto = netto + mwst;
+  const nettoEl = document.getElementById(`${prefix}-netto`);
+  const mwstLblEl = document.getElementById(`${prefix}-mwst-lbl`);
+  const mwstValEl = document.getElementById(`${prefix}-mwst-val`);
+  const bruttoEl = document.getElementById(`${prefix}-brutto`);
+  const mwstRow = document.getElementById(`${prefix}-mwst-row`);
+  if(nettoEl) nettoEl.textContent = fmtEur(netto);
+  if(mwstLblEl) mwstLblEl.textContent = isKU ? 'MwSt. (§ 19 UStG)' : `MwSt. ${Math.round(mwstRate*100)}%`;
+  if(mwstValEl) mwstValEl.textContent = isKU ? 'entfällt' : fmtEur(mwst);
+  if(bruttoEl) bruttoEl.textContent = fmtEur(brutto);
+  if(mwstRow) mwstRow.style.opacity = isKU ? '0.45' : '1';
+}
+
+function getPositions(prefix) {
+  const items = document.querySelectorAll(`#${prefix}-positions .pos-item`);
+  return Array.from(items).map(item => {
+    const qty = parseFloat(item.querySelector('.pos-qty').value)||0;
+    const price = parseFloat(item.querySelector('.pos-price').value)||0;
+    const detailTA = item.querySelector('.pos-detail textarea');
+    return {
+      desc: item.querySelector('.pos-desc').value,
+      detail: detailTA ? detailTA.value : '',
+      qty, price,
+      total: qty * price
+    };
+  });
+}
+
+function fillPositions(prefix, positions) {
+  const c = document.getElementById(`${prefix}-positions`);
+  c.innerHTML = '';
+  (positions||[]).forEach(p => {
+    const posid = uid();
+    const hasDetail = !!(p.detail && p.detail.trim());
+    const item = document.createElement('div');
+    item.className = 'pos-item';
+    item.dataset.posid = posid;
+    item.innerHTML = `
+      <div class="pos-row">
+        <button class="pos-toggle${hasDetail?' open':''}" title="Detail-Beschreibung ein-/ausblenden" onclick="togglePosDetail('${posid}')">${hasDetail?'−':'+'}</button>
+        <input type="text" placeholder="Positionstitel" class="pos-desc" value="${(p.desc||'').replace(/"/g,'&quot;')}">
+        <input type="number" value="${p.qty||1}" min="0.01" step="0.01" class="pos-qty" onchange="calcTotals('${prefix}')">
+        <input type="number" value="${p.price||''}" placeholder="0.00" class="pos-price" onchange="calcTotals('${prefix}')">
+        <span class="pos-total">${fmtEur(p.total)}</span>
+        <button class="pos-remove" onclick="this.closest('.pos-item').remove();calcTotals('${prefix}')">✕</button>
+      </div>
+      <div class="pos-detail${hasDetail?' open':''}" id="detail-${posid}">
+        <div class="pos-detail-hint">📝 Detail-Beschreibung (erscheint auf dem Dokument unter dem Titel)</div>
+        <textarea placeholder="z.B.: • Google Business Optimierung&#10;• Meta Ads Verwaltung&#10;• Monatliches Reporting">${p.detail||''}</textarea>
+      </div>`;
+    c.appendChild(item);
+  });
+  calcTotals(prefix);
+}
+
+function sumPositions(positions) {
+  const netto = (positions||[]).reduce((s,p) => s+p.total, 0);
+  const isKU = !!DB.settings.kleinunternehmer;
+  const mwst = isKU ? 0 : netto * getMwst();
+  return { netto, mwst, brutto: netto+mwst };
+}
+
+// ═══════════════════════════════════════════
+// CONTACTS
+// ═══════════════════════════════════════════
+function openContactModal(id) {
+  editId = id || null;
+  const c = id ? DB.contacts.find(x=>x.id===id) : null;
+  document.getElementById('contact-modal-title').textContent = id ? 'Kontakt bearbeiten' : 'Neuer Kontakt';
+  document.getElementById('c-firma').value = c?.firma||'';
+  document.getElementById('c-person').value = c?.person||'';
+  document.getElementById('c-branche').value = c?.branche||'handwerk';
+  document.getElementById('c-str').value = c?.str||'';
+  document.getElementById('c-plz').value = c?.plz||'';
+  document.getElementById('c-tel').value = c?.tel||'';
+  document.getElementById('c-email').value = c?.email||'';
+  document.getElementById('c-web').value = c?.web||'';
+  const ig=document.getElementById('c-instagram'); if(ig) ig.value=c?.instagram||'';
+  const fb=document.getElementById('c-facebook'); if(fb) fb.value=c?.facebook||'';
+  const gb=document.getElementById('c-gbusiness'); if(gb) gb.value=c?.gbusiness||'';
+  document.getElementById('c-status').value = c?.status||'offen';
+  document.getElementById('c-ana').value = c?.ana||'';
+  document.getElementById('c-notes').value = c?.notes||'';
+  // Photo
+  const prev=document.getElementById('c-photo-preview');
+  const photoData=document.getElementById('c-photo-data');
+  if(prev){ if(c?.photo){prev.src=c.photo;prev.style.display='block';}else{prev.src='';prev.style.display='none';} }
+  if(photoData) photoData.value=c?.photo||'';
+  setupContactPhotoUpload();
+  document.getElementById('contact-modal').classList.add('open');
+}
+
+function saveContact() {
+  const firma = document.getElementById('c-firma').value.trim();
+  if(!firma) { alert('Firmenname ist erforderlich.'); return; }
+  const photoData = document.getElementById('c-photo-data')?.value||'';
+  const existingPhoto = editId ? DB.contacts.find(x=>x.id===editId)?.photo||'' : '';
+  const obj = {
+    id: editId||uid(), firma,
+    person: document.getElementById('c-person').value,
+    branche: document.getElementById('c-branche').value,
+    str: document.getElementById('c-str').value,
+    plz: document.getElementById('c-plz').value,
+    tel: document.getElementById('c-tel').value,
+    email: document.getElementById('c-email').value,
+    web: document.getElementById('c-web').value,
+    instagram: document.getElementById('c-instagram')?.value||'',
+    facebook: document.getElementById('c-facebook')?.value||'',
+    gbusiness: document.getElementById('c-gbusiness')?.value||'',
+    status: document.getElementById('c-status').value,
+    ana: document.getElementById('c-ana').value,
+    notes: document.getElementById('c-notes').value,
+    photo: photoData||existingPhoto,
+    updatedAt: new Date().toISOString()
+  };
+  if(editId) { const i = DB.contacts.findIndex(x=>x.id===editId); if(i>-1) DB.contacts[i]=obj; }
+  else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue'); }
+  save(); closeModal('contact-modal'); renderContacts(); renderDashboard();
+}
+
+function deleteContact(id) {
+  if(!confirm('Kontakt wirklich löschen?')) return;
+  DB.contacts = DB.contacts.filter(x=>x.id!==id);
+  save(); renderContacts(); renderDashboard();
+}
+
+function setContactFilter(f, btn) {
+  contactFilter = f;
+  document.querySelectorAll('[data-cf]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderContacts();
+}
+
+function renderContacts() {
+  const q = (document.getElementById('contact-search')?.value||'').toLowerCase();
+  let list = DB.contacts.filter(c => {
+    const matchF = contactFilter==='alle'||c.status===contactFilter;
+    const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q);
+    return matchF && matchQ;
+  });
+  document.getElementById('contacts-count').textContent = list.length;
+  const tbody = document.getElementById('contacts-tbody');
+  if(!list.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="emo">👥</div><p>Keine Kontakte gefunden.<br>Klicke auf "+ Neuer Kontakt".</p></div></td></tr>`; return; }
+  // get total value per contact
+  tbody.innerHTML = list.map(c => {
+    const rgs = DB.rechnungen.filter(r=>r.kundeId===c.id);
+    const wert = rgs.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+    const lastUpdate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('de-DE') : '–';
+    return `<tr>
+      <td class="bold"><div style="display:flex;align-items:center;gap:10px">
+        ${c.photo
+          ? `<img src="${c.photo}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
+          : `<div style="width:30px;height:30px;border-radius:4px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--yellow);flex-shrink:0">${initials(c.firma)}</div>`
+        }
+        <div><div>${c.firma}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${c.person}</div>`:''}</div>
+      </div></td>
+      <td><span class="badge ${brancheClass(c.branche)}" style="font-size:9px;padding:2px 7px">${brancheLabel(c.branche)}</span></td>
+      <td>${c.plz||'–'}</td>
+      <td>${c.tel?`<a href="tel:${c.tel}" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
+      <td>${getBadge(c.status)}</td>
+      <td class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
+      <td style="color:var(--muted);font-size:11px">${lastUpdate}</td>
+      <td class="actions">
+        <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Angebot</button>
+        <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal('${c.id}')" title="Erinnerung">🔔</button>
+        <button class="btn-ghost btn-sm" onclick="openContactModal('${c.id}')">✏</button>
+        <button class="btn-danger" onclick="deleteContact('${c.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function brancheClass(b) { const m={handwerk:'b-handwerk',arzt:'b-arzt',gastro:'b-gastro',dienst:'b-dienst',sonstige:'b-dienst'}; return m[b]||''; }
+function brancheLabel(b) { const m={handwerk:'Handwerk',arzt:'Arzt/Praxis',gastro:'Gastronomie',dienst:'Dienstleister',sonstige:'Sonstige'}; return m[b]||b; }
+
+function populateKundenSelect(selId) {
+  const sel = document.getElementById(selId);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Kunde wählen —</option>';
+  DB.contacts.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id; opt.textContent = c.firma + (c.person ? ` (${c.person})` : '');
+    sel.appendChild(opt);
+  });
+  if(cur) sel.value = cur;
+}
+
+// ═══════════════════════════════════════════
+// ANGEBOTE
+// ═══════════════════════════════════════════
+function openAngebotModal(id) {
+  editId = id||null;
+  populateKundenSelect('a-kunde');
+  const a = id ? DB.angebote.find(x=>x.id===id) : null;
+  document.getElementById('angebot-modal-title').textContent = id ? 'Angebot bearbeiten' : 'Neues Angebot';
+  document.getElementById('a-kunde').value = a?.kundeId||'';
+  document.getElementById('a-datum').value = a?.datum||today();
+  document.getElementById('a-betreff').value = a?.betreff||'';
+  document.getElementById('a-status').value = a?.status||'entwurf';
+  document.getElementById('a-notes').value = a?.notes||'';
+  document.getElementById('a-valid').value = a?.validBis||addDays(today(),30);
+  fillPositions('a', a?.positions||[]);
+  if(!a) addPosition('a-positions','a');
+  document.getElementById('angebot-modal').classList.add('open');
+}
+
+function openAngebotForContact(cid) {
+  showPage('angebote');
+  setTimeout(() => {
+    openAngebotModal();
+    document.getElementById('a-kunde').value = cid;
+  }, 100);
+}
+
+function saveAngebot(forceStatus) {
+  const kundeId = document.getElementById('a-kunde').value;
+  const betreff = document.getElementById('a-betreff').value.trim();
+  if(!kundeId||!betreff) { alert('Bitte Kunde und Betreff ausfüllen.'); return; }
+  const positions = getPositions('a');
+  const status = forceStatus||document.getElementById('a-status').value;
+  const obj = {
+    id: editId||uid(),
+    nr: editId ? DB.angebote.find(x=>x.id===editId)?.nr : 'A'+String(DB.nextAngebotNr).padStart(4,'0'),
+    kundeId, betreff, status, positions,
+    datum: document.getElementById('a-datum').value,
+    validBis: document.getElementById('a-valid').value,
+    notes: document.getElementById('a-notes').value,
+    createdAt: editId ? DB.angebote.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
+  };
+  if(editId) { const i=DB.angebote.findIndex(x=>x.id===editId); if(i>-1) DB.angebote[i]=obj; }
+  else { DB.angebote.unshift(obj); DB.nextAngebotNr++; const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr} für "${c?.firma||'?'}" erstellt`,'orange'); }
+  save(); closeModal('angebot-modal'); renderAngebote(); renderDashboard();
+  if(!forceStatus) printDoc('angebot', obj.id);
+}
+
+function deleteAngebot(id) {
+  if(!confirm('Angebot löschen?')) return;
+  DB.angebote = DB.angebote.filter(x=>x.id!==id);
+  save(); renderAngebote(); renderDashboard();
+}
+
+function setAngebotFilter(f,btn) {
+  angebotFilter=f;
+  document.querySelectorAll('[data-af]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); renderAngebote();
+}
+
+function renderAngebote() {
+  const q=(document.getElementById('angebot-search')?.value||'').toLowerCase();
+  let list=DB.angebote.filter(a=>{
+    const matchF=angebotFilter==='alle'||a.status===angebotFilter;
+    const c=DB.contacts.find(x=>x.id===a.kundeId);
+    const matchQ=!q||a.nr?.toLowerCase().includes(q)||a.betreff.toLowerCase().includes(q)||(c?.firma||'').toLowerCase().includes(q);
+    return matchF&&matchQ;
+  });
+  document.getElementById('angebote-count').textContent=list.length;
+  const tbody=document.getElementById('angebote-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="emo">📋</div><p>Noch keine Angebote.<br>Klicke auf "+ Neues Angebot".</p></div></td></tr>`;return;}
+  tbody.innerHTML=list.map(a=>{
+    const c=DB.contacts.find(x=>x.id===a.kundeId);
+    const sum=sumPositions(a.positions);
+    return `<tr>
+      <td class="mono" style="font-weight:600;color:var(--blue)">${a.nr||'–'}</td>
+      <td class="bold">${c?.firma||'Unbekannt'}</td>
+      <td>${a.betreff}</td>
+      <td style="color:var(--muted)">${fmtDate(a.datum)}</td>
+      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
+      <td>${getBadge(a.status)}</td>
+      <td class="actions">
+        <button class="btn-ghost btn-sm" onclick="angebotToRechnung('${a.id}')">→ Rechnung</button>
+        <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨</button>
+        <button class="btn-ghost btn-sm" onclick="openAngebotModal('${a.id}')">✏</button>
+        <button class="btn-danger" onclick="deleteAngebot('${a.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function angebotToRechnung(aid) {
+  const a=DB.angebote.find(x=>x.id===aid);
+  if(!a){return;}
+  showPage('rechnungen');
+  setTimeout(()=>{
+    openRechnungModal();
+    document.getElementById('r-kunde').value=a.kundeId;
+    document.getElementById('r-betreff').value=a.betreff;
+    document.getElementById('r-datum').value=today();
+    document.getElementById('r-faellig').value=addDays(today(),getZahlung());
+    fillPositions('r',a.positions);
+    document.getElementById('r-notes').value=`Basierend auf Angebot ${a.nr}`;
+  },150);
+}
+
+// ═══════════════════════════════════════════
+// RECHNUNGEN
+// ═══════════════════════════════════════════
+function openRechnungModal(id) {
+  editId=id||null;
+  populateKundenSelect('r-kunde');
+  const r=id?DB.rechnungen.find(x=>x.id===id):null;
+  document.getElementById('rechnung-modal-title').textContent=id?'Rechnung bearbeiten':'Neue Rechnung';
+  document.getElementById('r-kunde').value=r?.kundeId||'';
+  document.getElementById('r-datum').value=r?.datum||today();
+  document.getElementById('r-faellig').value=r?.faellig||addDays(today(),getZahlung());
+  document.getElementById('r-betreff').value=r?.betreff||'';
+  document.getElementById('r-status').value=r?.status||'offen-rg';
+  document.getElementById('r-notes').value=r?.notes||'';
+  fillPositions('r',r?.positions||[]);
+  if(!r) addPosition('r-positions','r');
+  document.getElementById('rechnung-modal').classList.add('open');
+}
+
+function saveRechnung() {
+  const kundeId=document.getElementById('r-kunde').value;
+  const betreff=document.getElementById('r-betreff').value.trim();
+  if(!kundeId||!betreff){alert('Bitte Kunde und Betreff ausfüllen.');return;}
+  const positions=getPositions('r');
+  const obj={
+    id:editId||uid(),
+    nr:editId?DB.rechnungen.find(x=>x.id===editId)?.nr:'R'+String(DB.nextRechnungNr).padStart(4,'0'),
+    kundeId,betreff,positions,
+    datum:document.getElementById('r-datum').value,
+    faellig:document.getElementById('r-faellig').value,
+    status:document.getElementById('r-status').value,
+    notes:document.getElementById('r-notes').value,
+    createdAt:editId?DB.rechnungen.find(x=>x.id===editId)?.createdAt:new Date().toISOString()
+  };
+  if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
+  else{DB.rechnungen.unshift(obj);DB.nextRechnungNr++;const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`Rechnung ${obj.nr} für "${c?.firma||'?'}" erstellt`,'green');}
+  save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
+  printDoc('rechnung',obj.id);
+}
+
+function deleteRechnung(id){
+  if(!confirm('Rechnung löschen?'))return;
+  DB.rechnungen=DB.rechnungen.filter(x=>x.id!==id);
+  save();renderRechnungen();renderDashboard();
+}
+
+function markBezahlt(id){
+  const r=DB.rechnungen.find(x=>x.id===id);
+  if(!r)return;
+  r.status='bezahlt';
+  const c=DB.contacts.find(x=>x.id===r.kundeId);
+  addActivity(`Rechnung ${r.nr} bezahlt von "${c?.firma||'?'}"`, 'green');
+  save();renderRechnungen();renderDashboard();
+}
+
+function setRechnungFilter(f,btn){
+  rechnungFilter=f;
+  document.querySelectorAll('[data-rf]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');renderRechnungen();
+}
+
+function renderRechnungen(){
+  const q=(document.getElementById('rechnung-search')?.value||'').toLowerCase();
+  let list=DB.rechnungen.filter(r=>{
+    const matchF=rechnungFilter==='alle'||r.status===rechnungFilter;
+    const c=DB.contacts.find(x=>x.id===r.kundeId);
+    const matchQ=!q||r.nr?.toLowerCase().includes(q)||r.betreff.toLowerCase().includes(q)||(c?.firma||'').toLowerCase().includes(q);
+    return matchF&&matchQ;
+  });
+  document.getElementById('rechnungen-count').textContent=list.length;
+  const tbody=document.getElementById('rechnungen-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="emo">🧾</div><p>Noch keine Rechnungen.</p></div></td></tr>`;return;}
+  tbody.innerHTML=list.map(r=>{
+    const c=DB.contacts.find(x=>x.id===r.kundeId);
+    const sum=sumPositions(r.positions);
+    const isUeber=r.status==='offen-rg'&&r.faellig&&new Date(r.faellig)<new Date();
+    if(isUeber&&r.status==='offen-rg'){r.status='ueberfaellig';}
+    return `<tr>
+      <td class="mono" style="font-weight:600;color:var(--blue)">${r.nr||'–'}</td>
+      <td class="bold">${c?.firma||'Unbekannt'}</td>
+      <td>${r.betreff}</td>
+      <td style="color:var(--muted)">${fmtDate(r.datum)}</td>
+      <td style="color:${isUeber?'var(--red)':'var(--muted)'};font-weight:${isUeber?'600':'400'}">${fmtDate(r.faellig)}</td>
+      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
+      <td>${getBadge(r.status)}</td>
+      <td class="actions">
+        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
+        <button class="btn-ghost btn-sm" onclick="printDoc('rechnung','${r.id}')">🖨</button>
+        <button class="btn-ghost btn-sm" onclick="openRechnungModal('${r.id}')">✏</button>
+        <button class="btn-danger" onclick="deleteRechnung('${r.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// PRINT / PDF
+// ═══════════════════════════════════════════
+function printDoc(type, id) {
+  const s = DB.settings;
+  const isAngebot = type === 'angebot';
+  const doc = isAngebot ? DB.angebote.find(x=>x.id===id) : DB.rechnungen.find(x=>x.id===id);
+  if(!doc) return;
+  const c = DB.contacts.find(x=>x.id===doc.kundeId) || {};
+  const sum = sumPositions(doc.positions);
+  const isKU = !!DB.settings.kleinunternehmer; // fix: read from DB directly
+
+  const logoHtml = s.logo ? `<img src="${s.logo}" style="height:48px;object-fit:contain;margin-bottom:8px;display:block">` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>${isAngebot?'Angebot':'Rechnung'} ${doc.nr||''} – ${c.firma||''}</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:16mm 18mm;font-size:12px;line-height:1.5}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #111}
+  .logo-txt{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:3px}
+  .logo-txt span{color:#c49b00}
+  .doc-type{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;text-align:right}
+  .doc-num{font-size:13px;color:#666;text-align:right}
+  .addresses{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:22px}
+  .addr-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:5px}
+  .meta-row{display:flex;gap:28px;background:#f8f7f4;padding:11px 14px;border-radius:4px;margin-bottom:20px}
+  .meta-item b{display:block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:2px}
+  .meta-item{font-size:12px}
+  .betreff{font-size:14px;font-weight:600;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin-bottom:18px}
+  th{background:#f0ede7;padding:8px 10px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#666;text-align:left;border-bottom:2px solid #ddd}
+  td{padding:9px 10px;border-bottom:1px solid #eee;vertical-align:top}
+  .right{text-align:right}
+  .totals{display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-bottom:22px}
+  .total-row{display:flex;gap:40px;font-size:12px}
+  .total-row .lbl{color:#666;min-width:140px;text-align:right}
+  .total-row .val{font-weight:600;min-width:90px;text-align:right;font-family:'DM Mono',monospace}
+  .total-row.big .lbl{font-weight:700;font-size:14px;color:#111}
+  .total-row.big .val{font-size:16px;color:#1f9e5a}
+  .divider{border:none;border-top:1px solid #ddd;width:100%;margin:6px 0}
+  .note-box{background:#f8f7f4;border-left:3px solid #f5c400;padding:11px 14px;border-radius:0 4px 4px 0;margin-bottom:16px;font-size:12px}
+  .note-box b{display:block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:4px}
+  .pay-box{background:#f0f9f4;border-left:3px solid #1f9e5a;padding:11px 14px;border-radius:0 4px 4px 0;margin-bottom:16px;font-size:12px}
+  .pay-box b{display:block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:4px}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #ddd;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;font-size:10px;color:#666;line-height:1.7}
+  .footer b{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;margin-bottom:3px}
+  .ku-note{font-size:11px;color:#888;text-align:right;margin-top:6px;font-style:italic}
+  @media print{
+    body{padding:12mm 14mm}
+    @page{margin:0;size:A4}
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>${logoHtml}<div class="logo-txt">VIRAL <span>OUTLAWS</span></div><div style="font-size:11px;color:#666;margin-top:2px">${s.name||'Viral Outlaws'}${s.inhaber?' · '+s.inhaber:''}</div></div>
+    <div><div class="doc-type">${isAngebot?'ANGEBOT':'RECHNUNG'}</div><div class="doc-num">${doc.nr||''}</div></div>
+  </div>
+
+  <div class="addresses">
+    <div>
+      <div class="addr-label">Von</div>
+      <strong>${s.name||'Viral Outlaws'}</strong><br>
+      ${s.inhaber?s.inhaber+'<br>':''}
+      ${s.str?s.str+'<br>':''}
+      ${s.plz?s.plz+'<br>':''}
+      ${s.tel?'Tel: '+s.tel+'<br>':''}
+      ${s.email||''}
+    </div>
+    <div>
+      <div class="addr-label">An</div>
+      <strong>${c.firma||'–'}</strong><br>
+      ${c.person?c.person+'<br>':''}
+      ${c.str?c.str+'<br>':''}
+      ${c.plz||''}
+    </div>
+  </div>
+
+  <div class="meta-row">
+    <div class="meta-item"><b>${isAngebot?'Angebots-Nr.':'Rechnungs-Nr.'}</b>${doc.nr||'–'}</div>
+    <div class="meta-item"><b>Datum</b>${fmtDate(doc.datum)}</div>
+    ${isAngebot?`<div class="meta-item"><b>Gültig bis</b>${fmtDate(doc.validBis)}</div>`:`<div class="meta-item"><b>Fällig am</b>${fmtDate(doc.faellig)}</div>`}
+    ${s.steuer?`<div class="meta-item"><b>Steuernummer</b>${s.steuer}</div>`:''}
+    ${s.ust?`<div class="meta-item"><b>USt-IdNr.</b>${s.ust}</div>`:''}
+  </div>
+
+  <div class="betreff">${doc.betreff}</div>
+  ${doc.notes?`<div class="note-box"><b>Hinweis</b>${doc.notes}</div>`:''}
+
+  <table>
+    <thead><tr><th style="width:32px">Pos.</th><th>Beschreibung</th><th class="right" style="width:60px">Menge</th><th class="right" style="width:100px">Einzelpreis</th><th class="right" style="width:100px">Gesamt</th></tr></thead>
+    <tbody>
+      ${(doc.positions||[]).map((p,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><div style="font-weight:600">${p.desc||'–'}</div>${p.detail?`<div style="font-size:10.5px;color:#666;margin-top:3px;white-space:pre-line;line-height:1.5">${p.detail}</div>`:''}</td>
+        <td class="right">${p.qty}</td>
+        <td class="right">${fmtEur(p.price)}</td>
+        <td class="right">${fmtEur(p.total)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    ${isKU ? `
+      <div class="total-row big"><span class="lbl">Gesamtbetrag</span><span class="val">${fmtEur(sum.netto)}</span></div>
+      <div class="ku-note">Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</div>
+    ` : `
+      <div class="total-row"><span class="lbl">Nettobetrag</span><span class="val">${fmtEur(sum.netto)}</span></div>
+      <div class="total-row"><span class="lbl">MwSt. ${Math.round(getMwst()*100)}%</span><span class="val">${fmtEur(sum.mwst)}</span></div>
+      <hr class="divider">
+      <div class="total-row big"><span class="lbl">Gesamtbetrag (brutto)</span><span class="val">${fmtEur(sum.brutto)}</span></div>
+    `}
+  </div>
+
+  ${!isAngebot && s.iban ? `<div class="pay-box"><b>Zahlungsinformationen</b>
+    Bitte überweisen Sie <strong>${fmtEur(isKU?sum.netto:sum.brutto)}</strong> bis zum <strong>${fmtDate(doc.faellig)}</strong>:<br>
+    IBAN: ${s.iban}${s.bic?' · BIC: '+s.bic:''}${s.bank?' · '+s.bank:''}<br>
+    Verwendungszweck: <strong>${doc.nr}</strong>
+  </div>` : ''}
+
+  <div class="footer">
+    <div><b>Kontakt</b>${s.name||'Viral Outlaws'}<br>${s.inhaber||''}<br>${s.str||''}<br>${s.plz||''}<br>${s.tel||''}<br>${s.email||''}</div>
+    <div><b>Bankverbindung</b>${s.iban||'–'}<br>${s.bic?'BIC: '+s.bic+'<br>':''}<br>${s.bank||''}</div>
+    <div><b>Steuer</b>${s.steuer?'St.-Nr.: '+s.steuer+'<br>':''}${s.ust?'USt-Id: '+s.ust+'<br>':''}<br>${s.footer||''}</div>
+  </div>
+
+  <script>window.onload=()=>{window.print();}<\/script>
+</body>
+</html>`;
+
+  // Open in new tab for reliable PDF generation
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if(!win) {
+    // Fallback if popup blocked: use print-area
+    document.getElementById('print-area').innerHTML = `<div style="padding:20mm">${html}</div>`;
+    window.print();
+  }
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+let activityLog = [];
+function addActivity(text, color) {
+  activityLog.unshift({ text, color: color||'blue', time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) });
+  if(activityLog.length>20) activityLog.pop();
+}
+
+function renderDashboard() {
+  // Today / Wiedervorlagen
+  if(!DB.wiedervorlagen) DB.wiedervorlagen = [];
+  renderTodoSection();
+  const offeneAngebote = DB.angebote.filter(a=>a.status==='gesendet'||a.status==='entwurf');
+  const pipelineWert = offeneAngebote.reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
+  const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt');
+  const umsatz = bezahlteRg.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+  const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
+  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt');
+  const offenWert = offeneRg.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+
+  document.getElementById('kpi-pipeline').textContent = fmtEur(pipelineWert);
+  document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote offen';
+  document.getElementById('kpi-umsatz').textContent = fmtEur(umsatz);
+  document.getElementById('kpi-umsatz-sub').textContent = bezahlteRg.length+' Rechnungen bezahlt';
+  document.getElementById('kpi-kunden').textContent = kunden;
+  document.getElementById('kpi-kunden-sub').textContent = 'von '+DB.contacts.length+' Kontakten';
+  document.getElementById('kpi-offen').textContent = fmtEur(offenWert);
+  document.getElementById('kpi-offen-sub').textContent = offeneRg.length+' Rechnungen ausstehend';
+
+  // Pipeline bars
+  const statuses = ['offen','kontakt','termin','angebot','kunde'];
+  const labels = {offen:'Offen',kontakt:'Kontaktiert',termin:'Termin',angebot:'Angebot',kunde:'Kunde'};
+  const colors = {offen:'#ccc',kontakt:'#f5c400',termin:'#2563b8',angebot:'#d97706',kunde:'#1f9e5a'};
+  const max = Math.max(...statuses.map(s=>DB.contacts.filter(c=>c.status===s).length),1);
+  document.getElementById('dash-pipeline').innerHTML = statuses.map(s=>{
+    const count = DB.contacts.filter(c=>c.status===s).length;
+    return `<div class="pipe-row">
+      <span class="pipe-label">${labels[s]}</span>
+      <div class="pipe-track"><div class="pipe-fill" style="width:${Math.round(count/max*100)}%;background:${colors[s]}"></div></div>
+      <span class="pipe-count">${count}</span>
+    </div>`;
+  }).join('');
+
+  // Recent invoices
+  const recentRg = [...DB.rechnungen].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,5);
+  document.getElementById('dash-recent-rg').innerHTML = recentRg.length ? recentRg.map(r=>{
+    const c=DB.contacts.find(x=>x.id===r.kundeId);
+    return `<div class="recent-item">
+      <div class="recent-name">${c?.firma||'?'}</div>
+      <div class="recent-date">${getBadge(r.status)}</div>
+      <div class="recent-amt">${fmtEur(sumPositions(r.positions).brutto)}</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">Noch keine Rechnungen</div>';
+
+  // Activity
+  document.getElementById('dash-activity').innerHTML = activityLog.length ? activityLog.slice(0,8).map(a=>`
+    <div class="activity-item">
+      <div class="activity-dot" style="background:var(--${a.color})"></div>
+      <span class="activity-text">${a.text}</span>
+      <span class="activity-time">${a.time}</span>
+    </div>`).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">Noch keine Aktivitäten</div>';
+}
+
+// ═══════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════
+function loadSettings() {
+  const s=DB.settings;
+  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer','gsurl'].forEach(k=>{
+    const el=document.getElementById('s-'+k); if(el) el.value=s[k]||'';
+  });
+  const ku=document.getElementById('s-kleinunternehmer');
+  if(ku) ku.checked = !!s.kleinunternehmer;
+  // Show saved logo
+  if(s.logo){ const lp=document.getElementById('s-logo-preview'); if(lp){lp.src=s.logo;lp.style.display='block';} }
+  // Show sync status
+  if(s.gsurl) setSyncStatus('connected');
+  else setSyncStatus('offline');
+  // Auto-sync button state
+  const ab=document.getElementById('btn-autosync');
+  if(ab&&autoSyncEnabled){ab.textContent='🔄 Auto-Sync: An (5 min)';ab.style.color='var(--green)';}
+  // Show last sync time
+  if(s.lastSync) {
+    const st=document.getElementById('sync-status-txt');
+    if(st) st.textContent = 'Letzter Sync: '+new Date(s.lastSync).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+function saveSettings() {
+  ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer','gsurl'].forEach(k=>{
+    const el=document.getElementById('s-'+k); if(el) DB.settings[k]=el.value;
+  });
+  const ku=document.getElementById('s-kleinunternehmer');
+  DB.settings.kleinunternehmer = ku ? ku.checked : false;
+  save();
+  alert('✅ Einstellungen gespeichert!');
+}
+
+function exportData() {
+  const json=JSON.stringify(DB,null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(json);
+  a.download='viral-outlaws-crm-'+today()+'.json';
+  a.click();
+}
+
+function importData() { document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{try{DB=JSON.parse(ev.target.result);save();location.reload();}catch(err){alert('Datei konnte nicht gelesen werden.');}};
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ═══════════════════════════════════════════
+let autoSyncEnabled = false;
+let autoSyncTimer = null;
+
+function getGsUrl() { return (DB.settings.gsurl||'').trim(); }
+
+function setSyncStatus(state) {
+  const dot = document.getElementById('sync-status-dot');
+  const txt = document.getElementById('sync-status-txt');
+  if(!dot||!txt) return;
+  const map = {
+    connected:  { color:'#1f9e5a', text:'Verbunden' },
+    syncing:    { color:'#f5c400', text:'Synchronisiert…' },
+    error:      { color:'#d63030', text:'Fehler – URL prüfen' },
+    offline:    { color:'#ccc',    text:'Nicht verbunden' },
+    saved:      { color:'#1f9e5a', text:'Gespeichert ✓' },
+  };
+  const s = map[state]||map.offline;
+  dot.style.background = s.color;
+  txt.textContent = s.text;
+}
+
+async function gsRequest(action, payload) {
+  const url = getGsUrl();
+  if(!url) throw new Error('Keine URL konfiguriert');
+  const params = new URLSearchParams({ action });
+  if(payload && Object.keys(payload).length) params.set("payload", JSON.stringify(payload));
+  const targetUrl = url + '?' + params.toString();
+  // Direct fetch works from https:// (GitHub Pages) - no CORS issues
+  const r = await fetch(targetUrl, { redirect:"follow", signal: AbortSignal.timeout(20000) });
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  const text = await r.text();
+  const clean = text.trim().replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
+  return JSON.parse(clean || text);
+}
+
+function parseGsResponse(raw) {
+  if(typeof raw === 'object') return raw;
+  const text = String(raw).trim();
+  // Strip JSONP: callback({...}) or callback([...])
+  const stripped = text.replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
+  return JSON.parse(stripped || text);
+}
+
+async function testConnection() {
+  const url = getGsUrl();
+  if(!url) { alert('Bitte zuerst die Apps Script URL eintragen und Einstellungen speichern.'); return; }
+  setSyncStatus('syncing');
+  try {
+    const r = await gsRequest('ping', {});
+    if(r.ok) { setSyncStatus('connected'); alert('✅ Verbindung erfolgreich! Google Sheets ist bereit.'); }
+    else throw new Error(r.error||'Unbekannter Fehler');
+  } catch(e) { setSyncStatus('error'); alert('❌ Verbindung fehlgeschlagen:\n' + e.message + '\n\nBitte prüfe die URL und ob die Web-App korrekt bereitgestellt wurde.'); }
+}
+
+async function syncToSheets() {
+  const url = getGsUrl();
+  if(!url) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); return; }
+  setSyncStatus('syncing');
+  const btn = document.getElementById('btn-sync-up');
+  if(btn) { btn.disabled=true; btn.textContent='☁ Wird hochgeladen…'; }
+  try {
+    const r = await gsRequest('save', { data: JSON.stringify(DB) });
+    if(r.ok) {
+      setSyncStatus('saved');
+      DB.settings.lastSync = new Date().toISOString();
+      save();
+      if(btn) { btn.textContent='✅ Hochgeladen'; setTimeout(()=>{ btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; },2000); }
+    } else throw new Error(r.error||'Fehler beim Speichern');
+  } catch(e) {
+    setSyncStatus('error');
+    if(btn) { btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; }
+    alert('❌ Sync fehlgeschlagen:\n' + e.message);
+  }
+}
+
+async function loadFromSheets() {
+  const url = getGsUrl();
+  if(!url) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); return; }
+  if(!confirm('Alle lokalen Daten werden mit den Daten aus Google Sheets überschrieben. Fortfahren?')) return;
+  setSyncStatus('syncing');
+  const btn = document.getElementById('btn-sync-down');
+  if(btn) { btn.disabled=true; btn.textContent='⬇ Wird geladen…'; }
+  try {
+    const r = await gsRequest('load', {});
+    if(r.ok && r.data) {
+      const loaded = JSON.parse(r.data);
+      DB = Object.assign(DB, loaded);
+      save();
+      setSyncStatus('connected');
+      if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
+      alert('✅ Daten erfolgreich aus Google Sheets geladen!');
+      location.reload();
+    } else if(r.ok && !r.data) {
+      setSyncStatus('connected');
+      if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
+      alert('ℹ️ Noch keine Daten in Google Sheets vorhanden. Lade zuerst die aktuellen Daten hoch.');
+    } else throw new Error(r.error||'Fehler beim Laden');
+  } catch(e) {
+    setSyncStatus('error');
+    if(btn) { btn.disabled=false; btn.textContent='⬇ Von Sheets laden'; }
+    alert('❌ Laden fehlgeschlagen:\n' + e.message);
+  }
+}
+
+function openUrlInBrowser() {
+  const url = getGsUrl();
+  if(!url) { alert('Bitte zuerst die URL eintragen.'); return; }
+  const testUrl = url + '?action=ping';
+  window.open(testUrl, '_blank');
+  setTimeout(()=>{
+    alert('Ein neuer Tab wurde geöffnet.\n\nDu solltest folgendes sehen:\n{"ok":true,"message":"Viral Outlaws CRM aktiv ✓",...}\n\nFalls du das siehst → Verbindung ist OK, dann nochmal "Jetzt hochladen" versuchen.\nFalls du eine Fehlermeldung siehst → Bereitstellung in Apps Script prüfen.');
+  }, 500);
+}
+
+function toggleAutoSync() {
+  autoSyncEnabled = !autoSyncEnabled;
+  const btn = document.getElementById('btn-autosync');
+  if(autoSyncEnabled) {
+    btn.textContent = '🔄 Auto-Sync: An (5 min)';
+    btn.style.background = 'var(--green-bg)';
+    btn.style.borderColor = 'var(--green)';
+    btn.style.color = 'var(--green)';
+    autoSyncTimer = setInterval(() => { if(getGsUrl()) syncToSheets(); }, 5 * 60 * 1000);
+  } else {
+    btn.textContent = '🔄 Auto-Sync: Aus';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    clearInterval(autoSyncTimer);
+  }
+}
+
+// patch save() to also auto-sync if enabled
+const _origSave = save;
+function save() {
+  try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
+}
+// override global save with auto-sync awareness
+window._saveAndMaybeSync = function() {
+  save();
+  if(autoSyncEnabled && getGsUrl()) {
+    clearTimeout(window._syncDebounce);
+    window._syncDebounce = setTimeout(syncToSheets, 3000);
+  }
+}
+
+// ═══════════════════════════════════════════
+// WIEDERVORLAGEN / ERINNERUNGEN
+// ═══════════════════════════════════════════
+if(!DB.wiedervorlagen) DB.wiedervorlagen = [];
+
+function openWiedervorlageModal(contactId, wvId) {
+  populateKundenSelect('wv-kontakt');
+  // add empty option at top
+  const sel = document.getElementById('wv-kontakt');
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value=''; emptyOpt.textContent='— Kontakt wählen (optional) —';
+  sel.insertBefore(emptyOpt, sel.firstChild);
+
+  const wv = wvId ? DB.wiedervorlagen.find(x=>x.id===wvId) : null;
+  editId = wvId||null;
+  document.getElementById('wv-modal-title').textContent = wvId ? 'Erinnerung bearbeiten' : 'Erinnerung erstellen';
+  document.getElementById('wv-kontakt').value = wv?.kontaktId || contactId || '';
+  document.getElementById('wv-text').value = wv?.text||'';
+  document.getElementById('wv-datum').value = wv?.datum||addDays(today(),1);
+  document.getElementById('wv-typ').value = wv?.typ||'anruf';
+  document.getElementById('wv-notiz').value = wv?.notiz||'';
+  document.getElementById('wv-modal').classList.add('open');
+}
+
+function setWvDate(days) {
+  document.getElementById('wv-datum').value = addDays(today(), days);
+}
+
+function saveWiedervorlage() {
+  const text = document.getElementById('wv-text').value.trim();
+  const datum = document.getElementById('wv-datum').value;
+  if(!text || !datum) { alert('Bitte Aufgabe und Datum ausfüllen.'); return; }
+  const obj = {
+    id: editId||uid(),
+    kontaktId: document.getElementById('wv-kontakt').value||null,
+    text, datum,
+    typ: document.getElementById('wv-typ').value,
+    notiz: document.getElementById('wv-notiz').value,
+    done: false,
+    createdAt: editId ? DB.wiedervorlagen.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
+  };
+  if(editId) { const i=DB.wiedervorlagen.findIndex(x=>x.id===editId); if(i>-1) DB.wiedervorlagen[i]=obj; }
+  else { DB.wiedervorlagen.push(obj); }
+  save(); closeModal('wv-modal'); renderDashboard();
+  addActivity(`Erinnerung gesetzt: "${text}" am ${fmtDate(datum)}`, 'yellow');
+}
+
+function doneWiedervorlage(id) {
+  const wv = DB.wiedervorlagen.find(x=>x.id===id);
+  if(wv) { wv.done=true; wv.doneAt=new Date().toISOString(); }
+  save(); renderDashboard();
+}
+
+function deleteWiedervorlage(id) {
+  DB.wiedervorlagen = DB.wiedervorlagen.filter(x=>x.id!==id);
+  save(); renderDashboard();
+}
+
+const typIcon = { anruf:'📞', email:'✉', termin:'📅', angebot:'📋', sonstiges:'📌' };
+
+function renderTodoSection() {
+  const todayStr = today();
+  const overdue = DB.wiedervorlagen.filter(w=>!w.done && w.datum < todayStr).sort((a,b)=>a.datum.localeCompare(b.datum));
+  const dueToday = DB.wiedervorlagen.filter(w=>!w.done && w.datum === todayStr);
+  const todos = [...overdue, ...dueToday];
+  const upcoming = DB.wiedervorlagen.filter(w=>!w.done && w.datum > todayStr).sort((a,b)=>a.datum.localeCompare(b.datum)).slice(0,5);
+
+  // Badge
+  const badge = document.getElementById('todo-badge');
+  if(badge) { badge.style.display = todos.length ? 'inline' : 'none'; badge.textContent = todos.length; }
+
+  // Today/overdue
+  const todoEl = document.getElementById('dash-todo');
+  if(todoEl) {
+    if(!todos.length) {
+      todoEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0;text-align:center">🎉 Alles erledigt!</div>';
+    } else {
+      todoEl.innerHTML = todos.map(w => {
+        const c = w.kontaktId ? DB.contacts.find(x=>x.id===w.kontaktId) : null;
+        const isOverdue = w.datum < todayStr;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:16px;flex-shrink:0;margin-top:1px">${typIcon[w.typ]||'📌'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--ink)">${w.text}</div>
+            ${c?`<div style="font-size:10px;color:var(--muted);margin-top:2px">👤 ${c.firma}</div>`:''}
+            <div style="font-size:10px;margin-top:2px;color:${isOverdue?'var(--red)':'var(--muted)'}">
+              ${isOverdue?'⚠ Überfällig: ':''}${fmtDate(w.datum)}
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0">
+            ${c?`<button class="btn-ghost btn-sm" onclick="openEmailModal('${c.id}')" title="E-Mail">✉</button>`:''}
+            <button class="btn-ghost btn-sm" style="color:var(--green);border-color:var(--green)" onclick="doneWiedervorlage('${w.id}')" title="Erledigt">✓</button>
+            <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal(null,'${w.id}')" title="Bearbeiten">✏</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Upcoming
+  const upcomingEl = document.getElementById('dash-upcoming');
+  if(upcomingEl) {
+    if(!upcoming.length) {
+      upcomingEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0;text-align:center">Keine weiteren Erinnerungen</div>';
+    } else {
+      upcomingEl.innerHTML = upcoming.map(w => {
+        const c = w.kontaktId ? DB.contacts.find(x=>x.id===w.kontaktId) : null;
+        const daysLeft = Math.ceil((new Date(w.datum)-new Date(today()))/(1000*60*60*24));
+        return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:14px;flex-shrink:0">${typIcon[w.typ]||'📌'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.text}</div>
+            ${c?`<div style="font-size:10px;color:var(--muted)">${c.firma}</div>`:''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:11px;font-weight:600;color:var(--yellow2)">${daysLeft===1?'Morgen':'in '+daysLeft+' Tagen'}</div>
+            <div style="font-size:10px;color:var(--muted)">${fmtDate(w.datum)}</div>
+          </div>
+          <button class="btn-ghost btn-sm" style="color:var(--green);border-color:var(--green)" onclick="doneWiedervorlage('${w.id}')" title="Erledigt">✓</button>
+          <button class="btn-ghost btn-sm" onclick="deleteWiedervorlage('${w.id}')" title="Löschen" style="color:var(--red)">✕</button>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+// E-MAIL VORLAGEN
+// ═══════════════════════════════════════════
+let currentEmailTab = 'erstkontakt';
+
+const EMAIL_TEMPLATES = {
+  erstkontakt: {
+    subject: (c,s) => `Kostenlose Online-Analyse für ${c?.firma||'Ihr Unternehmen'} – Viral Outlaws`,
+    body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
+
+mein Name ist ${s.inhaber||'Kim'} von Viral Outlaws – ich bin eine Performance Marketing Agentur aus der Region Memmingen/Unterallgäu.
+
+Ich habe mir Ihren Online-Auftritt angeschaut und einige konkrete Möglichkeiten entdeckt, wie ${c?.firma||'Ihr Unternehmen'} deutlich mehr Anfragen über Google und Social Media generieren könnte – ohne großen Aufwand auf Ihrer Seite.
+
+Ich würde Ihnen das gerne in einem kurzen, kostenlosen Gespräch (ca. 20 Minuten) zeigen – völlig unverbindlich.
+
+Hätten Sie diese Woche einen kurzen Termin?
+
+Mit freundlichen Grüßen
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}
+${s.web||'viraloutlaws.de'}`
+  },
+  angebot: {
+    subject: (c,s) => `Ihr Angebot von Viral Outlaws – ${c?.firma||''}`,
+    body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
+
+vielen Dank für unser Gespräch! Wie besprochen, sende ich Ihnen hiermit unser Angebot zu.
+
+Im Anhang finden Sie alle Details zu den vereinbarten Leistungen und Konditionen.
+
+Bei Fragen stehe ich Ihnen jederzeit gerne zur Verfügung – entweder per Telefon oder per Antwort auf diese E-Mail.
+
+Ich freue mich auf eine gute Zusammenarbeit!
+
+Mit freundlichen Grüßen
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}
+${s.web||'viraloutlaws.de'}`
+  },
+  nachfassen: {
+    subject: (c,s) => `Kurze Nachfrage – Angebot Viral Outlaws für ${c?.firma||'Sie'}`,
+    body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
+
+ich wollte kurz nachfragen, ob Sie unser Angebot erhalten haben und ob Sie bereits die Möglichkeit hatten, es sich anzuschauen.
+
+Falls Sie noch Fragen haben oder etwas angepasst werden soll, melden Sie sich gerne – ich bin flexibel.
+
+Ich würde mich freuen, ${c?.firma||'Ihr Unternehmen'} dabei zu unterstützen, online mehr Sichtbarkeit und Anfragen zu gewinnen.
+
+Mit freundlichen Grüßen
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}`
+  },
+  willkommen: {
+    subject: (c,s) => `Willkommen bei Viral Outlaws – wie es weitergeht`,
+    body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
+
+herzlich willkommen – ich freue mich sehr, dass wir zusammenarbeiten!
+
+Hier kurz der nächste Schritt: Ich werde mich innerhalb der nächsten 2 Werktage bei Ihnen melden, um alle notwendigen Zugänge (Google Business, Social Media etc.) einzurichten.
+
+Was ich von Ihnen brauche:
+• Zugang zu Ihrem Google Business Profil
+• Kurzes Briefing: Was sind Ihre wichtigsten Leistungen / Zielgruppe?
+• 1–2 aktuelle Fotos von Ihrem Betrieb (falls vorhanden)
+
+Bei Fragen – einfach anrufen oder antworten.
+
+Auf gute Zusammenarbeit!
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}`
+  },
+  rechnung: {
+    subject: (c,s) => `Rechnung von Viral Outlaws – ${c?.firma||''}`,
+    body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
+
+im Anhang finden Sie unsere aktuelle Rechnung für die erbrachten Leistungen.
+
+Bitte überweisen Sie den Betrag innerhalb von ${s.zahlung||14} Tagen auf das angegebene Konto. Den Verwendungszweck entnehmen Sie bitte der Rechnung.
+
+Für Rückfragen stehe ich jederzeit zur Verfügung.
+
+Mit freundlichen Grüßen
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}`
+  }
+};
+
+function openEmailModal(contactId) {
+  populateKundenSelect('email-kontakt');
+  if(contactId) document.getElementById('email-kontakt').value = contactId;
+  currentEmailTab = 'erstkontakt';
+  document.querySelectorAll('#email-modal .filter-chip').forEach((b,i)=>b.classList.toggle('active',i===0));
+  updateEmailPreview();
+  document.getElementById('email-modal').classList.add('open');
+}
+
+function setEmailTab(tab, btn) {
+  currentEmailTab = tab;
+  document.querySelectorAll('#email-modal .filter-chip').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  updateEmailPreview();
+}
+
+function updateEmailPreview() {
+  const cid = document.getElementById('email-kontakt').value;
+  const c = cid ? DB.contacts.find(x=>x.id===cid) : null;
+  const s = DB.settings;
+  const tpl = EMAIL_TEMPLATES[currentEmailTab];
+  if(!tpl) return;
+  document.getElementById('email-subject').value = tpl.subject(c,s);
+  document.getElementById('email-body').value = tpl.body(c,s);
+}
+
+function copyEmailText() {
+  const subj = document.getElementById('email-subject').value;
+  const body = document.getElementById('email-body').value;
+  navigator.clipboard.writeText(`Betreff: ${subj}\n\n${body}`)
+    .then(()=>{ alert('✅ Text kopiert!'); })
+    .catch(()=>{ alert('Kopieren nicht möglich – bitte manuell markieren.'); });
+}
+
+function openMailClient() {
+  const cid = document.getElementById('email-kontakt').value;
+  const c = cid ? DB.contacts.find(x=>x.id===cid) : null;
+  const subj = encodeURIComponent(document.getElementById('email-subject').value);
+  const body = encodeURIComponent(document.getElementById('email-body').value);
+  const to = c?.email || '';
+  window.location.href = `mailto:${to}?subject=${subj}&body=${body}`;
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  editId=null;
+}
+
+// Fix: only close overlay when the mousedown AND mouseup both started on the overlay itself
+// This prevents accidental closing when selecting text inside the modal
+document.querySelectorAll('.overlay').forEach(o=>{
+  let mousedownOnOverlay = false;
+  o.addEventListener('mousedown', e=>{ mousedownOnOverlay = (e.target === o); });
+  o.addEventListener('mouseup', e=>{
+    if(mousedownOnOverlay && e.target === o) o.classList.remove('open');
+    mousedownOnOverlay = false;
+  });
+});
+
+// ═══════════════════════════════════════════
+// KALENDER
+// ═══════════════════════════════════════════
+if(!DB.kalEvents) DB.kalEvents = [];
+
+let kalYear  = new Date().getFullYear();
+let kalMonth = new Date().getMonth(); // 0-based
+let kalView  = 'month';
+
+const KAL_MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const KAL_DAYS   = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+
+function setKalView(v, btn) {
+  kalView = v;
+  document.querySelectorAll('[id^="kal-view-"]').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderKalender();
+}
+
+function kalenderPrevMonth() {
+  if(kalView==='week') { kalWeekOffset = (kalWeekOffset||0) - 1; renderKalender(); return; }
+  kalMonth--; if(kalMonth<0){kalMonth=11;kalYear--;} renderKalender();
+}
+
+function kalenderNextMonth() {
+  if(kalView==='week') { kalWeekOffset = (kalWeekOffset||0) + 1; renderKalender(); return; }
+  kalMonth++; if(kalMonth>11){kalMonth=0;kalYear++;} renderKalender();
+}
+
+function kalenderGoToday() {
+  kalYear=new Date().getFullYear(); kalMonth=new Date().getMonth();
+  kalWeekOffset=0; renderKalender();
+}
+
+let kalWeekOffset = 0;
+
+// Collect all events from DB (custom + wiedervorlagen + rechnungen fällig + retainer)
+function getAllKalEvents() {
+  const events = [];
+  _kalEventMap = {};
+
+  // Custom events
+  (DB.kalEvents||[]).forEach(e => {
+    const ev = {
+      id: e.id, datum: e.datum, titel: e.titel,
+      zeit: e.zeit||'', bis: e.bis||'',
+      typ: e.typ||'termin', notiz: e.notiz||'',
+      kontaktId: e.kontaktId||null,
+      color: {termin:'#2563b8',anruf:'#2563b8',aufgabe:'#8040b0',sonstiges:'#666'}[e.typ||'termin']||'#2563b8',
+      source: 'custom'
+    };
+    events.push(ev); _kalEventMap[ev.id] = ev;
+  });
+
+  // Wiedervorlagen
+  (DB.wiedervorlagen||[]).filter(w=>!w.done).forEach(w => {
+    const ev = {
+      id: 'wv_'+w.id, datum: w.datum, titel: w.text,
+      zeit:'', bis:'', typ:'erinnerung', notiz: w.notiz||'',
+      kontaktId: w.kontaktId||null, color:'#d97706', source:'wv'
+    };
+    events.push(ev); _kalEventMap[ev.id] = ev;
+  });
+
+  // Fällige Rechnungen
+  (DB.rechnungen||[]).filter(r=>r.status!=='bezahlt'&&r.faellig).forEach(r => {
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const ev = {
+      id:'rg_'+r.id, datum:r.faellig,
+      titel:`Rechnung ${r.nr||''} fällig${c?' – '+c.firma:''}`,
+      zeit:'', bis:'', typ:'rechnung', color:'#d63030', source:'rg', notiz:'', kontaktId:r.kundeId||null
+    };
+    events.push(ev); _kalEventMap[ev.id] = ev;
+  });
+
+  // Retainer Abrechnungen
+  (DB.retainer||[]).filter(r=>r.status==='aktiv'&&r.next).forEach(r => {
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const ev = {
+      id:'ret_'+r.id, datum:r.next,
+      titel:`Retainer ${c?.firma||''} – ${fmtEur(r.betrag)}`,
+      zeit:'', bis:'', typ:'retainer', color:'#1f9e5a', source:'ret', notiz:'', kontaktId:r.kundeId||null
+    };
+    events.push(ev); _kalEventMap[ev.id] = ev;
+  });
+
+  return events;
+}
+
+function renderKalender() {
+  if(!DB.kalEvents) DB.kalEvents = [];
+  document.getElementById('kal-month-label').textContent =
+    kalView==='week'
+      ? 'Woche ' + getWeekNumber(getWeekStart(kalWeekOffset))
+      : KAL_MONTHS[kalMonth] + ' ' + kalYear;
+
+  if(kalView==='week') renderKalWeek();
+  else renderKalMonth();
+
+  renderKalUpcoming();
+}
+
+function getWeekStart(offset) {
+  const d = new Date();
+  const day = d.getDay()||7;
+  d.setDate(d.getDate() - day + 1 + offset*7);
+  return d;
+}
+
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date-yearStart)/86400000)+1)/7);
+}
+
+function dateStr(d) { return d.toISOString().split('T')[0]; }
+
+function renderKalMonth() {
+  const allEvents = getAllKalEvents();
+  const todayStr = today();
+
+  // First day of month (Mon=0 offset)
+  const firstDay = new Date(kalYear, kalMonth, 1);
+  const lastDay  = new Date(kalYear, kalMonth+1, 0);
+  let startDow = firstDay.getDay(); // 0=Sun
+  startDow = startDow === 0 ? 6 : startDow - 1; // convert to Mon=0
+
+  const grid = document.getElementById('kal-grid');
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr)">`;
+
+  // Day headers
+  KAL_DAYS.forEach((d,i) => {
+    html += `<div style="background:var(--ink);color:${i>=5?'var(--yellow)':'rgba(255,255,255,.7)'};text-align:center;padding:9px 4px;font-size:10px;font-weight:700;letter-spacing:1.5px">${d}</div>`;
+  });
+
+  // Empty cells before month start
+  for(let i=0;i<startDow;i++) {
+    html += `<div style="min-height:100px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px"></div>`;
+  }
+
+  // Day cells
+  for(let d=1; d<=lastDay.getDate(); d++) {
+    const ds = `${kalYear}-${String(kalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = ds===todayStr;
+    const dow = (startDow+d-1)%7;
+    const isWeekend = dow>=5;
+    const dayEvents = allEvents.filter(e=>e.datum===ds);
+    const bgColor = isToday?'#fffbea':isWeekend?'#faf9f6':'#fff';
+
+    html += `<div onclick="kalDayClick('${ds}')" style="min-height:100px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;cursor:pointer;background:${bgColor}">
+      <div style="font-size:13px;font-weight:${isToday?'700':'500'};color:${isToday?'#fff':'var(--ink)'};background:${isToday?'var(--yellow)':'transparent'};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:4px">${d}</div>
+      ${dayEvents.slice(0,3).map(e=>`
+        <div onclick="event.stopPropagation();kalEventClick('${e.id}','${e.source}')"
+          style="font-size:10px;font-weight:600;color:#fff;background:${e.color};border-radius:3px;padding:2px 5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${e.titel.replace(/"/g,'&quot;')}">
+          ${e.zeit?e.zeit+' ':''}${e.titel}
+        </div>`).join('')}
+      ${dayEvents.length>3?`<div style="font-size:9px;color:var(--muted);margin-top:1px">+${dayEvents.length-3} weitere</div>`:''}
+    </div>`;
+  }
+
+  // Empty cells after month end
+  const totalCells = startDow + lastDay.getDate();
+  const remainder = totalCells % 7;
+  if(remainder>0) {
+    for(let i=remainder;i<7;i++) {
+      html += `<div style="min-height:100px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px"></div>`;
+    }
+  }
+
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function renderKalWeek() {
+  const allEvents = getAllKalEvents();
+  const todayStr = today();
+  const weekStart = getWeekStart(kalWeekOffset);
+
+  // Update month label for week view
+  document.getElementById('kal-month-label').textContent =
+    `KW ${getWeekNumber(weekStart)} – ${KAL_MONTHS[weekStart.getMonth()]} ${weekStart.getFullYear()}`;
+
+  const days = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(weekStart);
+    d.setDate(d.getDate()+i);
+    days.push(d);
+  }
+
+  const grid = document.getElementById('kal-grid');
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr)">`;
+
+  days.forEach((d,i)=>{
+    const ds = dateStr(d);
+    const isToday = ds===todayStr;
+    const isWeekend = i>=5;
+    html += `<div style="background:${isToday?'var(--yellow)':'var(--ink)'};color:${isToday?'var(--ink)':'rgba(255,255,255,.7)'};text-align:center;padding:9px 4px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px">${KAL_DAYS[i]}</div>
+      <div style="font-size:16px;font-weight:700;color:${isToday?'var(--ink)':'#fff'};margin-top:2px">${d.getDate()}</div>
+    </div>`;
+  });
+
+  days.forEach((d,i)=>{
+    const ds = dateStr(d);
+    const isToday = ds===todayStr;
+    const isWeekend = i>=5;
+    const dayEvents = allEvents.filter(e=>e.datum===ds).sort((a,b)=>(a.zeit||'99').localeCompare(b.zeit||'99'));
+    html += `<div onclick="kalDayClick('${ds}')" style="min-height:160px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:8px;cursor:pointer;background:${isToday?'#fffbea':isWeekend?'#faf9f6':'#fff'};vertical-align:top">
+      ${dayEvents.map(e=>`
+        <div onclick="event.stopPropagation();kalEventClick('${e.id}','${e.source}')"
+          style="font-size:11px;font-weight:600;color:#fff;background:${e.color};border-radius:3px;padding:4px 7px;margin-bottom:4px;cursor:pointer;line-height:1.4">
+          ${e.zeit?`<span style="opacity:.8;font-size:10px">${e.zeit}</span><br>`:''}${e.titel}
+        </div>`).join('')}
+      ${!dayEvents.length?`<div style="font-size:11px;color:var(--border);text-align:center;padding-top:20px">–</div>`:''}
+    </div>`;
+  });
+
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function renderKalUpcoming() {
+  const allEvents = getAllKalEvents();
+  const todayStr = today();
+  const upcoming = allEvents
+    .filter(e=>e.datum>=todayStr)
+    .sort((a,b)=>a.datum.localeCompare(b.datum)||(a.zeit||'').localeCompare(b.zeit||''))
+    .slice(0,8);
+
+  const ul = document.getElementById('kal-upcoming-list');
+  if(!ul) return;
+  if(!upcoming.length) { ul.innerHTML='<div style="color:var(--muted);font-size:12px">Keine bevorstehenden Termine</div>'; return; }
+
+  ul.innerHTML = upcoming.map(e=>{
+    const c = e.kontaktId ? DB.contacts.find(x=>x.id===e.kontaktId) : null;
+    const isToday = e.datum===todayStr;
+    return `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);align-items:flex-start">
+      <div style="width:4px;border-radius:2px;background:${e.color};align-self:stretch;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titel}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">
+          ${isToday?'<strong style="color:var(--orange)">Heute</strong>':fmtDate(e.datum)}${e.zeit?' · '+e.zeit:''}
+          ${c?` · ${c.firma}`:''}
+        </div>
+      </div>
+      ${e.source==='custom'?`<button class="btn-ghost btn-sm" onclick="openKalEventModal('${e.id}')" style="font-size:10px;padding:2px 7px;flex-shrink:0">✏</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+// Global event lookup map – populated on each render
+let _kalEventMap = {};
+
+function kalEventClick(id, source) {
+  if(source === 'custom') {
+    openKalEventModal(id);
+  } else {
+    const e = _kalEventMap[id];
+    if(!e) return;
+    const c = e.kontaktId ? DB.contacts.find(x=>x.id===e.kontaktId) : null;
+    const lines = [e.titel, fmtDate(e.datum)+(e.zeit?' · '+e.zeit:''), c?'Kontakt: '+c.firma:'', e.notiz||''].filter(Boolean);
+    alert(lines.join('\n'));
+  }
+}
+
+function kalDayClick(ds) {
+  openKalEventModal(null, ds);
+}
+
+function openKalEventModal(id, prefillDate) {
+  editId = id||null;
+  populateKundenSelect('ke-kontakt');
+  const e = id ? DB.kalEvents.find(x=>x.id===id) : null;
+  document.getElementById('kal-modal-title').textContent = id ? 'Termin bearbeiten' : 'Neuer Termin';
+  document.getElementById('ke-titel').value = e?.titel||'';
+  document.getElementById('ke-datum').value = e?.datum||prefillDate||today();
+  document.getElementById('ke-zeit').value = e?.zeit||'';
+  document.getElementById('ke-bis').value = e?.bis||'';
+  document.getElementById('ke-typ').value = e?.typ||'termin';
+  document.getElementById('ke-kontakt').value = e?.kontaktId||'';
+  document.getElementById('ke-notiz').value = e?.notiz||'';
+  document.getElementById('ke-reminder').checked = e?.reminder||false;
+  document.getElementById('kal-delete-btn').style.display = id ? 'block' : 'none';
+  document.getElementById('kal-event-modal').classList.add('open');
+}
+
+function saveKalEvent() {
+  const titel = document.getElementById('ke-titel').value.trim();
+  const datum = document.getElementById('ke-datum').value;
+  if(!titel||!datum) { alert('Bitte Titel und Datum ausfüllen.'); return; }
+  const obj = {
+    id: editId||uid(), titel, datum,
+    zeit: document.getElementById('ke-zeit').value,
+    bis: document.getElementById('ke-bis').value,
+    typ: document.getElementById('ke-typ').value,
+    kontaktId: document.getElementById('ke-kontakt').value||null,
+    notiz: document.getElementById('ke-notiz').value,
+    reminder: document.getElementById('ke-reminder').checked
+  };
+  if(editId) { const i=DB.kalEvents.findIndex(x=>x.id===editId); if(i>-1) DB.kalEvents[i]=obj; }
+  else {
+    DB.kalEvents.push(obj);
+    // If reminder checked, also create a Wiedervorlage 1 day before
+    if(obj.reminder && obj.datum > today()) {
+      const reminderDate = addDays(obj.datum, -1);
+      if(!DB.wiedervorlagen) DB.wiedervorlagen=[];
+      DB.wiedervorlagen.push({
+        id:uid(), kontaktId:obj.kontaktId||null,
+        text:'Erinnerung: '+obj.titel,
+        datum:reminderDate, typ:'termin', done:false,
+        createdAt:new Date().toISOString()
+      });
+    }
+    const c = obj.kontaktId ? DB.contacts.find(x=>x.id===obj.kontaktId) : null;
+    addActivity(`Termin "${titel}" am ${fmtDate(datum)} angelegt${c?' für '+c.firma:''}`, 'blue');
+  }
+  save(); closeModal('kal-event-modal'); renderKalender();
+  // Jump to the month of the saved event
+  const ed = new Date(datum);
+  kalYear = ed.getFullYear(); kalMonth = ed.getMonth();
+  renderKalender();
+}
+
+function deleteKalEvent(id) {
+  if(!id||!confirm('Termin wirklich löschen?')) return;
+  DB.kalEvents = DB.kalEvents.filter(x=>x.id!==id);
+  save(); closeModal('kal-event-modal'); renderKalender();
+}
+
+// ═══════════════════════════════════════════
+// DARK MODE
+// ═══════════════════════════════════════════
+function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  const isDark = document.body.classList.contains('dark-mode');
+  document.getElementById('dark-toggle').textContent = isDark ? '☀' : '🌙';
+  try { localStorage.setItem('vo_darkmode', isDark?'1':'0'); } catch(e){}
+}
+try { if(localStorage.getItem('vo_darkmode')==='1'){ document.body.classList.add('dark-mode'); setTimeout(()=>{const b=document.getElementById('dark-toggle');if(b)b.textContent='☀';},0); } } catch(e){}
+
+// ═══════════════════════════════════════════
+// RETAINER TRACKER
+// ═══════════════════════════════════════════
+if(!DB.retainer) DB.retainer = [];
+
+function openRetainerModal(id) {
+  editId = id||null;
+  populateKundenSelect('ret-kunde');
+  const r = id ? DB.retainer.find(x=>x.id===id) : null;
+  document.getElementById('retainer-modal-title').textContent = id ? 'Retainer bearbeiten' : 'Neuer Retainer';
+  document.getElementById('ret-kunde').value = r?.kundeId||'';
+  document.getElementById('ret-paket').value = r?.paket||'';
+  document.getElementById('ret-betrag').value = r?.betrag||'';
+  document.getElementById('ret-start').value = r?.start||today();
+  document.getElementById('ret-leistungen').value = r?.leistungen||'';
+  document.getElementById('ret-status').value = r?.status||'aktiv';
+  document.getElementById('ret-next').value = r?.next||addDays(today(),30);
+  document.getElementById('retainer-modal').classList.add('open');
+}
+
+function saveRetainer() {
+  const kundeId = document.getElementById('ret-kunde').value;
+  const betrag = document.getElementById('ret-betrag').value;
+  if(!kundeId||!betrag) { alert('Bitte Kunde und Betrag ausfüllen.'); return; }
+  const obj = {
+    id: editId||uid(), kundeId, betrag: parseFloat(betrag),
+    paket: document.getElementById('ret-paket').value,
+    start: document.getElementById('ret-start').value,
+    leistungen: document.getElementById('ret-leistungen').value,
+    status: document.getElementById('ret-status').value,
+    next: document.getElementById('ret-next').value,
+  };
+  if(editId) { const i=DB.retainer.findIndex(x=>x.id===editId); if(i>-1) DB.retainer[i]=obj; }
+  else { DB.retainer.push(obj); const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Retainer ${fmtEur(obj.betrag)}/Monat für "${c?.firma||'?'}" angelegt`,'green'); }
+  save(); closeModal('retainer-modal'); renderZiele(); renderDashboard();
+}
+
+function deleteRetainer(id) {
+  if(!confirm('Retainer löschen?')) return;
+  DB.retainer = DB.retainer.filter(x=>x.id!==id);
+  save(); renderZiele(); renderDashboard();
+}
+
+function renderRetainerTable() {
+  if(!DB.retainer) DB.retainer = [];
+  const tbody = document.getElementById('retainer-tbody');
+  if(!tbody) return;
+  if(!DB.retainer.length) { tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="emo">🔄</div><p>Noch keine Retainer. Klicke auf "+ Retainer".</p></div></td></tr>`; return; }
+  tbody.innerHTML = DB.retainer.map(r=>{
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const statusMap = {aktiv:`<span class="badge badge-kunde">✅ Aktiv</span>`,pausiert:`<span class="badge badge-angebot">⏸ Pausiert</span>`,gekuendigt:`<span class="badge badge-absage">✗ Gekündigt</span>`};
+    return `<tr>
+      <td class="bold">${c?.firma||'?'}</td>
+      <td>${r.paket||'–'}</td>
+      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(r.betrag)}/Monat</td>
+      <td style="color:var(--muted)">${fmtDate(r.start)}</td>
+      <td>${statusMap[r.status]||r.status}</td>
+      <td class="actions">
+        <button class="btn-ghost btn-sm" onclick="openRetainerModal('${r.id}')">✏</button>
+        <button class="btn-danger" onclick="deleteRetainer('${r.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// ZIELE & FORTSCHRITT
+// ═══════════════════════════════════════════
+if(!DB.ziele) DB.ziele = { mrrZiel:4500, kundenZiel:15, kundenDatum:'', meilensteine:[] };
+
+function saveZiele() {
+  if(!DB.ziele) DB.ziele = {};
+  DB.ziele.mrrZiel = parseFloat(document.getElementById('z-mrr-ziel')?.value||4500);
+  DB.ziele.kundenZiel = parseInt(document.getElementById('z-kunden-ziel')?.value||15);
+  DB.ziele.kundenDatum = document.getElementById('z-kunden-datum')?.value||'';
+  save(); renderZiele(); alert('✅ Ziele gespeichert!');
+}
+
+function renderZiele() {
+  if(!DB.ziele) DB.ziele = { mrrZiel:4500, kundenZiel:15, kundenDatum:'', meilensteine:[] };
+  if(!DB.retainer) DB.retainer = [];
+  const el = id => document.getElementById(id);
+  if(el('z-mrr-ziel')) el('z-mrr-ziel').value = DB.ziele.mrrZiel||4500;
+  if(el('z-kunden-ziel')) el('z-kunden-ziel').value = DB.ziele.kundenZiel||15;
+  if(el('z-kunden-datum')) el('z-kunden-datum').value = DB.ziele.kundenDatum||'';
+  const mrr = DB.retainer.filter(r=>r.status==='aktiv').reduce((s,r)=>s+parseFloat(r.betrag||0),0);
+  const mrrZiel = DB.ziele.mrrZiel||4500;
+  const mrrPct = Math.min(100,Math.round(mrr/mrrZiel*100));
+  if(el('z-mrr-current')) el('z-mrr-current').textContent = fmtEur(mrr);
+  if(el('z-mrr-bar')) el('z-mrr-bar').style.width = mrrPct+'%';
+  if(el('z-mrr-pct')) el('z-mrr-pct').textContent = mrrPct+'%';
+  if(el('z-mrr-missing')) el('z-mrr-missing').textContent = mrr>=mrrZiel?'🎉 Ziel erreicht!':'fehlen: '+fmtEur(mrrZiel-mrr);
+  const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
+  const kundenZiel = DB.ziele.kundenZiel||15;
+  const kundenPct = Math.min(100,Math.round(kunden/kundenZiel*100));
+  if(el('z-kunden-bar')) el('z-kunden-bar').style.width = kundenPct+'%';
+  if(el('z-kunden-info')) el('z-kunden-info').textContent = `${kunden} von ${kundenZiel} Kunden (${kundenPct}%)`;
+  renderMeilensteine();
+  renderRetainerTable();
+}
+
+function addMeilenstein() {
+  if(!DB.ziele.meilensteine) DB.ziele.meilensteine = [];
+  DB.ziele.meilensteine.push({ id:uid(), text:'', datum:'', done:false });
+  save(); renderMeilensteine();
+}
+
+function renderMeilensteine() {
+  const el = document.getElementById('meilensteine-list');
+  if(!el) return;
+  const list = DB.ziele?.meilensteine||[];
+  if(!list.length) { el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Noch keine Meilensteine. Klicke auf "+ Meilenstein".</div>'; return; }
+  el.innerHTML = list.map(m=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${m.done?'checked':''} onchange="toggleMeilenstein('${m.id}')" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;flex-shrink:0">
+      <input type="text" value="${(m.text||'').replace(/"/g,'&quot;')}" placeholder="Meilenstein…" onchange="updateMeilenstein('${m.id}','text',this.value)"
+        style="flex:1;border:1px solid var(--border);border-radius:3px;padding:5px 8px;font-family:'Sora',sans-serif;font-size:12px;background:var(--paper);color:var(--ink);outline:none;${m.done?'text-decoration:line-through;color:var(--muted)':''}">
+      <input type="date" value="${m.datum||''}" onchange="updateMeilenstein('${m.id}','datum',this.value)"
+        style="border:1px solid var(--border);border-radius:3px;padding:5px 8px;font-family:'Sora',sans-serif;font-size:11px;background:var(--paper);color:var(--ink);outline:none;width:140px">
+      <button class="btn-danger" onclick="deleteMeilenstein('${m.id}')">✕</button>
+    </div>`).join('');
+}
+
+function toggleMeilenstein(id) {
+  const m = DB.ziele?.meilensteine?.find(x=>x.id===id);
+  if(m) { m.done=!m.done; save(); renderMeilensteine(); }
+}
+function updateMeilenstein(id,field,val) {
+  const m = DB.ziele?.meilensteine?.find(x=>x.id===id);
+  if(m) { m[field]=val; save(); }
+}
+function deleteMeilenstein(id) {
+  if(DB.ziele?.meilensteine) DB.ziele.meilensteine=DB.ziele.meilensteine.filter(x=>x.id!==id);
+  save(); renderMeilensteine();
+}
+
+// ═══════════════════════════════════════════
+// KANBAN / AUFGABEN
+// ═══════════════════════════════════════════
+if(!DB.kanban) DB.kanban = [];
+
+function openKanbanTaskModal(id) {
+  editId = id||null;
+  populateKundenSelect('kt-kontakt');
+  const kt = id ? DB.kanban.find(x=>x.id===id) : null;
+  document.getElementById('kanban-modal-title').textContent = id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe';
+  document.getElementById('kt-text').value = kt?.text||'';
+  document.getElementById('kt-kontakt').value = kt?.kontaktId||'';
+  document.getElementById('kt-col').value = kt?.col||'todo';
+  document.getElementById('kt-prio').value = kt?.prio||'normal';
+  document.getElementById('kt-datum').value = kt?.datum||'';
+  document.getElementById('kt-notiz').value = kt?.notiz||'';
+  document.getElementById('kanban-modal').classList.add('open');
+}
+
+function saveKanbanTask() {
+  const text = document.getElementById('kt-text').value.trim();
+  if(!text) { alert('Bitte eine Aufgabe eingeben.'); return; }
+  const obj = {
+    id: editId||uid(), text,
+    kontaktId: document.getElementById('kt-kontakt').value||null,
+    col: document.getElementById('kt-col').value,
+    prio: document.getElementById('kt-prio').value,
+    datum: document.getElementById('kt-datum').value,
+    notiz: document.getElementById('kt-notiz').value,
+    createdAt: editId ? DB.kanban.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
+  };
+  if(editId) { const i=DB.kanban.findIndex(x=>x.id===editId); if(i>-1) DB.kanban[i]=obj; }
+  else DB.kanban.push(obj);
+  save(); closeModal('kanban-modal'); renderKanban();
+}
+
+function moveKanbanTask(id,col) {
+  const t=DB.kanban.find(x=>x.id===id);
+  if(t){t.col=col;save();renderKanban();}
+}
+
+function deleteKanbanTask(id) {
+  DB.kanban=DB.kanban.filter(x=>x.id!==id);
+  save(); renderKanban();
+}
+
+function renderKanban() {
+  if(!DB.kanban) DB.kanban=[];
+  const filterCid = document.getElementById('kanban-filter-contact')?.value||'';
+  const sel=document.getElementById('kanban-filter-contact');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Alle Kontakte</option>';
+    DB.contacts.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.firma;sel.appendChild(o);});
+    sel.value=cur;
+  }
+  const cols=[{id:'todo',label:'📋 Offen',color:'var(--blue)'},{id:'doing',label:'⚡ In Arbeit',color:'var(--yellow2)'},{id:'done',label:'✅ Erledigt',color:'var(--green)'}];
+  const prioColors={hoch:'var(--red)',normal:'var(--border2)',niedrig:'var(--blue)'};
+  const board=document.getElementById('kanban-board');
+  if(!board) return;
+  board.innerHTML=cols.map(col=>{
+    let tasks=DB.kanban.filter(t=>t.col===col.id);
+    if(filterCid) tasks=tasks.filter(t=>t.kontaktId===filterCid);
+    return `<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:var(--shadow)">
+      <div style="background:var(--ink);padding:12px 14px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;font-weight:700;color:#fff;flex:1">${col.label}</span>
+        <span style="background:rgba(255,255,255,.15);color:rgba(255,255,255,.7);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">${tasks.length}</span>
+      </div>
+      <div style="padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px">
+        ${tasks.length?tasks.map(t=>{
+          const c=t.kontaktId?DB.contacts.find(x=>x.id===t.kontaktId):null;
+          const overdue=t.datum&&t.datum<today()&&t.col!=='done';
+          return `<div style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:4px;padding:10px 12px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
+            <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:4px">${t.text}</div>
+            ${c?`<div style="font-size:10px;color:var(--muted)">👤 ${c.firma}</div>`:''}
+            ${t.datum?`<div style="font-size:10px;color:${overdue?'var(--red)':'var(--muted)'};margin-top:3px">${overdue?'⚠ ':' '}${fmtDate(t.datum)}</div>`:''}
+            <div style="display:flex;gap:5px;margin-top:7px">
+              ${col.id!=='todo'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','todo')" style="font-size:9px;padding:2px 6px">◀ Offen</button>`:''}
+              ${col.id==='todo'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','doing')" style="font-size:9px;padding:2px 6px">▶ In Arbeit</button>`:''}
+              ${col.id!=='done'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','done')" style="font-size:9px;padding:2px 6px;color:var(--green)">✓ Erledigt</button>`:''}
+              <button class="btn-danger" onclick="event.stopPropagation();deleteKanbanTask('${t.id}')" style="margin-left:auto;padding:2px 6px;font-size:9px">✕</button>
+            </div>
+          </div>`;
+        }).join(''):`<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">Keine Aufgaben</div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// KONTAKT-BILD & LOGO-UPLOAD
+// ═══════════════════════════════════════════
+function setupContactPhotoUpload() {
+  const inp = document.getElementById('c-photo-input');
+  if(!inp) return;
+  inp.onchange = function(e) {
+    const file = e.target.files[0]; if(!file) return;
+    if(file.size > 500*1024) { alert('Bild bitte unter 500 KB halten.'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById('c-photo-preview').src = ev.target.result;
+      document.getElementById('c-photo-preview').style.display = 'block';
+      document.getElementById('c-photo-data').value = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+}
+
+function setupLogoUpload() {
+  const inp = document.getElementById('s-logo-input');
+  if(!inp) return;
+  inp.onchange = function(e) {
+    const file = e.target.files[0]; if(!file) return;
+    if(file.size > 300*1024) { alert('Logo bitte unter 300 KB halten.'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      DB.settings.logo = ev.target.result;
+      const prev = document.getElementById('s-logo-preview');
+      if(prev) { prev.src=ev.target.result; prev.style.display='block'; }
+      save(); alert('✅ Logo gespeichert!');
+    };
+    reader.readAsDataURL(file);
+  };
+}
+
+// ═══════════════════════════════════════════
+// GLOBAL SEARCH
+// ═══════════════════════════════════════════
+let _gsSelectedIdx=-1, _gsResults=[];
+
+document.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openGlobalSearch();}
+  if(e.key==='Escape'){closeGlobalSearch();closeFab();}
+});
+
+function openGlobalSearch(){
+  document.getElementById('global-search-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('global-search-input').focus(),50);
+  runGlobalSearch('');
+}
+function closeGlobalSearch(){
+  document.getElementById('global-search-overlay').classList.remove('open');
+  document.getElementById('global-search-input').value='';
+  _gsSelectedIdx=-1;
+}
+function runGlobalSearch(q){
+  q=q.toLowerCase().trim(); _gsResults=[]; _gsSelectedIdx=-1;
+  const el=document.getElementById('global-search-results');
+  const contacts=DB.contacts.filter(c=>c.firma?.toLowerCase().includes(q)||c.person?.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||c.tel?.includes(q)).slice(0,5);
+  const angebote=DB.angebote.filter(a=>{const c=DB.contacts.find(x=>x.id===a.kundeId);return a.nr?.toLowerCase().includes(q)||a.betreff?.toLowerCase().includes(q)||c?.firma?.toLowerCase().includes(q);}).slice(0,4);
+  const rechnungen=DB.rechnungen.filter(r=>{const c=DB.contacts.find(x=>x.id===r.kundeId);return r.nr?.toLowerCase().includes(q)||r.betreff?.toLowerCase().includes(q)||c?.firma?.toLowerCase().includes(q);}).slice(0,4);
+  let html='';
+  if(contacts.length){
+    html+=`<div class="gs-section-label">Kontakte</div>`;
+    contacts.forEach(c=>{
+      _gsResults.push({type:'contact',id:c.id});
+      html+=`<div class="gs-result" onclick="gsGoto('contact','${c.id}')">
+        ${c.photo?`<img src="${c.photo}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;flex-shrink:0">`:`<div class="gs-result-icon">👤</div>`}
+        <div class="gs-result-main"><div class="gs-result-title">${c.firma}</div><div class="gs-result-sub">${c.plz||''}${c.person?' · '+c.person:''}</div></div>
+        ${getBadge(c.status)}</div>`;
+    });
+  }
+  if(angebote.length){
+    html+=`<div class="gs-section-label">Angebote</div>`;
+    angebote.forEach(a=>{const c=DB.contacts.find(x=>x.id===a.kundeId);_gsResults.push({type:'angebot',id:a.id});html+=`<div class="gs-result" onclick="gsGoto('angebot','${a.id}')"><div class="gs-result-icon">📋</div><div class="gs-result-main"><div class="gs-result-title">${a.betreff}</div><div class="gs-result-sub">${a.nr||''} · ${c?.firma||''}</div></div><div class="gs-result-badge">${fmtEur(sumPositions(a.positions).brutto)}</div></div>`;});
+  }
+  if(rechnungen.length){
+    html+=`<div class="gs-section-label">Rechnungen</div>`;
+    rechnungen.forEach(r=>{const c=DB.contacts.find(x=>x.id===r.kundeId);_gsResults.push({type:'rechnung',id:r.id});html+=`<div class="gs-result" onclick="gsGoto('rechnung','${r.id}')"><div class="gs-result-icon">🧾</div><div class="gs-result-main"><div class="gs-result-title">${r.betreff}</div><div class="gs-result-sub">${r.nr||''} · ${c?.firma||''}</div></div><div class="gs-result-badge">${fmtEur(sumPositions(r.positions).brutto)}</div></div>`;});
+  }
+  if(!html) html=`<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">${q?'Keine Ergebnisse für "'+q+'"':'Tippe um zu suchen…'}</div>`;
+  el.innerHTML=html;
+}
+function gsGoto(type,id){
+  closeGlobalSearch();
+  if(type==='contact'){showPage('contacts');setTimeout(()=>{const si=document.getElementById('contact-search');if(si){si.value=DB.contacts.find(x=>x.id===id)?.firma||'';renderContacts();}},100);}
+  if(type==='angebot') showPage('angebote');
+  if(type==='rechnung') showPage('rechnungen');
+}
+function gsKeyNav(e){
+  const items=document.querySelectorAll('.gs-result');
+  if(e.key==='ArrowDown') _gsSelectedIdx=Math.min(_gsSelectedIdx+1,items.length-1);
+  else if(e.key==='ArrowUp') _gsSelectedIdx=Math.max(_gsSelectedIdx-1,0);
+  else if(e.key==='Enter'&&_gsSelectedIdx>=0){items[_gsSelectedIdx]?.click();return;}
+  else if(e.key==='Escape'){closeGlobalSearch();return;}
+  items.forEach((el,i)=>el.style.background=i===_gsSelectedIdx?'var(--yellow-bg)':'');
+  if(_gsSelectedIdx>=0) items[_gsSelectedIdx]?.scrollIntoView({block:'nearest'});
+}
+
+// ═══════════════════════════════════════════
+// FLOATING ACTION BUTTON
+// ═══════════════════════════════════════════
+function toggleFab(){
+  document.getElementById('fab-main').classList.toggle('open');
+  document.getElementById('fab-menu').classList.toggle('open');
+}
+function closeFab(){
+  document.getElementById('fab-main')?.classList.remove('open');
+  document.getElementById('fab-menu')?.classList.remove('open');
+}
+document.addEventListener('click',e=>{
+  const fab=document.getElementById('fab');
+  if(fab&&!fab.contains(e.target)) closeFab();
+});
+
+// ═══════════════════════════════════════════
+// MINI CALENDAR (DASHBOARD)
+// ═══════════════════════════════════════════
+let miniCalYear=new Date().getFullYear(), miniCalMonth=new Date().getMonth();
+function miniCalPrev(){miniCalMonth--;if(miniCalMonth<0){miniCalMonth=11;miniCalYear--;}renderMiniCal();}
+function miniCalNext(){miniCalMonth++;if(miniCalMonth>11){miniCalMonth=0;miniCalYear++;}renderMiniCal();}
+function renderMiniCal(){
+  const lbl=document.getElementById('mini-cal-label');
+  const grid=document.getElementById('mini-cal-grid');
+  if(!lbl||!grid) return;
+  lbl.textContent=KAL_MONTHS[miniCalMonth]+' '+miniCalYear;
+  const allEvents=getAllKalEvents();
+  const eventDates=new Set(allEvents.map(e=>e.datum));
+  const todayStr=today();
+  const firstDay=new Date(miniCalYear,miniCalMonth,1);
+  const lastDay=new Date(miniCalYear,miniCalMonth+1,0);
+  let startDow=firstDay.getDay(); startDow=startDow===0?6:startDow-1;
+  let html=KAL_DAYS.map(d=>`<div class="mini-cal-day-hdr">${d[0]}</div>`).join('');
+  for(let i=0;i<startDow;i++) html+=`<div class="mini-cal-cell empty"></div>`;
+  for(let d=1;d<=lastDay.getDate();d++){
+    const ds=`${miniCalYear}-${String(miniCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=ds===todayStr;
+    const hasEv=eventDates.has(ds);
+    html+=`<div class="mini-cal-cell${isToday?' today':''}${hasEv&&!isToday?' has-event':''}" onclick="miniCalDayClick('${ds}')">${d}</div>`;
+  }
+  grid.innerHTML=html;
+}
+function miniCalDayClick(ds){const d=new Date(ds);kalYear=d.getFullYear();kalMonth=d.getMonth();showPage('kalender');}
+function renderDashCalEvents(){
+  const el=document.getElementById('dash-cal-events');
+  if(!el) return;
+  const allEvents=getAllKalEvents();
+  const todayStr=today();
+  const tomorrowStr=addDays(today(),1);
+  const relevant=allEvents.filter(e=>e.datum===todayStr||e.datum===tomorrowStr).sort((a,b)=>a.datum.localeCompare(b.datum)||(a.zeit||'').localeCompare(b.zeit||''));
+  if(!relevant.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Keine Termine heute oder morgen 🎉</div>';return;}
+  el.innerHTML=relevant.map(e=>{
+    const c=e.kontaktId?DB.contacts.find(x=>x.id===e.kontaktId):null;
+    const isToday=e.datum===todayStr;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:4px;align-self:stretch;border-radius:2px;background:${e.color};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--ink)">${e.titel}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${isToday?'<strong style="color:var(--orange)">Heute</strong>':'Morgen'}${e.zeit?' · '+e.zeit:''}${c?' · '+c.firma:''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// SUMMARY STRIPS
+// ═══════════════════════════════════════════
+function renderAngeboteSummary(){
+  const el=document.getElementById('angebote-summary');
+  if(!el) return;
+  const all=DB.angebote;
+  const stats=[
+    {label:'Gesamt',val:all.length,sub:fmtEur(all.reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--blue)',icon:'📋'},
+    {label:'Offen / Entwurf',val:all.filter(a=>a.status==='entwurf'||a.status==='gesendet').length,sub:fmtEur(all.filter(a=>a.status==='entwurf'||a.status==='gesendet').reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--orange)',icon:'📤'},
+    {label:'Akzeptiert',val:all.filter(a=>a.status==='akzeptiert').length,sub:fmtEur(all.filter(a=>a.status==='akzeptiert').reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--green)',icon:'✅'},
+    {label:'Abgelehnt',val:all.filter(a=>a.status==='abgelehnt').length,sub:'',color:'var(--red)',icon:'✗'},
+  ];
+  el.innerHTML=stats.map(s=>`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${s.color};box-shadow:var(--shadow)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${s.icon} ${s.label}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;color:var(--ink);line-height:1">${s.val}</div>
+    ${s.sub?`<div style="font-size:11px;color:${s.color};font-weight:600;margin-top:3px">${s.sub}</div>`:''}</div>`).join('');
+}
+function renderRechnungenSummary(){
+  const el=document.getElementById('rechnungen-summary');
+  if(!el) return;
+  const all=DB.rechnungen;
+  const ueber=all.filter(r=>r.status!=='bezahlt'&&r.faellig&&new Date(r.faellig)<new Date());
+  const stats=[
+    {label:'Gesamt',val:all.length,sub:fmtEur(all.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--blue)',icon:'🧾'},
+    {label:'Offen',val:all.filter(r=>r.status==='offen-rg').length,sub:fmtEur(all.filter(r=>r.status==='offen-rg').reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--orange)',icon:'⏳'},
+    {label:'Bezahlt',val:all.filter(r=>r.status==='bezahlt').length,sub:fmtEur(all.filter(r=>r.status==='bezahlt').reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--green)',icon:'✅'},
+    {label:'Überfällig',val:ueber.length,sub:ueber.length?fmtEur(ueber.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)):'',color:'var(--red)',icon:'🔴'},
+  ];
+  el.innerHTML=stats.map(s=>`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${s.color};box-shadow:var(--shadow)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${s.icon} ${s.label}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;color:var(--ink);line-height:1">${s.val}</div>
+    ${s.sub?`<div style="font-size:11px;color:${s.color};font-weight:600;margin-top:3px">${s.sub}</div>`:''}</div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// MONATSBERICHT
+// ═══════════════════════════════════════════
+function exportMonatsbericht(){
+  const now=new Date(), year=now.getFullYear(), month=now.getMonth();
+  const monthName=KAL_MONTHS[month];
+  const s=DB.settings;
+  const moStart=`${year}-${String(month+1).padStart(2,'0')}-01`;
+  const moEnd=`${year}-${String(month+1).padStart(2,'0')}-31`;
+  const inMonth=d=>d&&d>=moStart&&d<=moEnd;
+  const rgsMonth=DB.rechnungen.filter(r=>inMonth(r.datum));
+  const bezahlt=rgsMonth.filter(r=>r.status==='bezahlt');
+  const offene=DB.rechnungen.filter(r=>r.status!=='bezahlt');
+  const mrr=(DB.retainer||[]).filter(r=>r.status==='aktiv').reduce((s,r)=>s+parseFloat(r.betrag||0),0);
+  const angebotsumme=DB.angebote.filter(a=>inMonth(a.datum)).reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
+  const upcoming=(getAllKalEvents()||[]).filter(e=>e.datum>=today()).sort((a,b)=>a.datum.localeCompare(b.datum)).slice(0,5);
+  const logoHtml=s.logo?`<img src="${s.logo}" style="height:40px;object-fit:contain;margin-bottom:6px">`:'';
+  const html=`<div class="doc-paper" style="padding:20mm">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #111">
+      <div>${logoHtml}<div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px">VIRAL <span style="color:#c49b00">OUTLAWS</span></div><div style="font-size:12px;color:#666">${s.name||'Viral Outlaws'} · ${s.inhaber||''}</div></div>
+      <div style="text-align:right"><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px">MONATSBERICHT</div><div style="font-size:14px;font-weight:600;color:#666">${monthName} ${year}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px">
+      ${[{l:'Umsatz bezahlt',v:fmtEur(bezahlt.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),c:'#1f9e5a'},{l:'MRR Retainer',v:fmtEur(mrr),c:'#c49b00'},{l:'Neue Angebote',v:fmtEur(angebotsumme),c:'#2563b8'},{l:'Offen',v:fmtEur(offene.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),c:'#d63030'}].map(k=>`<div style="background:#f8f7f4;border-radius:6px;padding:14px;border-top:3px solid ${k.c}"><div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:6px">${k.l}</div><div style="font-size:22px;font-weight:700;color:#111">${k.v}</div></div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <div><div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:10px">Rechnungen diesen Monat</div>${rgsMonth.length?rgsMonth.map(r=>{const c=DB.contacts.find(x=>x.id===r.kundeId);return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:12px"><span>${r.nr||''} · ${c?.firma||'?'}</span><span style="font-weight:600;color:${r.status==='bezahlt'?'#1f9e5a':'#d97706'}">${fmtEur(sumPositions(r.positions).brutto)}</span></div>`;}).join(''):'<div style="font-size:12px;color:#888">Keine</div>'}</div>
+      <div><div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:10px">Kommende Termine</div>${upcoming.length?upcoming.map(e=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:12px"><span>${e.titel}</span><span style="color:#666">${fmtDate(e.datum)}</span></div>`).join(''):'<div style="font-size:12px;color:#888">Keine</div>'}</div>
+    </div>
+    <div style="margin-top:40px;padding-top:16px;border-top:1px solid #ddd;font-size:10px;color:#aaa;display:flex;justify-content:space-between"><span>${s.name||'Viral Outlaws'} · ${new Date().toLocaleDateString('de-DE')}</span><span>${s.web||'viraloutlaws.de'}</span></div>
+  </div>`;
+  document.getElementById('print-area').innerHTML=html;
+  window.print();
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+if(!DB.kalEvents) DB.kalEvents=[];
+if(!DB.kanban) DB.kanban=[];
+if(!DB.retainer) DB.retainer=[];
+if(!DB.wiedervorlagen) DB.wiedervorlagen=[];
+if(!DB.ziele) DB.ziele={mrrZiel:4500,kundenZiel:15,kundenDatum:'',meilensteine:[]};
+renderDashboard();
+renderMiniCal();
+renderDashCalEvents();
+
+// ── PWA: Service Worker ──
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.log('SW failed:', e));
+  });
+}
+
+// ── PWA: Install prompt ──
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstall = e;
+  // Show install button in topbar
+  const btn = document.createElement('button');
+  btn.className = 'btn-settings';
+  btn.textContent = '📲 App installieren';
+  btn.style.background = 'rgba(245,196,0,.2)';
+  btn.style.color = '#f5c400';
+  btn.onclick = async () => {
+    if(!_deferredInstall) return;
+    _deferredInstall.prompt();
+    const { outcome } = await _deferredInstall.userChoice;
+    if(outcome === 'accepted') btn.remove();
+    _deferredInstall = null;
+  };
+  document.querySelector('.topbar-right')?.prepend(btn);
+});
+</script>
+</body>
+</html>
