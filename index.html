@@ -316,9 +316,52 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 .doc-footer b{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;margin-bottom:4px}
 .doc-notes{font-size:12px;color:#444;background:#f8f7f4;padding:14px 16px;border-radius:4px;margin-bottom:20px;border-left:3px solid #f5c400}
 .doc-notes b{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:6px}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{position:fixed;inset:0;background:#0a0a0a;z-index:9999;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif}
+#login-screen.hidden{display:none}
+.login-box{width:100%;max-width:380px;padding:0 28px}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:4px;color:#fff;margin-bottom:4px}
+.login-logo span{color:#f5c400}
+.login-bar{width:40px;height:3px;background:#f5c400;border-radius:2px;margin-bottom:10px}
+.login-sub{font-size:12px;color:rgba(255,255,255,.3);letter-spacing:.5px;margin-bottom:40px}
+.login-field{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.login-field label{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.login-field input{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);border-radius:6px;padding:13px 16px;font-family:'Sora',sans-serif;font-size:15px;color:#fff;outline:none;transition:border-color .15s;width:100%}
+.login-field input:focus{border-color:#f5c400;background:rgba(255,255,255,.07)}
+.login-field input.shake{animation:shake .3s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.login-btn{width:100%;padding:14px;background:#f5c400;color:#0a0a0a;border:none;border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2px;cursor:pointer;margin-top:10px;transition:all .15s}
+.login-btn:hover{background:#e6b800;transform:translateY(-1px)}
+.login-btn:active{transform:scale(.98)}
+.login-error{font-size:12px;color:#d63030;text-align:center;margin-top:12px;min-height:18px;font-weight:500}
+.login-hint{font-size:10px;color:rgba(255,255,255,.15);text-align:center;margin-top:32px;line-height:1.8}
 </style>
 </head>
 <body>
+
+<!-- ════════════════════════════════════════
+     LOGIN SCREEN
+════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">VIRAL <span>OUTLAWS</span></div>
+    <div class="login-bar"></div>
+    <div class="login-sub">CRM · Performance Marketing Allgäu</div>
+    <div class="login-field">
+      <label>Passwort</label>
+      <input type="password" id="login-pw" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter')doLogin()"
+        autocomplete="current-password">
+    </div>
+    <button class="login-btn" onclick="doLogin()">EINLOGGEN</button>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-hint">
+      Viral Outlaws CRM · crm.viraloutlaws.de<br>
+      Nur für autorisierte Nutzung
+    </div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div class="topbar">
@@ -340,6 +383,7 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       <button class="btn-settings" onclick="exportMonatsbericht()">📊 Monatsbericht</button>
       <button class="btn-settings" id="dark-toggle" onclick="toggleDarkMode()">🌙</button>
       <button class="btn-settings" onclick="showPage('settings')">⚙ Einstellungen</button>
+      <button class="btn-settings" onclick="logout()" style="color:rgba(255,255,255,.4)" title="Ausloggen">⏻</button>
     </div>
   </div>
 </div>
@@ -576,6 +620,7 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
         <button class="btn-yellow" onclick="saveSettings()">Einstellungen speichern</button>
         <button class="btn-ghost" onclick="exportData()">📤 Daten exportieren</button>
         <button class="btn-ghost" onclick="importData()">📥 Daten importieren</button>
+        <button class="btn-ghost" onclick="changePassword()">🔑 Passwort ändern</button>
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
       </div>
     </div>
@@ -3197,6 +3242,95 @@ function exportMonatsbericht(){
 }
 
 // ═══════════════════════════════════════════
+// LOGIN / AUTH
+// ═══════════════════════════════════════════
+
+// SHA-256 hash helper (Web Crypto API – built into all browsers)
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Default password hash – "viraloutlaws2024"
+// Change via Einstellungen → Passwort ändern
+const DEFAULT_PW_HASH = 'b2d3e4a1f5c6789012345678901234567890abcdef1234567890abcdef123456';
+
+function getStoredHash() {
+  return DB.settings?.pwHash || null;
+}
+
+async function initLogin() {
+  // First time: set default hash
+  if(!DB.settings.pwHash) {
+    DB.settings.pwHash = await sha256('viraloutlaws2024');
+    save();
+  }
+  // Check session (stays logged in for 8 hours)
+  const session = sessionStorage.getItem('vo_auth');
+  const sessionTime = parseInt(sessionStorage.getItem('vo_auth_time')||'0');
+  const eightHours = 8 * 60 * 60 * 1000;
+  if(session === 'ok' && Date.now() - sessionTime < eightHours) {
+    unlockApp();
+  } else {
+    document.getElementById('login-screen').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('login-pw')?.focus(), 100);
+  }
+}
+
+async function doLogin() {
+  const pw = document.getElementById('login-pw').value;
+  const errEl = document.getElementById('login-error');
+  const inp = document.getElementById('login-pw');
+  if(!pw) { errEl.textContent='Bitte Passwort eingeben.'; return; }
+
+  const hash = await sha256(pw);
+  const stored = DB.settings?.pwHash || await sha256('viraloutlaws2024');
+
+  if(hash === stored) {
+    sessionStorage.setItem('vo_auth','ok');
+    sessionStorage.setItem('vo_auth_time', Date.now().toString());
+    unlockApp();
+  } else {
+    errEl.textContent='Falsches Passwort.';
+    inp.classList.add('shake');
+    inp.value='';
+    setTimeout(()=>inp.classList.remove('shake'), 400);
+    setTimeout(()=>inp.focus(), 50);
+  }
+}
+
+function unlockApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+}
+
+function logout() {
+  sessionStorage.removeItem('vo_auth');
+  sessionStorage.removeItem('vo_auth_time');
+  document.getElementById('login-pw').value='';
+  document.getElementById('login-error').textContent='';
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-pw').focus();
+}
+
+async function changePassword() {
+  const current = prompt('Aktuelles Passwort:');
+  if(!current) return;
+  const currentHash = await sha256(current);
+  const stored = DB.settings?.pwHash || await sha256('viraloutlaws2024');
+  if(currentHash !== stored) { alert('❌ Falsches aktuelles Passwort.'); return; }
+
+  const newPw = prompt('Neues Passwort (min. 8 Zeichen):');
+  if(!newPw || newPw.length < 8) { alert('Passwort muss mindestens 8 Zeichen haben.'); return; }
+
+  const confirm = prompt('Neues Passwort bestätigen:');
+  if(newPw !== confirm) { alert('❌ Passwörter stimmen nicht überein.'); return; }
+
+  DB.settings.pwHash = await sha256(newPw);
+  save();
+  alert('✅ Passwort erfolgreich geändert!');
+}
+
+// ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 if(!DB.kalEvents) DB.kalEvents=[];
@@ -3207,6 +3341,9 @@ if(!DB.ziele) DB.ziele={mrrZiel:4500,kundenZiel:15,kundenDatum:'',meilensteine:[
 renderDashboard();
 renderMiniCal();
 renderDashCalEvents();
+
+// Init login AFTER app renders (so DB is loaded)
+initLogin();
 
 // ── PWA: Service Worker ──
 if('serviceWorker' in navigator) {
