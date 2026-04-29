@@ -557,6 +557,14 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       <span class="nav-item-icon">🧮</span>
       <span class="nav-item-label">Performance-Rechner</span>
     </div>
+    <div class="nav-item" onclick="showPage('konfigurator')" data-page="konfigurator">
+      <span class="nav-item-icon">🛒</span>
+      <span class="nav-item-label">Angebots-Konfigurator</span>
+    </div>
+    <div class="nav-item" onclick="showPage('wettbewerb')" data-page="wettbewerb">
+      <span class="nav-item-icon">🔍</span>
+      <span class="nav-item-label">Wettbewerbs-Analyse</span>
+    </div>
   </nav>
 
   <div id="sidebar-bottom">
@@ -1165,6 +1173,144 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
      MODALS
 ════════════════════════════════════════ -->
 
+<!-- ANGEBOTS-KONFIGURATOR -->
+<div class="page" id="page-konfigurator">
+  <div class="sec-header">
+    <div class="sec-title">Angebots-Konfigurator</div>
+    <button class="btn-ghost" onclick="konfReset()">&#8634; Zurücksetzen</button>
+    <button class="btn-ghost" onclick="konfPDF()">&#128196; PDF</button>
+    <button class="btn-primary" onclick="konfInsAngebot()">&#128203; Als Angebot ins CRM</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start" id="konf-layout">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">&#128100; Kundendaten</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field form-full"><label>Kontakt</label>
+            <select id="konf-kunde" onchange="konfKundeChange()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%"><option value="">&#8212; Kontakt wählen oder manuell &#8212;</option></select>
+          </div>
+          <div class="field"><label>Firmenname</label><input id="konf-firma" placeholder="Müller GmbH" oninput="konfCalc()" style="font-size:12px"></div>
+          <div class="field"><label>Gültig bis</label><input id="konf-gueltig" type="date" style="font-size:12px"></div>
+          <div class="field"><label>Zahlungsziel (Tage)</label><input id="konf-zahlung" type="number" value="14" style="font-size:12px"></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px">&#128200;</div><h3>Performance Marketing</h3></div>
+        <div style="margin-bottom:12px;border:1.5px solid var(--border);border-radius:6px;overflow:hidden">
+          <div style="background:var(--bg);padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue)">&#128309; Google Ads</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px" id="konf-google-items"></div>
+        </div>
+        <div style="margin-bottom:12px;border:1.5px solid var(--border);border-radius:6px;overflow:hidden">
+          <div style="background:var(--bg);padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8040b0">&#128156; Meta Ads</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px" id="konf-meta-items"></div>
+        </div>
+        <div style="border:1.5px solid var(--border);border-radius:6px;overflow:hidden">
+          <div style="background:var(--bg);padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--green)">&#128260; Monatliches Management (Retainer)</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px" id="konf-retainer-items"></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:32px;height:32px;background:var(--orange);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px">&#127760;</div><h3>Webdesign &amp; Entwicklung</h3></div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="konf-web-items"></div>
+      </div>
+      <div class="dash-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:32px;height:32px;background:var(--yellow);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px">&#11088;</div><h3>Extras &amp; Add-ons</h3></div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="konf-extra-items"></div>
+      </div>
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">&#9999; Eigene Position</h3>
+        <div style="display:grid;grid-template-columns:1fr 120px auto;gap:10px;align-items:end">
+          <div class="field" style="margin:0"><label>Bezeichnung</label><input id="konf-custom-name" placeholder="z.B. SEO-Optimierung" style="font-size:12px"></div>
+          <div class="field" style="margin:0"><label>Preis (€)</label><input id="konf-custom-price" type="number" placeholder="500" style="font-size:12px"></div>
+          <button class="btn-yellow" onclick="konfAddCustom()" style="height:38px">+ Hinzufügen</button>
+        </div>
+        <div id="konf-custom-list" style="margin-top:12px;display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">&#128221; Rabatt &amp; Notiz</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Rabatt (%)</label><input id="konf-rabatt" type="number" value="0" min="0" max="50" oninput="konfCalc()" style="font-size:12px"></div>
+          <div class="field"><label>Mindestlaufzeit (Monate)</label><input id="konf-laufzeit" type="number" value="3" min="1" style="font-size:12px"></div>
+          <div class="field form-full"><label>Anmerkung</label><textarea id="konf-notiz" rows="3" placeholder="z.B. Preis gilt für 3 Monate Mindestlaufzeit..." style="font-size:12px;resize:vertical"></textarea></div>
+        </div>
+      </div>
+    </div>
+    <div style="position:sticky;top:70px">
+      <div class="dash-card" style="border:2px solid var(--yellow)">
+        <h3 style="margin-bottom:16px">&#128176; Angebotsübersicht</h3>
+        <div id="konf-summary-list" style="margin-bottom:14px;font-size:12px"></div>
+        <div id="konf-totals" style="border-top:2px solid var(--border);padding-top:12px"></div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+          <button class="btn-primary" onclick="konfInsAngebot()" style="width:100%">&#128203; Als Angebot ins CRM</button>
+          <button class="btn-ghost" onclick="konfPDF()" style="width:100%">&#128196; PDF generieren</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WETTBEWERBS-ANALYSE -->
+<div class="page" id="page-wettbewerb">
+  <div class="sec-header">
+    <div class="sec-title">Wettbewerbs-Analyse</div>
+    <button class="btn-ghost" onclick="wettbReset()">&#8634; Neu starten</button>
+    <button class="btn-primary" onclick="wettbPDF()">&#128196; PDF exportieren</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+    <div class="dash-card">
+      <h3 style="margin-bottom:14px">&#127970; Unternehmen</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field form-full"><label>Firmenname *</label><input id="wb-firma" placeholder="Müller Elektro GmbH" style="font-size:12px"></div>
+        <div class="field"><label>Branche</label><input id="wb-branche" placeholder="Elektriker" style="font-size:12px"></div>
+        <div class="field"><label>Ort / PLZ</label><input id="wb-ort" placeholder="Memmingen" style="font-size:12px"></div>
+        <div class="field"><label>Website</label><input id="wb-website" placeholder="muellerelektro.de" style="font-size:12px"></div>
+        <div class="field"><label>Google Business</label>
+          <select id="wb-gbusiness" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="0">&#10060; Nicht vorhanden</option><option value="1">&#9888; Vorhanden, nicht optimiert</option><option value="2">&#9989; Optimiert &amp; aktiv</option>
+          </select>
+        </div>
+        <div class="field"><label>Google-Bewertung</label>
+          <select id="wb-rating" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="0">Keine Bewertungen</option><option value="1">Unter 3,0 &#11088;</option><option value="2">3,0 &#8211; 3,9 &#11088;&#11088;&#11088;</option><option value="3">4,0 &#8211; 4,4 &#11088;&#11088;&#11088;&#11088;</option><option value="4">4,5 &#8211; 5,0 &#11088;&#11088;&#11088;&#11088;&#11088;</option>
+          </select>
+        </div>
+        <div class="field"><label>Anzahl Bewertungen</label><input id="wb-reviews" type="number" placeholder="12" style="font-size:12px"></div>
+        <div class="field"><label>Google Ads aktiv?</label>
+          <select id="wb-gads" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="0">&#10060; Nein</option><option value="1">&#9888; Sporadisch</option><option value="2">&#9989; Aktiv</option>
+          </select>
+        </div>
+        <div class="field"><label>Meta Ads aktiv?</label>
+          <select id="wb-mads" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="0">&#10060; Nein</option><option value="1">&#9888; Sporadisch</option><option value="2">&#9989; Aktiv</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <h3 style="margin-bottom:14px">&#127760; Website-Check</h3>
+      <div style="display:flex;flex-direction:column;gap:8px" id="wb-website-checks">
+        <!-- filled by JS -->
+      </div>
+    </div>
+    <div class="dash-card">
+      <h3 style="margin-bottom:14px">&#128241; Social Media</h3>
+      <div style="display:flex;flex-direction:column;gap:8px" id="wb-social-checks">
+        <!-- filled by JS -->
+      </div>
+    </div>
+    <div class="dash-card" style="border:2px solid var(--yellow)">
+      <h3 style="margin-bottom:16px">&#127919; Score &amp; Potenzial</h3>
+      <div id="wb-score-area"><div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Fülle die Felder aus und klicke auf "Auswerten".</div></div>
+      <div class="field" style="margin-top:14px"><label>Notizen / Beobachtungen</label>
+        <textarea id="wb-notizen" rows="4" placeholder="Was fällt auf? Was ist die größte Schwäche?" style="font-size:12px;resize:vertical"></textarea>
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:12px" onclick="wettbCalc()">&#128202; Auswertung generieren</button>
+    </div>
+    <div class="dash-card" style="grid-column:1/-1;display:none" id="wb-empfehlungen"></div>
+  </div>
+</div>
+
 <!-- CONTACT MODAL -->
 <div class="overlay" id="contact-modal">
   <div class="modal">
@@ -1636,7 +1782,8 @@ const PAGE_TITLES = {
   dashboard:'Dashboard', contacts:'Kontakte', kalender:'Kalender',
   angebote:'Angebote', rechnungen:'Rechnungen', kanban:'Aufgaben',
   ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
-  rechner:'Performance-Rechner'
+  rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
+  wettbewerb:'Wettbewerbs-Analyse'
 };
 
 function showPage(id) {
@@ -1668,6 +1815,8 @@ function showPage(id) {
   if(id==='kanban') renderKanban();
   if(id==='ziele') renderZiele();
   if(id==='rechner') rechnerCalc();
+  if(id==='konfigurator') initKonfigurator();
+  if(id==='wettbewerb') initWettbewerb();
 }
 
 function toggleSidebar() {
@@ -4100,6 +4249,383 @@ if(!DB.kanban) DB.kanban=[];
 if(!DB.retainer) DB.retainer=[];
 if(!DB.wiedervorlagen) DB.wiedervorlagen=[];
 if(!DB.ziele) DB.ziele={mrrZiel:4500,kundenZiel:15,kundenDatum:'',meilensteine:[]};
+
+// ==================================================
+// ANGEBOTS-KONFIGURATOR
+// ==================================================
+
+const KONF_LEISTUNGEN = {
+  google: [
+    { id:'g-setup',    label:'Google Ads Kampagnen-Setup',      preis:800,  typ:'einmalig',  desc:'Keyword-Recherche, Anzeigentexte, Kampagnenstruktur, Conversion-Tracking' },
+    { id:'g-audit',    label:'Google Ads Konto-Audit',          preis:350,  typ:'einmalig',  desc:'Analyse bestehender Kampagnen, Optimierungsempfehlungen' },
+    { id:'g-landing',  label:'Landing Page (Google Traffic)',   preis:600,  typ:'einmalig',  desc:'Conversion-optimierte Landing Page fuer Google-Traffic' },
+    { id:'g-shopping', label:'Google Shopping Setup',           preis:700,  typ:'einmalig',  desc:'Shopping-Feed, Kampagnenstruktur, Produktgruppen' },
+  ],
+  meta: [
+    { id:'m-setup',    label:'Meta Ads Kampagnen-Setup',        preis:800,  typ:'einmalig',  desc:'Zielgruppen-Recherche, Creative-Strategie, Pixel-Integration' },
+    { id:'m-creatives',label:'Ad Creatives (3 Varianten)',      preis:450,  typ:'einmalig',  desc:'Professionelle Bild- und Textvarianten fuer A/B-Testing' },
+    { id:'m-reels',    label:'Reels / Video Ads (2 Videos)',    preis:800,  typ:'einmalig',  desc:'Kurze Video-Anzeigen fuer Instagram & Facebook' },
+  ],
+  retainer: [
+    { id:'r-google',   label:'Google Ads Management',           preis:500,  typ:'monatlich', desc:'Laufende Optimierung, Reporting, Budgetkontrolle' },
+    { id:'r-meta',     label:'Meta Ads Management',             preis:500,  typ:'monatlich', desc:'Laufende Optimierung, Creative-Updates, Reporting' },
+    { id:'r-beide',    label:'Google + Meta Management',        preis:850,  typ:'monatlich', desc:'Beide Kanaele, monatliches Reporting, Strategie-Call' },
+    { id:'r-premium',  label:'Full-Service Performance',        preis:1500, typ:'monatlich', desc:'Google + Meta + Strategie + Report + 1h Call' },
+    { id:'r-reporting',label:'Monatliches Reporting',           preis:150,  typ:'monatlich', desc:'Detaillierter Kampagnenreport mit Handlungsempfehlungen' },
+  ],
+  web: [
+    { id:'w-basic',    label:'Website Basic (5 Seiten)',        preis:2500, typ:'einmalig',  desc:'Startseite, Leistungen, Ueber uns, Kontakt, Impressum' },
+    { id:'w-pro',      label:'Website Professional (10 Seiten)',preis:4500, typ:'einmalig',  desc:'Inkl. Blog, SEO-Grundoptimierung, Kontaktformular' },
+    { id:'w-premium',  label:'Website Premium (individuell)',   preis:7500, typ:'einmalig',  desc:'Individuelle Gestaltung, Animationen, erweiterte Funktionen' },
+    { id:'w-shop',     label:'Online-Shop (WooCommerce)',       preis:3500, typ:'einmalig',  desc:'Bis 100 Produkte, Zahlungsintegration, responsive' },
+    { id:'w-relaunch', label:'Website Relaunch / Redesign',    preis:2000, typ:'einmalig',  desc:'Modernisierung bestehender Website' },
+    { id:'w-maint',    label:'Website-Wartung & Hosting',      preis:99,   typ:'monatlich', desc:'Updates, Backups, Security, Hosting inkl.' },
+    { id:'w-seo',      label:'SEO On-Page Optimierung',        preis:800,  typ:'einmalig',  desc:'Meta-Tags, Struktur, Ladezeit, Schema-Markup' },
+  ],
+  extras: [
+    { id:'e-foto',     label:'Professionelles Fotoshooting',   preis:600,  typ:'einmalig',  desc:'Halbtag, 20+ bearbeitete Bilder' },
+    { id:'e-gbiz',     label:'Google Business Optimierung',    preis:250,  typ:'einmalig',  desc:'Profil, Fotos, Kategorien, Beitraege' },
+    { id:'e-analyse',  label:'Wettbewerbs-Analyse',            preis:300,  typ:'einmalig',  desc:'Detaillierte Analyse + Positionierungsempfehlung' },
+    { id:'e-strat',    label:'Marketing-Strategie Workshop',   preis:500,  typ:'einmalig',  desc:'2h Workshop, Zieldefinition, Kanalstrategie' },
+    { id:'e-email',    label:'E-Mail Marketing Setup',         preis:400,  typ:'einmalig',  desc:'Newsletter-Tool, Template, Willkommens-Automation' },
+  ],
+};
+
+let konfSelected = {};
+let konfCustom = [];
+
+function initKonfigurator() {
+  const sel = document.getElementById('konf-kunde');
+  if(sel) {
+    sel.innerHTML = '<option value="">-- Kontakt waehlen oder manuell --</option>';
+    DB.contacts.forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.firma; sel.appendChild(o); });
+  }
+  const gueltig = document.getElementById('konf-gueltig');
+  if(gueltig && !gueltig.value) gueltig.value = addDays(today(), 30);
+  renderKonfItems('konf-google-items',   KONF_LEISTUNGEN.google);
+  renderKonfItems('konf-meta-items',     KONF_LEISTUNGEN.meta);
+  renderKonfItems('konf-retainer-items', KONF_LEISTUNGEN.retainer);
+  renderKonfItems('konf-web-items',      KONF_LEISTUNGEN.web);
+  renderKonfItems('konf-extra-items',    KONF_LEISTUNGEN.extras);
+  konfCalc();
+}
+
+function renderKonfItems(containerId, items) {
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = items.map(item => '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:4px;border:1.5px solid '+(konfSelected[item.id]?'var(--yellow)':'var(--border)')+';background:'+(konfSelected[item.id]?'var(--yellow-bg)':'var(--paper)')+';cursor:pointer" onclick="konfToggle(\''+item.id+'\')">'
+    + '<input type="checkbox" '+(konfSelected[item.id]?'checked':'')+' style="width:16px;height:16px;accent-color:var(--yellow);cursor:pointer;margin-top:1px;flex-shrink:0" onclick="event.stopPropagation();konfToggle(\''+item.id+'\')">'
+    + '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--ink)">'+item.label+'</div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-top:1px">'+item.desc+'</div></div>'
+    + '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:'+(konfSelected[item.id]?'var(--yellow2)':'var(--ink)')+'">'+fmtEur(item.preis)+'</div>'
+    + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">'+item.typ+'</div></div></div>'
+  ).join('');
+}
+
+function konfToggle(id) {
+  konfSelected[id] = !konfSelected[id];
+  renderKonfItems('konf-google-items',   KONF_LEISTUNGEN.google);
+  renderKonfItems('konf-meta-items',     KONF_LEISTUNGEN.meta);
+  renderKonfItems('konf-retainer-items', KONF_LEISTUNGEN.retainer);
+  renderKonfItems('konf-web-items',      KONF_LEISTUNGEN.web);
+  renderKonfItems('konf-extra-items',    KONF_LEISTUNGEN.extras);
+  konfCalc();
+}
+
+function konfKundeChange() {
+  const id = document.getElementById('konf-kunde').value;
+  if(!id) return;
+  const c = DB.contacts.find(x=>x.id===id);
+  if(c) document.getElementById('konf-firma').value = c.firma;
+}
+
+function konfAddCustom() {
+  const name = document.getElementById('konf-custom-name').value.trim();
+  const price = parseFloat(document.getElementById('konf-custom-price').value)||0;
+  if(!name) { alert('Bitte Bezeichnung eingeben.'); return; }
+  konfCustom.push({ id:'custom_'+uid(), label:name, preis:price, typ:'einmalig', desc:'Individuelle Leistung' });
+  document.getElementById('konf-custom-name').value = '';
+  document.getElementById('konf-custom-price').value = '';
+  konfCustom.forEach(c => konfSelected[c.id] = true);
+  renderKonfCustomList();
+  konfCalc();
+}
+
+function renderKonfCustomList() {
+  const el = document.getElementById('konf-custom-list');
+  if(!el) return;
+  el.innerHTML = konfCustom.map(c => '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:4px">'
+    + '<span style="flex:1;font-size:12px;font-weight:600">'+c.label+'</span>'
+    + '<span style="font-size:12px;font-weight:700">'+fmtEur(c.preis)+'</span>'
+    + '<button class="btn-danger" onclick="konfRemoveCustom(\''+c.id+'\')" style="padding:2px 8px;font-size:11px">x</button></div>'
+  ).join('');
+}
+
+function konfRemoveCustom(id) {
+  konfCustom = konfCustom.filter(c=>c.id!==id);
+  delete konfSelected[id];
+  renderKonfCustomList();
+  konfCalc();
+}
+
+function konfCalc() {
+  const rabatt = parseFloat(document.getElementById('konf-rabatt')?.value||0)/100;
+  const laufzeit = parseInt(document.getElementById('konf-laufzeit')?.value||3);
+  const allItems = [...Object.values(KONF_LEISTUNGEN).flat(), ...konfCustom];
+  const selected = allItems.filter(i => konfSelected[i.id]);
+  const einmalig  = selected.filter(i=>i.typ==='einmalig').reduce((s,i)=>s+i.preis,0);
+  const monatlich = selected.filter(i=>i.typ==='monatlich').reduce((s,i)=>s+i.preis,0);
+  const einmaligR = einmalig*(1-rabatt);
+  const monatlichR = monatlich*(1-rabatt);
+  const gesamt = einmaligR + monatlichR*laufzeit;
+  const summaryEl = document.getElementById('konf-summary-list');
+  if(summaryEl) {
+    if(!selected.length) {
+      summaryEl.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Noch keine Leistungen gewaehlt</div>';
+    } else {
+      summaryEl.innerHTML = selected.map(i => '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border)">'
+        + '<div><div style="font-size:11px;font-weight:600;color:var(--ink)">'+i.label+'</div>'
+        + '<div style="font-size:10px;color:var(--muted)">'+i.typ+'</div></div>'
+        + '<div style="font-size:12px;font-weight:700;color:var(--ink);flex-shrink:0;margin-left:8px">'+fmtEur(i.preis)+'</div></div>'
+      ).join('');
+    }
+  }
+  const totalsEl = document.getElementById('konf-totals');
+  if(totalsEl) {
+    totalsEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Einmalig</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(einmalig)+'</span></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Monatlich</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(monatlich)+'</span></div>'
+      + (rabatt>0?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--green)"><span>Rabatt '+Math.round(rabatt*100)+'%</span><span style="font-weight:600">-'+fmtEur((einmalig+monatlich)*rabatt)+'</span></div>':'')
+      + '<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-top:1.5px solid var(--border);margin-top:4px">'
+      + '<span style="font-weight:700">Gesamt ('+laufzeit+' Mon.)</span>'
+      + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--yellow2)">'+fmtEur(gesamt)+'</span></div>'
+      + '<div style="font-size:10px;color:var(--muted);text-align:center">'+fmtEur(einmaligR)+' einmalig + '+fmtEur(monatlichR)+'/Monat</div>';
+  }
+  window._konfLastData = { selected, einmalig, monatlich, einmaligR, monatlichR, gesamt, rabatt, laufzeit };
+}
+
+function konfInsAngebot() {
+  if(!window._konfLastData?.selected?.length) { alert('Bitte mindestens eine Leistung auswaehlen.'); return; }
+  const data = window._konfLastData;
+  const kundeId = document.getElementById('konf-kunde').value||null;
+  const firma = document.getElementById('konf-firma').value||'Neuer Kunde';
+  const gueltig = document.getElementById('konf-gueltig').value||addDays(today(),30);
+  const notiz = document.getElementById('konf-notiz')?.value||'';
+  const positions = data.selected.map(i => ({ id:uid(), desc:i.label, detail:i.desc+' ('+i.typ+')', qty:1, price:i.preis*(1-data.rabatt), total:i.preis*(1-data.rabatt) }));
+  const angebot = { id:uid(), nr:'A-'+new Date().getFullYear()+'-'+String(DB.angebote.length+1).padStart(3,'0'),
+    kundeId, betreff:'Angebot '+firma+' - Performance Marketing & Webdesign',
+    datum:today(), validBis:gueltig, status:'entwurf', positions, notes:notiz, createdAt:new Date().toISOString() };
+  DB.angebote.unshift(angebot);
+  save();
+  addActivity('Angebot aus Konfigurator erstellt fuer "'+firma+'"','yellow');
+  if(confirm('Angebot erstellt!\nJetzt zum Angebot wechseln?')) showPage('angebote');
+}
+
+function konfReset() {
+  konfSelected={}; konfCustom=[];
+  ['konf-kunde','konf-firma','konf-notiz'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const rb=document.getElementById('konf-rabatt'); if(rb) rb.value=0;
+  const lf=document.getElementById('konf-laufzeit'); if(lf) lf.value=3;
+  initKonfigurator();
+}
+
+function konfPDF() {
+  konfCalc();
+  if(!window._konfLastData?.selected?.length) { alert('Bitte Leistungen auswaehlen.'); return; }
+  const s=DB.settings, data=window._konfLastData;
+  const firma=document.getElementById('konf-firma').value||'Interessent';
+  const gueltig=document.getElementById('konf-gueltig').value;
+  const notiz=document.getElementById('konf-notiz')?.value||'';
+  const datum=new Date().toLocaleDateString('de-DE');
+  const logoHtml=s.logo?'<img src="'+s.logo+'" style="height:44px;object-fit:contain;margin-bottom:6px;display:block">':'';
+  const einmaligItems=data.selected.filter(i=>i.typ==='einmalig');
+  const monatlichItems=data.selected.filter(i=>i.typ==='monatlich');
+  let html='<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Angebot '+firma+'</title>'
+    +'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:14mm 16mm;font-size:12px}'
+    +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:3px solid #f5c400}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#f0ede7;padding:8px 10px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#666;text-align:left;border-bottom:2px solid #ddd}'
+    +'td{padding:9px 10px;border-bottom:1px solid #eee}.right{text-align:right}'
+    +'@media print{body{padding:10mm};@page{margin:0;size:A4}}</style></head><body>'
+    +'<div class="header"><div>'+logoHtml+'<div style="font-family:Arial,sans-serif;font-size:22px;font-weight:900;letter-spacing:3px">VIRAL <span style="color:#f5c400">OUTLAWS</span></div>'
+    +'<div style="font-size:11px;color:#666;margin-top:2px">'+(s.name||'Viral Outlaws')+'</div></div>'
+    +'<div style="text-align:right"><div style="font-family:Arial,sans-serif;font-size:22px;font-weight:900;letter-spacing:2px">ANGEBOT</div>'
+    +'<div style="font-size:13px;color:#666;margin-top:4px">Fuer: <strong>'+firma+'</strong></div>'
+    +'<div style="font-size:11px;color:#888">Datum: '+datum+' | Gueltig bis: '+(gueltig?new Date(gueltig).toLocaleDateString('de-DE'):'30 Tage')+'</div></div></div>';
+  if(einmaligItems.length) {
+    html+='<h3 style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:10px">Einmalige Leistungen</h3>'
+      +'<table><thead><tr><th>Leistung</th><th>Beschreibung</th><th class="right">Preis</th></tr></thead><tbody>'
+      +einmaligItems.map(i=>'<tr><td style="font-weight:600">'+i.label+'</td><td style="color:#666;font-size:11px">'+i.desc+'</td><td class="right" style="font-weight:700">'+fmtEur(i.preis*(1-data.rabatt))+'</td></tr>').join('')
+      +'<tr style="background:#f8f7f4"><td colspan="2" style="font-weight:700;padding:10px">Summe einmalig</td><td class="right" style="font-weight:800;font-size:14px">'+fmtEur(data.einmaligR)+'</td></tr></tbody></table>';
+  }
+  if(monatlichItems.length) {
+    html+='<h3 style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin:16px 0 10px">Monatliche Leistungen (Retainer)</h3>'
+      +'<table><thead><tr><th>Leistung</th><th>Beschreibung</th><th class="right">/ Monat</th></tr></thead><tbody>'
+      +monatlichItems.map(i=>'<tr><td style="font-weight:600">'+i.label+'</td><td style="color:#666;font-size:11px">'+i.desc+'</td><td class="right" style="font-weight:700">'+fmtEur(i.preis*(1-data.rabatt))+'</td></tr>').join('')
+      +'<tr style="background:#f8f7f4"><td colspan="2" style="font-weight:700;padding:10px">Summe monatlich</td><td class="right" style="font-weight:800;font-size:14px">'+fmtEur(data.monatlichR)+'/Monat</td></tr></tbody></table>';
+  }
+  html+='<div style="background:#f8f7f4;border-radius:6px;padding:16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:4px">Gesamtinvestition ('+data.laufzeit+' Monate)</div>'
+    +'<div style="font-size:11px;color:#666">Einmalig '+fmtEur(data.einmaligR)+' + '+fmtEur(data.monatlichR)+'/Monat x '+data.laufzeit+'</div>'
+    +(data.rabatt>0?'<div style="font-size:11px;color:#1f9e5a">Rabatt '+Math.round(data.rabatt*100)+'% bereits abgezogen</div>':'')+'</div>'
+    +'<div style="font-family:Arial,sans-serif;font-size:28px;font-weight:900;color:#f5c400">'+fmtEur(data.gesamt)+'</div></div>'
+    +(notiz?'<div style="background:#fffbea;border-left:3px solid #f5c400;padding:12px 14px;margin-bottom:14px;font-size:12px"><strong>Hinweis: </strong>'+notiz+'</div>':'')
+    +(s.kleinunternehmer?'<p style="font-size:11px;color:#888;margin-bottom:14px">Gemaess 19 UStG wird keine Umsatzsteuer berechnet.</p>':'')
+    +'<div style="margin-top:28px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#aaa;display:flex;justify-content:space-between">'
+    +'<span>'+(s.name||'Viral Outlaws')+' | '+(s.email||'')+' | '+(s.tel||'')+'</span><span>'+(s.web||'viraloutlaws.de')+'</span></div>'
+    +'<script>window.onload=()=>{window.print();}<\/script></body></html>';
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+
+// ==================================================
+// WETTBEWERBS-ANALYSE
+// ==================================================
+const WB_WEBSITE_CHECKS = ['Mobilfreundlich (responsive)','HTTPS / SSL vorhanden','Ladezeit unter 3 Sekunden','Klares Angebot auf Startseite','Kontaktformular / CTA vorhanden','Impressum & Datenschutz','Blog / aktuelle Inhalte','Google Maps eingebunden'];
+const WB_SOCIAL = [{id:'instagram',label:'Instagram',icon:'Insta'},{id:'facebook',label:'Facebook',icon:'FB'},{id:'linkedin',label:'LinkedIn',icon:'LI'},{id:'tiktok',label:'TikTok',icon:'TT'},{id:'youtube',label:'YouTube',icon:'YT'}];
+let _wbCheckStates = {};
+
+function initWettbewerb() {
+  const wc = document.getElementById('wb-website-checks');
+  if(wc) {
+    wc.innerHTML = WB_WEBSITE_CHECKS.map((l,i) => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border-radius:4px;margin-bottom:4px">'
+      + '<span style="font-size:12px;font-weight:500">'+l+'</span>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button data-k="wc'+i+'" data-v="2" onclick="wbSetCheck(this,2)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#9989;</button>'
+      + '<button data-k="wc'+i+'" data-v="1" onclick="wbSetCheck(this,1)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#9888;</button>'
+      + '<button data-k="wc'+i+'" data-v="0" onclick="wbSetCheck(this,0)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#10060;</button>'
+      + '</div></div>'
+    ).join('');
+  }
+  const sc = document.getElementById('wb-social-checks');
+  if(sc) {
+    sc.innerHTML = WB_SOCIAL.map(s => '<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg);border-radius:4px;margin-bottom:4px">'
+      + '<span style="font-size:12px;font-weight:700;width:28px;flex-shrink:0">'+s.icon+'</span>'
+      + '<span style="font-size:12px;font-weight:500;flex:1">'+s.label+'</span>'
+      + '<select id="wb-sm-'+s.id+'" style="font-family:Sora,sans-serif;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--paper);color:var(--ink);outline:none">'
+      + '<option value="0">Nicht vorhanden</option><option value="1">Inaktiv</option><option value="2">Aktiv</option></select></div>'
+    ).join('');
+  }
+}
+
+function wbSetCheck(btn, val) {
+  const key = btn.dataset.k;
+  _wbCheckStates[key] = val;
+  const container = btn.closest('div');
+  container.querySelectorAll('button[data-k]').forEach(b => {
+    const bval = parseInt(b.dataset.v);
+    const active = bval === val;
+    b.style.background = active ? (val===2?'var(--green-bg)':val===1?'var(--orange-bg)':'var(--red-bg)') : 'var(--paper)';
+    b.style.borderColor = active ? (val===2?'var(--green)':val===1?'var(--orange)':'var(--red)') : 'var(--border)';
+  });
+}
+
+function wettbCalc() {
+  const firma = document.getElementById('wb-firma').value.trim();
+  if(!firma) { alert('Bitte Firmenname eingeben.'); return; }
+  const gbusiness=parseInt(document.getElementById('wb-gbusiness').value||0);
+  const rating=parseInt(document.getElementById('wb-rating').value||0);
+  const gads=parseInt(document.getElementById('wb-gads').value||0);
+  const mads=parseInt(document.getElementById('wb-mads').value||0);
+  const reviews=parseInt(document.getElementById('wb-reviews').value||0);
+  const wcVals=Object.values(_wbCheckStates);
+  const wcScore=wcVals.reduce((s,v)=>s+v,0);
+  const wcMax=WB_WEBSITE_CHECKS.length*2;
+  const smScore=WB_SOCIAL.reduce((s,p)=>s+parseInt(document.getElementById('wb-sm-'+p.id)?.value||0),0);
+  const smMax=WB_SOCIAL.length*2;
+  const mktScore=gads+mads+(reviews>=10?2:reviews>=3?1:0);
+  const gScore=gbusiness+rating+(reviews>=20?2:reviews>=5?1:0);
+  const totalScore=wcScore+smScore+mktScore+gScore;
+  const totalMax=wcMax+smMax+6+6;
+  const pct=Math.round(totalScore/totalMax*100);
+  const level=pct>=75?{label:'Stark aufgestellt',color:'var(--green)',icon:''}
+    :pct>=50?{label:'Ausbaufaehig',color:'var(--orange)',icon:''}
+    :pct>=25?{label:'Grosses Potenzial',color:'var(--yellow2)',icon:''}
+    :{label:'Kritischer Nachholbedarf',color:'var(--red)',icon:''};
+  const potenzial=100-pct;
+  const scoreEl=document.getElementById('wb-score-area');
+  if(scoreEl) {
+    scoreEl.innerHTML='<div style="text-align:center;margin-bottom:16px">'
+      +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:60px;color:'+level.color+';line-height:1">'+pct+'%</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+level.color+'">'+level.label+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:4px">Online-Sichtbarkeit von '+firma+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
+      +[['Website',wcScore,wcMax,'var(--blue)'],['Google',gScore,6,'var(--green)'],['Social',smScore,smMax,'#8040b0'],['Marketing',mktScore,6,'var(--orange)']].map(([l,s,m,c])=>
+        '<div style="background:var(--bg);border-radius:4px;padding:10px;text-align:center">'
+        +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">'+l+'</div>'
+        +'<div style="font-size:18px;font-weight:700;color:'+c+'">'+Math.round(s/m*100)+'%</div>'
+        +'<div style="height:4px;background:var(--border);border-radius:2px;margin-top:6px"><div style="height:100%;background:'+c+';border-radius:2px;width:'+Math.round(s/m*100)+'%"></div></div></div>'
+      ).join('')+'</div>'
+      +'<div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px;padding:10px 12px;font-size:12px">'
+      +'<strong style="display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow2);margin-bottom:4px">Potenzial-Score</strong>'
+      +'<span style="font-size:20px;font-weight:800;color:var(--yellow2)">'+potenzial+'%</span>'
+      +'<span style="font-size:11px;color:var(--muted);margin-left:6px">Verbesserungspotenzial</span></div>';
+  }
+  const recs=[];
+  if(gbusiness<2) recs.push({p:'HOCH',t:'Google Business Profil optimieren',d:'Vollstaendiges Profil erhoht Sichtbarkeit massiv.'});
+  if(rating<3) recs.push({p:'HOCH',t:'Google Bewertungen aufbauen',d:'Unter 4,0 Sterne: bis zu 40% weniger Klicks.'});
+  if(gads===0) recs.push({p:'HOCH',t:'Google Ads schalten',d:'Wettbewerber ist nicht aktiv – perfekte Chance.'});
+  if(mads===0) recs.push({p:'MITTEL',t:'Meta Ads starten',d:'Lokale Bekanntheit und Remarketing.'});
+  if(wcScore<wcMax*0.6) recs.push({p:'HOCH',t:'Website-Optimierung',d:'Website hat deutliche Schwaechen. Relaunch empfohlen.'});
+  if(smScore<smMax*0.4) recs.push({p:'MITTEL',t:'Social Media aufbauen',d:'Kaum Praesenz vorhanden.'});
+  const empfEl=document.getElementById('wb-empfehlungen');
+  if(empfEl && recs.length) {
+    empfEl.style.display='block';
+    empfEl.innerHTML='<h3 style="margin-bottom:16px">Handlungsempfehlungen fuer '+firma+'</h3>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">'
+      +recs.map(r=>'<div style="background:var(--bg);border-radius:6px;padding:12px 14px;border-left:3px solid '+(r.p==='HOCH'?'var(--red)':'var(--orange)')+'"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;background:'+(r.p==='HOCH'?'var(--red-bg)':'var(--orange-bg)')+';color:'+(r.p==='HOCH'?'var(--red)':'var(--orange)')+';padding:2px 7px;border-radius:10px">'+r.p+'</span>'
+        +'<span style="font-size:12px;font-weight:700">'+r.t+'</span></div>'
+        +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'+r.d+'</div></div>'
+      ).join('')+'</div>';
+  }
+  window._wbLastData={firma,pct,level,recs};
+}
+
+function wettbReset() {
+  ['wb-firma','wb-branche','wb-ort','wb-website','wb-reviews','wb-notizen'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['wb-gbusiness','wb-rating','wb-gads','wb-mads'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
+  _wbCheckStates={};
+  initWettbewerb();
+  const s=document.getElementById('wb-score-area');
+  if(s) s.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Felder ausfullen und Auswerten klicken.</div>';
+  const e=document.getElementById('wb-empfehlungen');
+  if(e){e.style.display='none';e.innerHTML='';}
+}
+
+function wettbPDF() {
+  wettbCalc();
+  const firma=document.getElementById('wb-firma').value||'Analyse';
+  const branche=document.getElementById('wb-branche').value||'';
+  const ort=document.getElementById('wb-ort').value||'';
+  const website=document.getElementById('wb-website').value||'';
+  const notizen=document.getElementById('wb-notizen').value||'';
+  const datum=new Date().toLocaleDateString('de-DE');
+  const s=DB.settings;
+  const data=window._wbLastData;
+  if(!data){alert('Bitte zuerst auswerten.');return;}
+  const logoHtml=s.logo?'<img src="'+s.logo+'" style="height:40px;object-fit:contain;margin-bottom:6px;display:block">':'';
+  const scoreHtml=document.getElementById('wb-score-area')?.innerHTML||'';
+  const empfHtml=document.getElementById('wb-empfehlungen')?.innerHTML||'';
+  const html='<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Wettbewerbs-Analyse '+firma+'</title>'
+    +'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:14mm 16mm;font-size:12px}'
+    +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f5c400}'
+    +'@media print{body{padding:10mm};@page{margin:0;size:A4}}</style></head><body>'
+    +'<div class="header"><div>'+logoHtml+'<div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:3px">VIRAL <span style="color:#f5c400">OUTLAWS</span></div>'
+    +'<div style="font-size:11px;color:#666">'+(s.name||'Viral Outlaws')+'</div></div>'
+    +'<div style="text-align:right"><div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:2px">WETTBEWERBS-ANALYSE</div>'
+    +'<div style="font-size:13px;color:#666;margin-top:4px"><strong>'+firma+'</strong></div>'
+    +'<div style="font-size:11px;color:#888">'+(branche?branche+' | ':'')+ort+' | '+datum+'</div></div></div>'
+    +scoreHtml
+    +(notizen?'<div style="margin:16px 0;background:#f8f7f4;border-left:3px solid #f5c400;padding:12px 14px;font-size:12px"><strong>Notizen: </strong>'+notizen+'</div>':'')
+    +(empfHtml?'<div style="margin-top:16px">'+empfHtml+'</div>':'')
+    +'<div style="margin-top:28px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#aaa;text-align:center">Erstellt von Viral Outlaws | crm.viraloutlaws.de | '+datum+'</div>'
+    +'<script>window.onload=()=>{window.print();}<\/script></body></html>';
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 
 // Inject logo
 const _logoEl1 = document.getElementById('login-logo-img');
