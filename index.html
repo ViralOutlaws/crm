@@ -378,6 +378,10 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
       <button class="nav-btn" onclick="showPage('ziele')">🎯 Ziele</button>
     </nav>
     <div class="topbar-right">
+      <div id="autosave-indicator" style="font-size:10px;color:rgba(255,255,255,.25);display:flex;align-items:center;gap:5px;margin-right:4px">
+        <span id="autosave-dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);display:inline-block;transition:background .3s"></span>
+        <span id="autosave-txt"></span>
+      </div>
       <button class="btn-settings" onclick="openEmailModal()">✉ E-Mail Vorlagen</button>
       <button class="btn-settings" onclick="openGlobalSearch()" title="Strg+K">🔍 Suche</button>
       <button class="btn-settings" onclick="exportMonatsbericht()">📊 Monatsbericht</button>
@@ -1993,7 +1997,23 @@ function saveSettings() {
   const ku=document.getElementById('s-kleinunternehmer');
   DB.settings.kleinunternehmer = ku ? ku.checked : false;
   save();
-  alert('✅ Einstellungen gespeichert!');
+
+  // Auto-sync to Google Drive if URL is set
+  if(getGsUrl()) {
+    const btn = document.querySelector('.btn-yellow[onclick="saveSettings()"]');
+    if(btn) { btn.textContent='💾 Wird gespeichert…'; btn.disabled=true; }
+    syncToSheets()
+      .then(()=>{
+        if(btn) { btn.textContent='✅ Gespeichert & gesichert!'; btn.disabled=false; }
+        setTimeout(()=>{ if(btn) btn.textContent='Einstellungen speichern'; }, 2500);
+      })
+      .catch(()=>{
+        if(btn) { btn.textContent='Einstellungen speichern'; btn.disabled=false; }
+        alert('✅ Lokal gespeichert.\n⚠ Cloud-Backup fehlgeschlagen – URL prüfen.');
+      });
+  } else {
+    alert('✅ Einstellungen gespeichert!\n\n💡 Tipp: Trage eine Google Apps Script URL ein um automatisch in der Cloud zu sichern.');
+  }
 }
 
 function exportData() {
@@ -2069,24 +2089,45 @@ async function testConnection() {
   } catch(e) { setSyncStatus('error'); alert('❌ Verbindung fehlgeschlagen:\n' + e.message + '\n\nBitte prüfe die URL und ob die Web-App korrekt bereitgestellt wurde.'); }
 }
 
-async function syncToSheets() {
+function setAutoSaveIndicator(state) {
+  const dot = document.getElementById('autosave-dot');
+  const txt = document.getElementById('autosave-txt');
+  if(!dot||!txt) return;
+  if(state==='saving') {
+    dot.style.background='#f5c400'; txt.textContent='Speichert…';
+  } else if(state==='saved') {
+    dot.style.background='#1f9e5a'; txt.textContent='Gesichert ✓';
+    setTimeout(()=>{ dot.style.background='rgba(255,255,255,.2)'; txt.textContent=''; }, 3000);
+  } else if(state==='error') {
+    dot.style.background='#d63030'; txt.textContent='Sync fehlgeschlagen';
+    setTimeout(()=>{ dot.style.background='rgba(255,255,255,.2)'; txt.textContent=''; }, 5000);
+  }
+}
+
+async function syncToSheets(silent=false) {
   const url = getGsUrl();
-  if(!url) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); return; }
+  if(!url) {
+    if(!silent) { alert('Bitte zuerst die Apps Script URL in den Einstellungen eintragen.'); showPage('settings'); }
+    return;
+  }
   setSyncStatus('syncing');
+  setAutoSaveIndicator('saving');
   const btn = document.getElementById('btn-sync-up');
-  if(btn) { btn.disabled=true; btn.textContent='☁ Wird hochgeladen…'; }
+  if(btn&&!silent) { btn.disabled=true; btn.textContent='☁ Wird hochgeladen…'; }
   try {
     const r = await gsRequest('save', { data: JSON.stringify(DB) });
     if(r.ok) {
       setSyncStatus('saved');
+      setAutoSaveIndicator('saved');
       DB.settings.lastSync = new Date().toISOString();
-      save();
-      if(btn) { btn.textContent='✅ Hochgeladen'; setTimeout(()=>{ btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; },2000); }
+      localStorage.setItem('vo_crm', JSON.stringify(DB)); // save without triggering another sync
+      if(btn&&!silent) { btn.textContent='✅ Hochgeladen'; setTimeout(()=>{ btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; },2000); }
     } else throw new Error(r.error||'Fehler beim Speichern');
   } catch(e) {
     setSyncStatus('error');
-    if(btn) { btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; }
-    alert('❌ Sync fehlgeschlagen:\n' + e.message);
+    setAutoSaveIndicator('error');
+    if(btn&&!silent) { btn.disabled=false; btn.textContent='☁ Jetzt hochladen'; }
+    if(!silent) alert('❌ Sync fehlgeschlagen:\n' + e.message);
   }
 }
 
@@ -2151,6 +2192,14 @@ function toggleAutoSync() {
 const _origSave = save;
 function save() {
   try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
+  // Silent debounced sync – fires 4 seconds after last save() call
+  // This means every contact, invoice, note etc. auto-syncs without any manual action
+  if(getGsUrl()) {
+    clearTimeout(window._autoSyncDebounce);
+    window._autoSyncDebounce = setTimeout(() => {
+      syncToSheets(true).catch(()=>{}); // silent – no error popup
+    }, 4000);
+  }
 }
 // override global save with auto-sync awareness
 window._saveAndMaybeSync = function() {
@@ -3391,7 +3440,7 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'hidden' && getGsUrl()) {
     // Silent background sync
-    syncToSheets().catch(()=>{});
+    syncToSheets(true).catch(()=>{});
   }
 });
 
@@ -3403,7 +3452,7 @@ window.addEventListener('blur', () => {
   // Max einmal pro Minute beim Fokus verlieren
   if(now - _lastFocusSync > 60000) {
     _lastFocusSync = now;
-    syncToSheets().catch(()=>{});
+    syncToSheets(true).catch(()=>{});
   }
 });
 </script>
