@@ -1885,6 +1885,7 @@ function showPage(id) {
   if(id==='rechner') rechnerCalc();
   if(id==='konfigurator') initKonfigurator();
   if(id==='wettbewerb') initWettbewerb();
+  // contact-detail is handled by openContactDetail()
 }
 
 function toggleSidebar() {
@@ -4834,6 +4835,304 @@ function resetLeistungen() {
   if(!confirm('Wirklich zuruecksetzen? Alle eigenen Anpassungen gehen verloren.')) return;
   DB.leistungen = JSON.parse(JSON.stringify(KONF_LEISTUNGEN));
   save(); renderLeistungenEditor();
+}
+
+// ==================================================
+// KONTAKT-DETAIL
+// ==================================================
+let currentDetailContactId = null;
+let currentDocContactId = null;
+let currentCheckContactId = null;
+
+function openContactDetail(cid) {
+  currentDetailContactId = cid;
+  showPage('contact-detail');
+  renderContactDetail(cid);
+}
+
+function renderContactDetail(cid) {
+  const c = DB.contacts.find(x => x.id === cid);
+  if(!c) return;
+  if(!c.notizen) c.notizen = [];
+  if(!c.dokumente) c.dokumente = [];
+  if(!c.checks) c.checks = [];
+
+  const retainer = (DB.retainer||[]).find(r => r.kundeId === cid && r.status === 'aktiv');
+  const angebote = DB.angebote.filter(a => a.kundeId === cid);
+  const rechnungen = DB.rechnungen.filter(r => r.kundeId === cid);
+  const bezahlt = rechnungen.filter(r => r.status === 'bezahlt').reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
+  const offen = rechnungen.filter(r => r.status !== 'bezahlt').reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
+  const noteIcons = {anruf:'📞', email:'✉', termin:'📅', notiz:'📝', angebot:'📋'};
+  const noteLabels = {anruf:'Anruf', email:'E-Mail', termin:'Termin', notiz:'Notiz', angebot:'Angebot'};
+
+  document.getElementById('contact-detail-content').innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+
+    <!-- LEFT -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Header Card -->
+      <div class="dash-card" style="display:flex;align-items:flex-start;gap:16px">
+        ${c.photo
+          ? `<img src="${c.photo}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0">`
+          : `<div style="width:52px;height:52px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--yellow);flex-shrink:0">${initials(c.firma)}</div>`
+        }
+        <div style="flex:1">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">${c.firma}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--muted)">
+            ${c.person ? `<span>👤 ${c.person}</span>` : ''}
+            ${c.tel ? `<span>📞 <a href="tel:${c.tel}" style="color:var(--blue)">${c.tel}</a></span>` : ''}
+            ${c.email ? `<span>✉ <a href="mailto:${c.email}" style="color:var(--blue)">${c.email}</a></span>` : ''}
+            ${c.plz ? `<span>📍 ${c.plz}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            ${c.web ? `<a href="https://${c.web}" target="_blank" class="btn-ghost btn-sm">🌐 Website</a>` : ''}
+            ${c.instagram ? `<a href="https://instagram.com/${c.instagram.replace('@','')}" target="_blank" class="btn-ghost btn-sm">📸 Instagram</a>` : ''}
+            ${c.facebook ? `<a href="https://${c.facebook}" target="_blank" class="btn-ghost btn-sm">👥 Facebook</a>` : ''}
+            ${c.gbusiness ? `<a href="https://${c.gbusiness}" target="_blank" class="btn-ghost btn-sm">📍 Google Business</a>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+          ${getBadge(c.status)}
+          <button class="btn-ghost btn-sm" onclick="openContactModal('${c.id}')">✏ Bearbeiten</button>
+          <button class="btn-ghost btn-sm" onclick="openWebsiteCheck('${c.id}')">🔍 Check</button>
+        </div>
+      </div>
+
+      <!-- Angebote -->
+      ${angebote.length ? `<div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3>📋 Angebote (${angebote.length})</h3>
+          <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Neues Angebot</button>
+        </div>
+        ${angebote.map(a => `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="printDoc('angebot','${a.id}')">
+          <div><div style="font-size:12px;font-weight:600">${a.betreff}</div>
+          <div style="font-size:10px;color:var(--muted)">${a.nr||''} · ${fmtDate(a.datum)}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--green)">${fmtEur(sumPositions(a.positions).brutto)}</span>
+            ${getBadge(a.status)}
+          </div>
+        </div>`).join('')}
+      </div>` : `<div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3>📋 Angebote</h3><button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Neues Angebot</button></div>
+        <div style="color:var(--muted);font-size:12px">Noch keine Angebote.</div>
+      </div>`}
+
+      <!-- Rechnungen -->
+      ${rechnungen.length ? `<div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3>🧾 Rechnungen (${rechnungen.length})</h3>
+          <button class="btn-ghost btn-sm" onclick="openRechnungForContact('${c.id}')">+ Neue Rechnung</button>
+        </div>
+        ${rechnungen.map(r => `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="printDoc('rechnung','${r.id}')">
+          <div><div style="font-size:12px;font-weight:600">${r.betreff}</div>
+          <div style="font-size:10px;color:var(--muted)">${r.nr||''} · ${fmtDate(r.datum)} · fällig ${fmtDate(r.faellig)}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--green)">${fmtEur(sumPositions(r.positions).brutto)}</span>
+            ${getBadge(r.status)}
+          </div>
+        </div>`).join('')}
+      </div>` : `<div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3>🧾 Rechnungen</h3><button class="btn-ghost btn-sm" onclick="openRechnungForContact('${c.id}')">+ Neue Rechnung</button></div>
+        <div style="color:var(--muted);font-size:12px">Noch keine Rechnungen.</div>
+      </div>`}
+
+      <!-- Timeline / Notizen -->
+      <div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h3>📋 Aktivitäts-Timeline</h3>
+          <button class="btn-yellow btn-sm" onclick="openNotizModal('${c.id}')">+ Notiz</button>
+        </div>
+        ${c.notizen.length ? c.notizen.sort((a,b) => b.datum.localeCompare(a.datum)).map(n => `
+          <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:18px;flex-shrink:0">${noteIcons[n.typ]||'📝'}</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--ink2)">${noteLabels[n.typ]||n.typ}</span>
+                <span style="font-size:10px;color:var(--muted)">${fmtDate(n.datum)}</span>
+              </div>
+              <div style="font-size:12px;color:var(--ink);margin-top:3px;white-space:pre-line;line-height:1.5">${n.text}</div>
+            </div>
+            <button class="btn-danger" style="align-self:flex-start;padding:2px 8px;font-size:11px" onclick="deleteNotiz('${c.id}','${n.id}')">✕</button>
+          </div>`).join('') : '<div style="color:var(--muted);font-size:12px;padding:8px 0">Noch keine Notizen. Klicke auf "+ Notiz".</div>'}
+      </div>
+
+      <!-- Dokumente -->
+      <div class="dash-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h3>📎 Dokumente</h3>
+          <button class="btn-ghost btn-sm" onclick="openDocModal('${c.id}')">+ Dokument</button>
+        </div>
+        ${c.dokumente.length ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`+c.dokumente.map(d => `
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">${d.type?.includes('pdf')?'📄':d.type?.includes('image')?'🖼':'📎'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.name}</div>
+              <div style="font-size:10px;color:var(--muted)">${fmtDate(d.date)}</div>
+            </div>
+            <a href="${d.data}" download="${d.name}" class="btn-ghost btn-sm" onclick="event.stopPropagation()">⬇</a>
+            <button class="btn-danger" style="padding:2px 8px;font-size:11px" onclick="deleteDoc('${c.id}','${d.id}')">✕</button>
+          </div>`).join('')+`</div>` : '<div style="color:var(--muted);font-size:12px;padding:8px 0">Noch keine Dokumente.</div>'}
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT SIDEBAR -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Umsatz -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:12px">💰 Umsatz</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div style="background:var(--green-bg);border-radius:4px;padding:10px;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace">${fmtEur(bezahlt)}</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px">Bezahlt</div>
+          </div>
+          <div style="background:var(--orange-bg);border-radius:4px;padding:10px;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:var(--orange);font-family:'DM Mono',monospace">${fmtEur(offen)}</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px">Ausstehend</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retainer -->
+      <div class="dash-card" style="border-left:3px solid var(--yellow)">
+        <h3 style="margin-bottom:12px">🔄 Retainer</h3>
+        ${retainer ? `
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--green)">${fmtEur(retainer.betrag)}<span style="font-size:13px;color:var(--muted)">/Monat</span></div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">${retainer.paket||''}</div>
+          <button class="btn-ghost btn-sm" style="margin-top:8px" onclick="openRetainerModal('${retainer.id}')">✏ Bearbeiten</button>
+        ` : `<div style="color:var(--muted);font-size:12px;margin-bottom:8px">Kein aktiver Retainer</div>
+          <button class="btn-yellow btn-sm" onclick="openRetainerModal();setTimeout(()=>{document.getElementById('ret-kunde').value='${c.id}'},100)">+ Retainer anlegen</button>`}
+      </div>
+
+      <!-- Schnellaktionen -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:10px">⚡ Schnellaktionen</h3>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openNotizModal('${c.id}')">📝 Notiz hinzufügen</button>
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openWiedervorlageModal('${c.id}')">🔔 Erinnerung setzen</button>
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openAngebotForContact('${c.id}')">📋 Angebot erstellen</button>
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openRechnungForContact('${c.id}')">🧾 Rechnung erstellen</button>
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openKanbanTaskModal();setTimeout(()=>document.getElementById('kt-kontakt').value='${c.id}',100)">🗂 Aufgabe erstellen</button>
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openWebsiteCheck('${c.id}')">🔍 Website checken</button>
+        </div>
+      </div>
+
+      <!-- Check-Verlauf -->
+      ${c.checks?.length ? `<div class="dash-card">
+        <h3 style="margin-bottom:10px">🔍 Check-Verlauf</h3>
+        ${c.checks.slice(0,5).map(ch => `<div style="font-size:11px;padding:5px 0;border-bottom:1px solid var(--border);color:var(--muted)">✓ ${fmtDate(ch.datum)} – ${ch.notiz||'Check durchgeführt'}</div>`).join('')}
+      </div>` : ''}
+
+      <!-- Notizen (Freitext) -->
+      ${c.notes ? `<div class="dash-card">
+        <h3 style="margin-bottom:8px">📄 Interne Notizen</h3>
+        <div style="font-size:12px;color:var(--ink2);line-height:1.6;white-space:pre-line">${c.notes}</div>
+      </div>` : ''}
+
+    </div><!-- /right -->
+  </div>`;
+}
+
+function openNotizModal(cid) {
+  currentDetailContactId = cid;
+  document.getElementById('n-datum').value = today();
+  document.getElementById('n-typ').value = 'notiz';
+  document.getElementById('n-text').value = '';
+  document.getElementById('notiz-modal').classList.add('open');
+}
+
+function saveNotiz() {
+  const text = document.getElementById('n-text').value.trim();
+  if(!text) { alert('Bitte einen Text eingeben.'); return; }
+  const c = DB.contacts.find(x => x.id === currentDetailContactId);
+  if(!c) return;
+  if(!c.notizen) c.notizen = [];
+  c.notizen.push({
+    id: uid(), text,
+    typ: document.getElementById('n-typ').value,
+    datum: document.getElementById('n-datum').value,
+    createdAt: new Date().toISOString()
+  });
+  c.updatedAt = new Date().toISOString();
+  save(); closeModal('notiz-modal'); renderContactDetail(currentDetailContactId);
+  addActivity('Notiz fuer "'+c.firma+'" hinzugefuegt', 'blue');
+}
+
+function deleteNotiz(cid, nid) {
+  const c = DB.contacts.find(x => x.id === cid);
+  if(c) { c.notizen = (c.notizen||[]).filter(n => n.id !== nid); save(); renderContactDetail(cid); }
+}
+
+function openDocModal(cid) {
+  currentDocContactId = cid;
+  document.getElementById('doc-name').value = '';
+  document.getElementById('doc-file').value = '';
+  document.getElementById('doc-preview-wrap').style.display = 'none';
+  document.getElementById('doc-file').onchange = function(e) {
+    const file = e.target.files[0]; if(!file) return;
+    if(file.size > 2*1024*1024) { alert('Datei bitte unter 2 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById('doc-preview').textContent = 'Datei: '+file.name+' ('+Math.round(file.size/1024)+' KB)';
+      document.getElementById('doc-preview-wrap').style.display = 'block';
+      document.getElementById('doc-file')._data = ev.target.result;
+      document.getElementById('doc-file')._type = file.type;
+      if(!document.getElementById('doc-name').value) document.getElementById('doc-name').value = file.name.replace(/\.[^/.]+$/,'');
+    };
+    reader.readAsDataURL(file);
+  };
+  document.getElementById('doc-modal').classList.add('open');
+}
+
+function saveDoc() {
+  const name = document.getElementById('doc-name').value.trim();
+  const data = document.getElementById('doc-file')._data;
+  if(!name || !data) { alert('Bitte Bezeichnung und Datei auswaehlen.'); return; }
+  const c = DB.contacts.find(x => x.id === currentDocContactId);
+  if(!c) return;
+  if(!c.dokumente) c.dokumente = [];
+  c.dokumente.push({ id:uid(), name, data, type: document.getElementById('doc-file')._type||'', date: today() });
+  save(); closeModal('doc-modal'); renderContactDetail(currentDocContactId);
+}
+
+function deleteDoc(cid, did) {
+  const c = DB.contacts.find(x => x.id === cid);
+  if(c) { c.dokumente = (c.dokumente||[]).filter(d => d.id !== did); save(); renderContactDetail(cid); }
+}
+
+function openWebsiteCheck(cid) {
+  currentCheckContactId = cid;
+  const c = DB.contacts.find(x => x.id === cid);
+  if(!c) return;
+  const body = document.getElementById('check-modal-body');
+  if(!body) return;
+  body.innerHTML = `
+    <p style="font-size:13px;margin-bottom:16px">Online-Praesenz von <strong>${c.firma}</strong>:</p>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${c.web ? `<a href="https://${c.web}" target="_blank" class="btn-ghost" style="text-align:left">🌐 Website: ${c.web}</a>` : '<div style="color:var(--muted);font-size:12px">Keine Website hinterlegt</div>'}
+      <a href="https://www.google.de/search?q=${encodeURIComponent(c.firma+' '+c.plz)}" target="_blank" class="btn-ghost" style="text-align:left">🔍 Google-Suche</a>
+      ${c.instagram ? `<a href="https://instagram.com/${c.instagram.replace('@','')}" target="_blank" class="btn-ghost" style="text-align:left">📸 Instagram: ${c.instagram}</a>` : ''}
+      ${c.web ? `<a href="https://pagespeed.web.dev/report?url=${encodeURIComponent('https://'+c.web)}" target="_blank" class="btn-ghost" style="text-align:left">⚡ PageSpeed testen</a>` : ''}
+    </div>
+    <div class="field"><label>Notiz zum Check</label><textarea id="check-notiz" rows="3" placeholder="Was hast du festgestellt?"></textarea></div>`;
+  document.getElementById('check-modal').classList.add('open');
+}
+
+function saveCheck() {
+  const c = DB.contacts.find(x => x.id === currentCheckContactId);
+  if(!c) return;
+  if(!c.checks) c.checks = [];
+  c.checks.unshift({ id:uid(), datum: today(), notiz: document.getElementById('check-notiz')?.value||'' });
+  c.updatedAt = new Date().toISOString();
+  save(); closeModal('check-modal');
+  if(document.getElementById('page-contact-detail').classList.contains('active')) renderContactDetail(currentCheckContactId);
+}
+
+function openRechnungForContact(cid) {
+  showPage('rechnungen');
+  setTimeout(() => { openRechnungModal(); document.getElementById('r-kunde').value = cid; }, 150);
 }
 
 // Inject logo
