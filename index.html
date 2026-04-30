@@ -5610,7 +5610,6 @@ async function radarSearch() {
 
   if(!query) { alert('Bitte Branche / Suchbegriff eingeben.'); return; }
   if(!location) { alert('Bitte Ort oder PLZ eingeben.'); return; }
-
   if(!apiKey) {
     document.getElementById('radar-api-hint').style.display = 'block';
     alert('Bitte zuerst den Google Places API Key eintragen.');
@@ -5620,29 +5619,32 @@ async function radarSearch() {
   const btn = document.getElementById('radar-btn');
   btn.textContent = '⏳ Suche...';
   btn.disabled = true;
-
   const resultsEl = document.getElementById('radar-results');
   resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Suche läuft...</div>';
 
   try {
-    // Step 1: Geocode location to lat/lng
-    const geoResp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`);
-    const geoData = await geoResp.json();
-    if(!geoData.results?.length) throw new Error('Ort nicht gefunden: ' + location);
-    const {lat, lng} = geoData.results[0].geometry.location;
+    // Use Places Text Search – combines query + location in one call, no Geocoding needed
+    const searchQuery = `${query} in ${location}`;
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&radius=${radius}&language=de&key=${apiKey}`;
 
-    // Step 2: Places Nearby Search
-    const placesResp = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(query)}&language=de&key=${apiKey}`);
-    const placesData = await placesResp.json();
+    const resp = await fetch(url);
+    const data = await resp.json();
 
-    if(placesData.status === 'REQUEST_DENIED') throw new Error('API-Key ungueltig oder Places API nicht aktiviert.');
-    if(!placesData.results?.length) { resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Keine Ergebnisse gefunden.</div>'; return; }
+    if(data.status === 'REQUEST_DENIED') {
+      throw new Error('API-Key abgelehnt. Prüfe:\n1. Places API aktiviert?\n2. API-Key korrekt?\n3. Abrechnungskonto in Google Cloud eingerichtet?');
+    }
+    if(data.status === 'ZERO_RESULTS' || !data.results?.length) {
+      resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Keine Ergebnisse gefunden.<br>Versuche einen anderen Suchbegriff oder Ort.</div>';
+      return;
+    }
+    if(data.status !== 'OK') {
+      throw new Error('Google API Fehler: ' + data.status + (data.error_message ? ' – ' + data.error_message : ''));
+    }
 
-    renderRadarResults(placesData.results, query, location);
+    renderRadarResults(data.results, query, location);
   } catch(err) {
-    resultsEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:14px 16px;color:var(--red);font-size:12px">
-      Fehler: ${err.message}<br><br>
-      Tipps: Places API in Google Cloud aktiviert? API-Key korrekt?
+    resultsEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:14px 16px;color:var(--red);font-size:12px;line-height:1.8">
+      <strong>Fehler:</strong> ${err.message.replace(/\n/g,'<br>')}
     </div>`;
   } finally {
     btn.textContent = '🔍 Suchen';
