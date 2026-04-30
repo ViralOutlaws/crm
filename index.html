@@ -872,6 +872,28 @@ tr[onclick] { transition:background .1s; }
       </div>
     </div>
 
+    <!-- E-MAIL VORLAGEN VERWALTUNG -->
+    <div class="dash-card" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h3>✉ E-Mail Vorlagen</h3>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Vorlagen bearbeiten und neue hinzufügen</div>
+        </div>
+        <button class="btn-yellow" onclick="saveEmailTemplates()">💾 Vorlagen speichern</button>
+      </div>
+      <div id="email-templates-editor"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Neue Vorlage hinzufügen</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Name der Vorlage *</label><input id="nt-name" placeholder="z.B. Follow-Up nach Demo" style="font-size:12px"></div>
+          <div class="field"><label>Betreff *</label><input id="nt-subject" placeholder="z.B. Kurze Rückfrage zu {firma}" style="font-size:12px"></div>
+          <div class="field form-full"><label>Text *</label><textarea id="nt-body" rows="5" placeholder="Hallo {person},&#10;&#10;..." style="font-size:12px;resize:vertical"></textarea></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin:6px 0 10px">Platzhalter: <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{firma}</code> <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{person}</code> <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{ort}</code></div>
+        <button class="btn-primary" onclick="addEmailTemplate()">+ Vorlage hinzufügen</button>
+      </div>
+    </div>
+
     <!-- LEISTUNGSVERWALTUNG -->
     <div class="dash-card" style="grid-column:1/-1">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -2996,6 +3018,13 @@ function loadSettings() {
   // Mail worker URL
   const mw = document.getElementById('s-mailworker');
   if(mw) mw.value = s.mailWorkerUrl||'';
+  // Load saved email templates
+  if(DB.emailTemplates) {
+    Object.entries(DB.emailTemplates).forEach(([k,v]) => {
+      EMAIL_TEMPLATES[k] = { label:v.label||k, subject:v.subject, body:v.body, custom:v.custom };
+    });
+  }
+  renderEmailTemplatesEditor();
   // Drive sync status
   driveUpdateUI();
   if(s.lastSync) {
@@ -6644,8 +6673,9 @@ function openEmailCompose(contactId, templateKey) {
   document.getElementById('em-body').value = '';
   document.getElementById('em-template').value = templateKey || '';
   document.getElementById('em-status').style.display = 'none';
-
-  if(templateKey) applyEmailTemplate();
+  // Refresh template options with any custom templates
+  updateEmailTemplateSelect();
+  if(templateKey) { document.getElementById('em-template').value = templateKey; applyEmailTemplate(); }
   document.getElementById('email-compose-modal').classList.add('open');
   setTimeout(()=>{
     if(!document.getElementById('em-to').value) document.getElementById('em-to').focus();
@@ -6763,6 +6793,146 @@ async function testMailWorker() {
   } catch(e) {
     alert('Verbindung fehlgeschlagen: ' + e.message);
   }
+}
+
+// ==================================================
+// E-MAIL VORLAGEN VERWALTUNG
+// ==================================================
+
+function getEmailTemplates() {
+  // Merge saved custom templates with defaults
+  if(DB.emailTemplates) {
+    Object.entries(DB.emailTemplates).forEach(([k,v]) => {
+      EMAIL_TEMPLATES[k] = { subject: v.subject, body: v.body, custom: v.custom };
+    });
+  }
+  return EMAIL_TEMPLATES;
+}
+
+function renderEmailTemplatesEditor() {
+  const el = document.getElementById('email-templates-editor');
+  if(!el) return;
+  const templates = getEmailTemplates();
+
+  el.innerHTML = Object.entries(templates).map(([key, tpl]) => {
+    // Get subject/body as string (handle both function and string types)
+    const s = DB.settings||{};
+    const subjStr = typeof tpl.subject === 'function' ? tpl.subject(null, s) : (tpl.subject||'');
+    const bodyStr = typeof tpl.body === 'function' ? tpl.body(null, s) : (tpl.body||'');
+    const isCustom = tpl.custom || (DB.emailTemplates && DB.emailTemplates[key]);
+    return `
+    <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:10px" id="et-wrap-${key}">
+      <div style="background:var(--bg);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleETEditor('${key}')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:14px">✉</span>
+          <div>
+            <div style="font-size:12px;font-weight:700" id="et-label-${key}">${tpl.label||key}</div>
+            <div style="font-size:10px;color:var(--muted)">${subjStr.slice(0,50)||'(Betreff)'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${isCustom?'<span style="font-size:9px;background:var(--yellow-bg);color:var(--yellow2);padding:2px 7px;border-radius:10px;font-weight:700">Angepasst</span>':''}
+          <span style="color:var(--muted);font-size:12px" id="et-arrow-${key}">▼</span>
+        </div>
+      </div>
+      <div id="et-editor-${key}" style="display:none;padding:14px">
+        <div class="field"><label>Name</label>
+          <input id="et-name-${key}" value="${(tpl.label||key).replace(/"/g,'&quot;')}" style="font-size:12px;font-weight:600">
+        </div>
+        <div class="field"><label>Betreff</label>
+          <input id="et-subject-${key}" value="${subjStr.replace(/"/g,'&quot;')}" style="font-size:12px">
+        </div>
+        <div class="field"><label>Text</label>
+          <textarea id="et-body-${key}" rows="8" style="font-size:12px;resize:vertical;line-height:1.6">${bodyStr}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-yellow btn-sm" onclick="saveOneTemplate('${key}')">💾 Speichern</button>
+          ${isCustom?`<button class="btn-danger btn-sm" onclick="deleteEmailTemplate('${key}')">🗑 Löschen</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleETEditor(key) {
+  const ed = document.getElementById('et-editor-'+key);
+  const arrow = document.getElementById('et-arrow-'+key);
+  if(!ed) return;
+  const isOpen = ed.style.display !== 'none';
+  ed.style.display = isOpen ? 'none' : 'block';
+  if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
+}
+
+function saveOneTemplate(key) {
+  if(!DB.emailTemplates) DB.emailTemplates = {};
+  const label = document.getElementById('et-name-'+key)?.value.trim()||key;
+  const subject = document.getElementById('et-subject-'+key)?.value.trim()||'';
+  const body = document.getElementById('et-body-'+key)?.value||'';
+  DB.emailTemplates[key] = { label, subject, body, custom: true };
+  EMAIL_TEMPLATES[key] = { label, subject, body, custom: true };
+  save();
+  // Update select options in compose modal
+  updateEmailTemplateSelect();
+  renderEmailTemplatesEditor();
+  alert('Vorlage "'+label+'" gespeichert!');
+}
+
+function saveEmailTemplates() {
+  if(!DB.emailTemplates) DB.emailTemplates = {};
+  Object.keys(EMAIL_TEMPLATES).forEach(key => {
+    const subjectEl = document.getElementById('et-subject-'+key);
+    const bodyEl = document.getElementById('et-body-'+key);
+    const nameEl = document.getElementById('et-name-'+key);
+    if(subjectEl && bodyEl) {
+      const label = nameEl?.value.trim()||key;
+      const subject = subjectEl.value.trim();
+      const body = bodyEl.value;
+      DB.emailTemplates[key] = { label, subject, body, custom: true };
+      EMAIL_TEMPLATES[key] = { label, subject, body, custom: true };
+    }
+  });
+  save();
+  updateEmailTemplateSelect();
+  alert('Alle Vorlagen gespeichert!');
+}
+
+function addEmailTemplate() {
+  const name = document.getElementById('nt-name').value.trim();
+  const subject = document.getElementById('nt-subject').value.trim();
+  const body = document.getElementById('nt-body').value.trim();
+  if(!name || !subject || !body) { alert('Bitte Name, Betreff und Text ausfullen.'); return; }
+  const key = 'custom_' + uid();
+  if(!DB.emailTemplates) DB.emailTemplates = {};
+  DB.emailTemplates[key] = { label: name, subject, body, custom: true };
+  EMAIL_TEMPLATES[key] = { label: name, subject, body, custom: true };
+  document.getElementById('nt-name').value = '';
+  document.getElementById('nt-subject').value = '';
+  document.getElementById('nt-body').value = '';
+  save();
+  updateEmailTemplateSelect();
+  renderEmailTemplatesEditor();
+  alert('Vorlage "'+name+'" hinzugefuegt!');
+}
+
+function deleteEmailTemplate(key) {
+  if(!confirm('Vorlage wirklich loeschen?')) return;
+  if(DB.emailTemplates) delete DB.emailTemplates[key];
+  delete EMAIL_TEMPLATES[key];
+  save();
+  updateEmailTemplateSelect();
+  renderEmailTemplatesEditor();
+}
+
+function updateEmailTemplateSelect() {
+  const sel = document.getElementById('em-template');
+  if(!sel) return;
+  const currentVal = sel.value;
+  const templates = getEmailTemplates();
+  sel.innerHTML = '<option value="">— Keine Vorlage —</option>'
+    + Object.entries(templates).map(([k,t]) =>
+        `<option value="${k}">${t.label||k}</option>`
+      ).join('');
+  sel.value = currentVal;
 }
 
 // Inject logo
