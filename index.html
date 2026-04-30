@@ -578,7 +578,7 @@ tr[onclick] { transition:background .1s; }
   </nav>
 
   <div id="sidebar-bottom">
-    <button class="sidebar-bottom-btn" onclick="openEmailModal()">✉ E-Mail Vorlagen</button>
+    <button class="sidebar-bottom-btn" onclick="openEmailCompose(null)">✉ E-Mail verfassen</button>
     <button class="sidebar-bottom-btn" onclick="openGlobalSearch()">🔍 Suche <span style="opacity:.4;font-size:10px;margin-left:4px">Strg+K</span></button>
     <button class="sidebar-bottom-btn" onclick="showPage('settings')">⚙ Einstellungen</button>
     <button class="sidebar-bottom-btn" onclick="logout()">⏻ Abmelden</button>
@@ -848,6 +848,27 @@ tr[onclick] { transition:background .1s; }
         <button class="btn-ghost" onclick="importData()">📥 Daten importieren</button>
         <button class="btn-ghost" onclick="changePassword()">🔑 Passwort ändern</button>
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+      </div>
+    </div>
+
+    <!-- E-MAIL VERSAND -->
+    <div class="dash-card" style="grid-column:1/-1;border-left:3px solid var(--blue)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="width:36px;height:36px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px">✉</div>
+        <div>
+          <h3 style="margin-bottom:2px">E-Mail Versand</h3>
+          <div style="font-size:11px;color:var(--muted)">Direkt aus dem CRM E-Mails versenden via Cloudflare Worker</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end">
+        <div class="field" style="margin:0">
+          <label>Mail-Worker URL</label>
+          <input id="s-mailworker" placeholder="https://vo-mail.NAME.workers.dev" style="font-family:'DM Mono',monospace;font-size:11px">
+        </div>
+        <button class="btn-ghost" onclick="testMailWorker()" style="height:38px;white-space:nowrap">🔌 Testen</button>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.8">
+        Worker einrichten: <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--blue)">workers.cloudflare.com</a> → neuer Worker „vo-mail" → Code aus <strong>mail-worker.js</strong> einfügen → E-Mail-Passwort in Zeile 13 eintragen → Deploy
       </div>
     </div>
 
@@ -1973,6 +1994,56 @@ tr[onclick] { transition:background .1s; }
   </div>
 </div>
 
+<!-- E-MAIL VERFASSEN MODAL -->
+<div class="overlay" id="email-compose-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <h2>✉ E-Mail verfassen</h2>
+      <button class="modal-close" onclick="closeModal('email-compose-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field form-full">
+          <label>An *</label>
+          <input id="em-to" type="email" placeholder="empfaenger@firma.de" style="font-size:13px">
+        </div>
+        <div class="field form-full">
+          <label>Betreff *</label>
+          <input id="em-subject" placeholder="Betreff" style="font-size:13px;font-weight:600">
+        </div>
+        <div class="field form-full">
+          <label>Vorlage wählen</label>
+          <select id="em-template" onchange="applyEmailTemplate()" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="">— Keine Vorlage —</option>
+            <option value="erstansprache">📨 Erstansprache (Kaltakquise)</option>
+            <option value="nachfassen">🔔 Nachfassen nach Erstgespräch</option>
+            <option value="angebot">📋 Angebot zusenden</option>
+            <option value="rechnung">🧾 Rechnung zusenden</option>
+            <option value="danke">🙏 Dankeschön nach Abschluss</option>
+            <option value="check">📊 Monatlicher Status-Check</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Nachricht *</label>
+          <textarea id="em-body" rows="12" placeholder="Deine Nachricht..." style="font-size:12px;resize:vertical;line-height:1.6"></textarea>
+        </div>
+        <div style="font-size:10px;color:var(--muted);padding:6px 0">
+          Verfügbare Platzhalter: <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{firma}</code>
+          <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{person}</code>
+          <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{name}</code>
+          <code style="background:var(--bg);padding:1px 5px;border-radius:3px">{ort}</code>
+        </div>
+      </div>
+      <div id="em-status" style="display:none;padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;margin-top:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('email-compose-modal')">Abbrechen</button>
+      <button class="btn-ghost" onclick="emPreview()">👁 Vorschau</button>
+      <button class="btn-yellow" onclick="sendEmail()" id="em-send-btn">✉ Senden</button>
+    </div>
+  </div>
+</div>
+
 <!-- NOTIZ MODAL (Timeline) -->
 <div class="overlay" id="notiz-modal">
   <div class="modal" style="max-width:480px">
@@ -2919,18 +2990,14 @@ function loadSettings() {
   });
   const ku=document.getElementById('s-kleinunternehmer');
   if(ku) ku.checked = !!s.kleinunternehmer;
-  // Show saved logo
   if(s.logo){ const lp=document.getElementById('s-logo-preview'); if(lp){lp.src=s.logo;lp.style.display='block';} }
-  // Load saved leistungen into KONF_LEISTUNGEN
   if(DB.leistungen) { Object.keys(DB.leistungen).forEach(k=>{ if(KONF_LEISTUNGEN[k]) KONF_LEISTUNGEN[k]=DB.leistungen[k]; }); }
   renderLeistungenEditor();
-  // Show sync status
-  if(s.gsurl) setSyncStatus('connected');
-  else setSyncStatus('offline');
-  // Auto-sync button state
-  const ab=document.getElementById('btn-autosync');
-  if(ab&&autoSyncEnabled){ab.textContent='🔄 Auto-Sync: An (5 min)';ab.style.color='var(--green)';}
-  // Show last sync time
+  // Mail worker URL
+  const mw = document.getElementById('s-mailworker');
+  if(mw) mw.value = s.mailWorkerUrl||'';
+  // Drive sync status
+  driveUpdateUI();
   if(s.lastSync) {
     const st=document.getElementById('sync-status-txt');
     if(st) st.textContent = 'Letzter Sync: '+new Date(s.lastSync).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -2943,6 +3010,9 @@ function saveSettings() {
   });
   const ku=document.getElementById('s-kleinunternehmer');
   DB.settings.kleinunternehmer = ku ? ku.checked : false;
+  // Save mail worker URL
+  const mw = document.getElementById('s-mailworker');
+  if(mw) DB.settings.mailWorkerUrl = mw.value.trim();
   save();
 
   // Auto-sync to Google Drive if URL is set
@@ -5412,6 +5482,7 @@ function renderContactDetail(cid) {
       <div class="dash-card">
         <h3 style="margin-bottom:10px">⚡ Schnellaktionen</h3>
         <div style="display:flex;flex-direction:column;gap:7px">
+          <button class="btn-ghost btn-sm" style="text-align:left" onclick="openEmailCompose('${c.id}')">✉ E-Mail schreiben</button>
           <button class="btn-ghost btn-sm" style="text-align:left" onclick="openNotizModal('${c.id}')">📝 Notiz hinzufügen</button>
           <button class="btn-ghost btn-sm" style="text-align:left" onclick="openWiedervorlageModal('${c.id}')">🔔 Erinnerung setzen</button>
           <button class="btn-ghost btn-sm" style="text-align:left" onclick="openAngebotForContact('${c.id}')">📋 Angebot erstellen</button>
@@ -6457,6 +6528,228 @@ function reportingPDF() {
   const blob = new Blob([html], {type:'text/html;charset=utf-8'});
   window.open(URL.createObjectURL(blob),'_blank');
   setTimeout(()=>{}, 60000);
+}
+
+// ==================================================
+// E-MAIL VERSAND
+// ==================================================
+
+var _ET_DUPLICATE = {
+  erstansprache: {
+    subject: 'Mehr Anfragen fuer {firma} - Kostenlose Analyse',
+    body: `Hallo {person},
+
+ich bin Kim Schmidt von Viral Outlaws, einer Performance Marketing Agentur aus dem Allgaeu.
+
+Ich habe mir die Online-Praesenz von {firma} angeschaut und sehe konkretes Potenzial, wie Sie mit gezielten Google und Meta Ads deutlich mehr Anfragen generieren koennen.
+
+Ich wuerde Ihnen gerne in einem kurzen 15-Minuten-Gespraech zeigen, was fuer {firma} in {ort} realistisch moeglich ist - voellig unverbindlich und kostenlos.
+
+Haben Sie diese Woche kurz Zeit fuer ein kurzes Telefonat?
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws - Performance Marketing
+crm.viraloutlaws.de`
+  },
+  nachfassen: {
+    subject: 'Nachfassen: Unser Gespraech zu {firma}',
+    body: `Hallo {person},
+
+vielen Dank fuer unser Gespraech letzte Woche. Es hat mich gefreut, mehr ueber {firma} zu erfahren.
+
+Wie besprochen wuerde ich Ihnen gerne ein konkretes Angebot fuer Ihre Online-Marketing-Massnahmen zukommen lassen.
+
+Koennen wir naechste Woche einen kurzen Termin vereinbaren, um die Details zu besprechen?
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws`
+  },
+  angebot: {
+    subject: 'Ihr individuelles Angebot von Viral Outlaws',
+    body: `Hallo {person},
+
+wie besprochen, erhalten Sie anbei unser individuelles Angebot fuer {firma}.
+
+Das Angebot beinhaltet alle besprochenen Leistungen und ist 30 Tage gueltig.
+
+Bei Fragen stehe ich Ihnen jederzeit zur Verfuegung. Ich freue mich auf Ihre Rueckmeldung!
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws
+Tel: +49 ...`
+  },
+  rechnung: {
+    subject: 'Ihre Rechnung von Viral Outlaws',
+    body: `Hallo {person},
+
+anbei erhalten Sie Ihre aktuelle Rechnung.
+
+Bitte ueberweisen Sie den Betrag innerhalb der angegebenen Zahlungsfrist.
+Bei Fragen stehe ich gerne zur Verfuegung.
+
+Vielen Dank fuer Ihr Vertrauen!
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws`
+  },
+  danke: {
+    subject: 'Willkommen bei Viral Outlaws - {firma}',
+    body: `Hallo {person},
+
+herzlich willkommen an Bord! Wir freuen uns sehr, {firma} als neuen Kunden begrueßen zu duerfen.
+
+In den naechsten Tagen werden wir mit der Einrichtung Ihrer Kampagnen beginnen. Sie erhalten von mir regelmaessige Updates zum Fortschritt.
+
+Bei Fragen koennen Sie mich jederzeit erreichen.
+
+Auf eine erfolgreiche Zusammenarbeit!
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws`
+  },
+  check: {
+    subject: 'Monatlicher Status-Check - {firma}',
+    body: `Hallo {person},
+
+kurzer monatlicher Status-Check zu Ihren laufenden Kampagnen.
+
+Diese Monat haben wir folgende Ergebnisse erzielt:
+- Leads: ...
+- Klicks: ...  
+- ROAS: ...x
+
+Details entnehmen Sie bitte dem beigefuegten Report.
+
+Gibt es von Ihrer Seite Feedback oder Wuensche fuer die naechste Periode?
+
+Beste Gruesse
+Kim Schmidt
+Viral Outlaws`
+  }
+};
+
+let _emCurrentContact = null;
+
+function openEmailCompose(contactId, templateKey) {
+  _emCurrentContact = contactId ? DB.contacts.find(x=>x.id===contactId) : null;
+  const c = _emCurrentContact;
+
+  document.getElementById('em-to').value = c?.email || '';
+  document.getElementById('em-subject').value = '';
+  document.getElementById('em-body').value = '';
+  document.getElementById('em-template').value = templateKey || '';
+  document.getElementById('em-status').style.display = 'none';
+
+  if(templateKey) applyEmailTemplate();
+  document.getElementById('email-compose-modal').classList.add('open');
+  setTimeout(()=>{
+    if(!document.getElementById('em-to').value) document.getElementById('em-to').focus();
+    else document.getElementById('em-subject').focus();
+  }, 100);
+}
+
+function applyEmailTemplate() {
+  const key = document.getElementById('em-template').value;
+  if(!key) return;
+  const tpl = EMAIL_TEMPLATES[key];
+  if(!tpl) return;
+  const c = _emCurrentContact;
+  const replace = (str) => str
+    .replace(/\{firma\}/g, c?.firma||'Ihr Unternehmen')
+    .replace(/\{person\}/g, c?.person?.split(' ')[0]||'Sehr geehrte Damen und Herren')
+    .replace(/\{name\}/g, c?.person||c?.firma||'')
+    .replace(/\{ort\}/g, c?.plz||'Ihrer Region');
+  document.getElementById('em-subject').value = replace(tpl.subject);
+  document.getElementById('em-body').value = replace(tpl.body);
+}
+
+function emPreview() {
+  const to = document.getElementById('em-to').value;
+  const subject = document.getElementById('em-subject').value;
+  const body = document.getElementById('em-body').value;
+  const preview = `An: ${to}\nBetreff: ${subject}\n\n${body}`;
+  alert(preview);
+}
+
+async function sendEmail() {
+  const to = document.getElementById('em-to').value.trim();
+  const subject = document.getElementById('em-subject').value.trim();
+  const body = document.getElementById('em-body').value.trim();
+  const workerUrl = DB.settings?.mailWorkerUrl || '';
+  const statusEl = document.getElementById('em-status');
+  const btn = document.getElementById('em-send-btn');
+
+  if(!to || !subject || !body) { alert('Bitte An, Betreff und Nachricht ausfullen.'); return; }
+  if(!workerUrl) {
+    alert('Bitte zuerst die Mail-Worker URL in den Einstellungen eintragen.');
+    closeModal('email-compose-modal');
+    showPage('settings');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = '⏳ Wird gesendet...';
+  statusEl.style.display = 'none';
+
+  // Convert plain text to HTML
+  const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;max-width:600px">
+    ${body.replace(/\n/g,'<br>')}
+    <br><br>
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+    <div style="font-size:11px;color:#888">
+      Diese E-Mail wurde gesendet von <strong>Viral Outlaws CRM</strong><br>
+      crm.viraloutlaws.de
+    </div>
+  </div>`;
+
+  try {
+    const resp = await fetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html: htmlBody, text: body }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await resp.json();
+    if(data.ok) {
+      statusEl.style.cssText = 'display:block;background:var(--green-bg);border:1px solid var(--green);color:var(--green);padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;margin-top:10px';
+      statusEl.textContent = 'E-Mail erfolgreich gesendet!';
+      btn.textContent = '✅ Gesendet';
+      // Log as activity and note on contact
+      if(_emCurrentContact) {
+        if(!_emCurrentContact.notizen) _emCurrentContact.notizen=[];
+        _emCurrentContact.notizen.push({
+          id:uid(), typ:'email', datum:today(), text:'E-Mail gesendet: "'+subject+'"',
+          createdAt:new Date().toISOString()
+        });
+        save();
+      }
+      addActivity('E-Mail an "'+(to)+'" gesendet: '+subject, 'blue');
+      setTimeout(()=>{ closeModal('email-compose-modal'); btn.disabled=false; btn.textContent='✉ Senden'; }, 2000);
+    } else {
+      throw new Error(data.error||'Unbekannter Fehler');
+    }
+  } catch(err) {
+    statusEl.style.cssText = 'display:block;background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;margin-top:10px';
+    statusEl.textContent = 'Fehler: ' + err.message;
+    btn.disabled=false; btn.textContent='✉ Senden';
+  }
+}
+
+async function testMailWorker() {
+  const url = document.getElementById('s-mailworker').value.trim();
+  if(!url) { alert('Bitte URL eintragen.'); return; }
+  try {
+    const resp = await fetch(url+'?action=ping', {signal:AbortSignal.timeout(8000)});
+    const data = await resp.json();
+    if(data.ok) alert('Mail-Worker aktiv! ' + data.message);
+    else alert('Worker antwortet aber: ' + JSON.stringify(data));
+  } catch(e) {
+    alert('Verbindung fehlgeschlagen: ' + e.message);
+  }
 }
 
 // Inject logo
