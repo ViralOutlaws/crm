@@ -555,9 +555,13 @@ tr[onclick] { transition:background .1s; }
       <span class="nav-item-icon">🎯</span>
       <span class="nav-item-label">Ziele & MRR</span>
     </div>
-    <div class="nav-item" onclick="showPage('rechner')" data-page="rechner">
-      <span class="nav-item-icon">🧮</span>
-      <span class="nav-item-label">Performance-Rechner</span>
+    <div class="nav-item" onclick="showPage('ausgaben')" data-page="ausgaben">
+      <span class="nav-item-icon">💶</span>
+      <span class="nav-item-label">Ausgaben & EÜR</span>
+    </div>
+    <div class="nav-item" onclick="showPage('kundenradar')" data-page="kundenradar">
+      <span class="nav-item-icon">🗺</span>
+      <span class="nav-item-label">Kundenradar</span>
     </div>
     <div class="nav-item" onclick="showPage('konfigurator')" data-page="konfigurator">
       <span class="nav-item-icon">🛒</span>
@@ -1349,6 +1353,165 @@ tr[onclick] { transition:background .1s; }
   </div>
 </div>
 
+<!-- AUSGABEN & EUER -->
+<div class="page" id="page-ausgaben">
+  <div class="sec-header">
+    <div class="sec-title">Ausgaben & EÜR</div>
+    <div style="display:flex;gap:8px;margin-left:0">
+      <select id="ausgaben-jahr" onchange="renderAusgaben()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none"></select>
+      <select id="ausgaben-filter" onchange="renderAusgaben()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
+        <option value="">Alle Kategorien</option>
+        <option value="software">Software & Tools</option>
+        <option value="werbung">Werbung & Marketing</option>
+        <option value="buero">Büro & Ausstattung</option>
+        <option value="fahrtkosten">Fahrtkosten</option>
+        <option value="weiterbildung">Weiterbildung</option>
+        <option value="telefon">Telefon & Internet</option>
+        <option value="steuer">Steuer & Beratung</option>
+        <option value="sonstiges">Sonstiges</option>
+      </select>
+    </div>
+    <button class="btn-ghost" onclick="ausgabenPDF()">📄 EÜR exportieren</button>
+    <button class="btn-primary" onclick="openAusgabeModal()">+ Ausgabe</button>
+  </div>
+
+  <!-- KPI Strip -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" id="ausgaben-kpis"></div>
+
+  <!-- Jahresübersicht Chart -->
+  <div class="dash-card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3>📊 Monatsübersicht</h3>
+      <div style="display:flex;gap:12px;font-size:10px">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--green);display:inline-block"></span>Einnahmen</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);display:inline-block"></span>Ausgaben</span>
+      </div>
+    </div>
+    <div id="ausgaben-chart" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:120px"></div>
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:4px">
+      <div style="font-size:9px;color:var(--muted);text-align:center">Jan</div><div style="font-size:9px;color:var(--muted);text-align:center">Feb</div><div style="font-size:9px;color:var(--muted);text-align:center">Mrz</div><div style="font-size:9px;color:var(--muted);text-align:center">Apr</div><div style="font-size:9px;color:var(--muted);text-align:center">Mai</div><div style="font-size:9px;color:var(--muted);text-align:center">Jun</div><div style="font-size:9px;color:var(--muted);text-align:center">Jul</div><div style="font-size:9px;color:var(--muted);text-align:center">Aug</div><div style="font-size:9px;color:var(--muted);text-align:center">Sep</div><div style="font-size:9px;color:var(--muted);text-align:center">Okt</div><div style="font-size:9px;color:var(--muted);text-align:center">Nov</div><div style="font-size:9px;color:var(--muted);text-align:center">Dez</div>
+    </div>
+  </div>
+
+  <!-- Tabelle -->
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Datum</th><th>Beschreibung</th><th>Kategorie</th><th>Betrag (netto)</th><th>MwSt</th><th>Betrag (brutto)</th><th>Beleg</th><th></th>
+      </tr></thead>
+      <tbody id="ausgaben-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- KUNDENRADAR -->
+<div class="page" id="page-kundenradar">
+  <div class="sec-header">
+    <div class="sec-title">Kundenradar</div>
+  </div>
+
+  <!-- Search bar -->
+  <div class="dash-card" style="margin-bottom:14px">
+    <h3 style="margin-bottom:14px">🔍 Neue Betriebe finden</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 120px auto;gap:10px;align-items:end">
+      <div class="field" style="margin:0"><label>Branche / Suchbegriff</label>
+        <input id="radar-query" placeholder="z.B. Elektriker, Zahnarzt, Bäcker" style="font-size:12px" onkeydown="if(event.key==='Enter')radarSearch()">
+      </div>
+      <div class="field" style="margin:0"><label>Ort / PLZ</label>
+        <input id="radar-location" placeholder="Memmingen" value="Memmingen" style="font-size:12px" onkeydown="if(event.key==='Enter')radarSearch()">
+      </div>
+      <div class="field" style="margin:0"><label>Radius (km)</label>
+        <select id="radar-radius" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+          <option value="5000">5 km</option>
+          <option value="10000">10 km</option>
+          <option value="20000" selected>20 km</option>
+          <option value="30000">30 km</option>
+          <option value="50000">50 km</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="radarSearch()" id="radar-btn" style="height:38px;white-space:nowrap">🔍 Suchen</button>
+    </div>
+
+    <!-- API Key hint -->
+    <div id="radar-api-hint" style="margin-top:12px;padding:10px 14px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px;font-size:11px;display:none">
+      <strong style="display:block;margin-bottom:4px">Google Places API Key einrichten:</strong>
+      <ol style="padding-left:16px;line-height:1.8">
+        <li>Gehe zu <a href="https://console.cloud.google.com" target="_blank" style="color:var(--blue)">console.cloud.google.com</a></li>
+        <li>APIs &amp; Dienste → Bibliothek → <strong>Places API</strong> aktivieren</li>
+        <li>Anmeldedaten → API-Schlüssel erstellen → kopieren</li>
+        <li>Schlüssel unten eintragen → Speichern</li>
+      </ol>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <input id="radar-api-key" placeholder="AIzaSy..." style="flex:1;font-family:DM Mono,monospace;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
+        <button class="btn-yellow" onclick="saveRadarKey()" style="height:32px;white-space:nowrap">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="radar-results"></div>
+</div>
+
+<!-- AUSGABE MODAL -->
+<div class="overlay" id="ausgabe-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 id="ausgabe-modal-title">Neue Ausgabe</h2>
+      <button class="modal-close" onclick="closeModal('ausgabe-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Typ</label>
+          <select id="ag-typ" onchange="ausgabeTypChange()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="ausgabe">💸 Ausgabe</option>
+            <option value="einnahme">💰 Einnahme (manuell)</option>
+          </select>
+        </div>
+        <div class="field"><label>Datum *</label><input id="ag-datum" type="date" style="font-size:12px"></div>
+        <div class="field form-full"><label>Beschreibung *</label><input id="ag-desc" placeholder="z.B. Adobe Creative Cloud Jahresabo" style="font-size:12px"></div>
+        <div class="field"><label>Kategorie</label>
+          <select id="ag-kat" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="software">💻 Software & Tools</option>
+            <option value="werbung">📢 Werbung & Marketing</option>
+            <option value="buero">🖥 Büro & Ausstattung</option>
+            <option value="fahrtkosten">🚗 Fahrtkosten</option>
+            <option value="weiterbildung">📚 Weiterbildung</option>
+            <option value="telefon">📱 Telefon & Internet</option>
+            <option value="steuer">📋 Steuer & Beratung</option>
+            <option value="sonstiges">📌 Sonstiges</option>
+          </select>
+        </div>
+        <div class="field"><label>MwSt</label>
+          <select id="ag-mwst" onchange="ausgabeMwstCalc()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="0">0% (KU/keine MwSt)</option>
+            <option value="7">7%</option>
+            <option value="19" selected>19%</option>
+          </select>
+        </div>
+        <div class="field"><label>Betrag netto (€) *</label>
+          <input id="ag-netto" type="number" step="0.01" placeholder="0.00" oninput="ausgabeMwstCalc()" style="font-size:13px;font-weight:600;font-family:DM Mono,monospace">
+        </div>
+        <div class="field"><label>MwSt-Betrag (€)</label>
+          <input id="ag-mwst-betrag" type="number" step="0.01" placeholder="0.00" readonly style="font-size:12px;background:var(--bg);font-family:DM Mono,monospace">
+        </div>
+        <div class="field"><label>Betrag brutto (€)</label>
+          <input id="ag-brutto" type="number" step="0.01" placeholder="0.00" oninput="ausgabeBruttoCalc()" style="font-size:13px;font-weight:700;color:var(--green);font-family:DM Mono,monospace">
+        </div>
+        <div class="field form-full"><label>Notiz</label><input id="ag-notiz" placeholder="z.B. Rechnung Nr. 2024-001" style="font-size:12px"></div>
+        <div class="field form-full">
+          <label>Beleg (optional)</label>
+          <input type="file" id="ag-beleg" accept="image/*,.pdf" style="font-size:11px;color:var(--muted)">
+          <div id="ag-beleg-preview" style="margin-top:6px;font-size:11px;color:var(--green);display:none"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('ausgabe-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveAusgabe()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- KONFIGURATOR EDIT MODAL -->
 <div class="overlay" id="konf-edit-modal">
   <div class="modal" style="max-width:460px">
@@ -1851,7 +2014,8 @@ const PAGE_TITLES = {
   angebote:'Angebote', rechnungen:'Rechnungen', kanban:'Aufgaben',
   ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
   rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
-  wettbewerb:'Wettbewerbs-Analyse'
+  wettbewerb:'Wettbewerbs-Analyse', ausgaben:'Ausgaben & EÜR',
+  kundenradar:'Kundenradar'
 };
 
 function showPage(id) {
@@ -1885,6 +2049,8 @@ function showPage(id) {
   if(id==='rechner') rechnerCalc();
   if(id==='konfigurator') initKonfigurator();
   if(id==='wettbewerb') initWettbewerb();
+  if(id==='ausgaben') initAusgaben();
+  if(id==='kundenradar') initKundenradar();
   // contact-detail is handled by openContactDetail()
 }
 
@@ -5133,6 +5299,397 @@ function saveCheck() {
 function openRechnungForContact(cid) {
   showPage('rechnungen');
   setTimeout(() => { openRechnungModal(); document.getElementById('r-kunde').value = cid; }, 150);
+}
+
+// ==================================================
+// AUSGABEN & EUER
+// ==================================================
+if(!DB.ausgaben) DB.ausgaben = [];
+
+const AG_KAT_LABELS = {
+  software:'Software & Tools', werbung:'Werbung & Marketing', buero:'Buero & Ausstattung',
+  fahrtkosten:'Fahrtkosten', weiterbildung:'Weiterbildung', telefon:'Telefon & Internet',
+  steuer:'Steuer & Beratung', sonstiges:'Sonstiges'
+};
+const AG_KAT_ICONS = {
+  software:'💻', werbung:'📢', buero:'🖥', fahrtkosten:'🚗',
+  weiterbildung:'📚', telefon:'📱', steuer:'📋', sonstiges:'📌'
+};
+
+function initAusgaben() {
+  if(!DB.ausgaben) DB.ausgaben = [];
+  // Populate year selector
+  const jahrSel = document.getElementById('ausgaben-jahr');
+  if(jahrSel) {
+    const curYear = new Date().getFullYear();
+    const years = [...new Set([curYear, curYear-1, ...(DB.ausgaben.map(a => parseInt(a.datum?.split('-')[0]||curYear)))])].sort((a,b)=>b-a);
+    jahrSel.innerHTML = years.map(y => `<option value="${y}" ${y===curYear?'selected':''}>${y}</option>`).join('');
+  }
+  renderAusgaben();
+}
+
+function ausgabeMwstCalc() {
+  const netto = parseFloat(document.getElementById('ag-netto').value)||0;
+  const mwstPct = parseFloat(document.getElementById('ag-mwst').value)||0;
+  const mwstBetrag = netto * mwstPct / 100;
+  const brutto = netto + mwstBetrag;
+  document.getElementById('ag-mwst-betrag').value = mwstBetrag.toFixed(2);
+  document.getElementById('ag-brutto').value = brutto.toFixed(2);
+}
+
+function ausgabeBruttoCalc() {
+  const brutto = parseFloat(document.getElementById('ag-brutto').value)||0;
+  const mwstPct = parseFloat(document.getElementById('ag-mwst').value)||0;
+  const netto = brutto / (1 + mwstPct/100);
+  const mwstBetrag = brutto - netto;
+  document.getElementById('ag-netto').value = netto.toFixed(2);
+  document.getElementById('ag-mwst-betrag').value = mwstBetrag.toFixed(2);
+}
+
+function ausgabeTypChange() {
+  const typ = document.getElementById('ag-typ').value;
+  const katField = document.getElementById('ag-kat').closest('.field');
+  const mwstField = document.getElementById('ag-mwst').closest('.field');
+  if(typ === 'einnahme') {
+    katField.style.display = 'none';
+    mwstField.style.display = 'none';
+  } else {
+    katField.style.display = '';
+    mwstField.style.display = '';
+  }
+}
+
+function openAusgabeModal(id) {
+  editId = id || null;
+  const a = id ? DB.ausgaben.find(x=>x.id===id) : null;
+  document.getElementById('ausgabe-modal-title').textContent = id ? 'Ausgabe bearbeiten' : 'Neue Ausgabe';
+  document.getElementById('ag-typ').value = a?.typ || 'ausgabe';
+  document.getElementById('ag-datum').value = a?.datum || today();
+  document.getElementById('ag-desc').value = a?.desc || '';
+  document.getElementById('ag-kat').value = a?.kat || 'software';
+  document.getElementById('ag-mwst').value = a?.mwstPct || 19;
+  document.getElementById('ag-netto').value = a?.netto || '';
+  document.getElementById('ag-mwst-betrag').value = a?.mwstBetrag || '';
+  document.getElementById('ag-brutto').value = a?.brutto || '';
+  document.getElementById('ag-notiz').value = a?.notiz || '';
+  document.getElementById('ag-beleg-preview').style.display = 'none';
+
+  // Setup beleg upload
+  document.getElementById('ag-beleg').onchange = function(e) {
+    const file = e.target.files[0]; if(!file) return;
+    if(file.size > 3*1024*1024) { alert('Bitte unter 3 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById('ag-beleg')._data = ev.target.result;
+      document.getElementById('ag-beleg')._type = file.type;
+      document.getElementById('ag-beleg')._name = file.name;
+      const prev = document.getElementById('ag-beleg-preview');
+      prev.textContent = 'Beleg: ' + file.name + ' (' + Math.round(file.size/1024) + ' KB)';
+      prev.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  ausgabeTypChange();
+  document.getElementById('ausgabe-modal').classList.add('open');
+}
+
+function saveAusgabe() {
+  const desc = document.getElementById('ag-desc').value.trim();
+  const datum = document.getElementById('ag-datum').value;
+  const netto = parseFloat(document.getElementById('ag-netto').value)||0;
+  if(!desc || !datum) { alert('Bitte Beschreibung und Datum ausfullen.'); return; }
+
+  const belegInput = document.getElementById('ag-beleg');
+  const existingBeleg = editId ? DB.ausgaben.find(x=>x.id===editId)?.beleg : null;
+
+  const obj = {
+    id: editId || uid(),
+    typ: document.getElementById('ag-typ').value,
+    datum, desc,
+    kat: document.getElementById('ag-kat').value,
+    mwstPct: parseFloat(document.getElementById('ag-mwst').value)||0,
+    netto: parseFloat(document.getElementById('ag-netto').value)||0,
+    mwstBetrag: parseFloat(document.getElementById('ag-mwst-betrag').value)||0,
+    brutto: parseFloat(document.getElementById('ag-brutto').value)||0,
+    notiz: document.getElementById('ag-notiz').value,
+    beleg: belegInput._data || existingBeleg || null,
+    belegName: belegInput._name || (editId ? DB.ausgaben.find(x=>x.id===editId)?.belegName : null),
+    belegType: belegInput._type || (editId ? DB.ausgaben.find(x=>x.id===editId)?.belegType : null),
+    createdAt: new Date().toISOString()
+  };
+
+  if(editId) { const i=DB.ausgaben.findIndex(x=>x.id===editId); if(i>-1) DB.ausgaben[i]=obj; }
+  else { DB.ausgaben.unshift(obj); }
+  save(); closeModal('ausgabe-modal'); renderAusgaben();
+  addActivity((obj.typ==='einnahme'?'Einnahme':'Ausgabe') + ' "'+desc+'" (' + fmtEur(obj.brutto) + ') erfasst', obj.typ==='einnahme'?'green':'red');
+}
+
+function deleteAusgabe(id) {
+  if(!confirm('Wirklich loeschen?')) return;
+  DB.ausgaben = DB.ausgaben.filter(x=>x.id!==id);
+  save(); renderAusgaben();
+}
+
+function renderAusgaben() {
+  if(!DB.ausgaben) DB.ausgaben = [];
+  const jahr = parseInt(document.getElementById('ausgaben-jahr')?.value || new Date().getFullYear());
+  const filterKat = document.getElementById('ausgaben-filter')?.value || '';
+
+  let list = DB.ausgaben.filter(a => a.datum?.startsWith(String(jahr)));
+  if(filterKat) list = list.filter(a => a.kat === filterKat);
+  list = list.sort((a,b) => b.datum.localeCompare(a.datum));
+
+  const ausgaben = list.filter(a => a.typ !== 'einnahme');
+  const einnahmen = list.filter(a => a.typ === 'einnahme');
+
+  // Also add einnahmen from rechnungen (bezahlt)
+  const rgEinnahmen = DB.rechnungen.filter(r => r.status==='bezahlt' && r.datum?.startsWith(String(jahr)));
+  const rgEinnahmenSum = rgEinnahmen.reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
+
+  const ausgabenSum = ausgaben.reduce((s,a) => s+a.brutto, 0);
+  const einnahmenSum = einnahmen.reduce((s,a) => s+a.brutto, 0) + rgEinnahmenSum;
+  const gewinn = einnahmenSum - ausgabenSum;
+  const mwstVorsteuer = ausgaben.reduce((s,a) => s+a.mwstBetrag, 0);
+
+  // KPIs
+  const kpiEl = document.getElementById('ausgaben-kpis');
+  if(kpiEl) {
+    kpiEl.innerHTML = [
+      {l:'Einnahmen '+jahr, v:fmtEur(einnahmenSum), c:'var(--green)', i:'💰'},
+      {l:'Ausgaben '+jahr, v:fmtEur(ausgabenSum), c:'var(--red)', i:'💸'},
+      {l:'Gewinn / Verlust', v:fmtEur(gewinn), c:gewinn>=0?'var(--green)':'var(--red)', i:'📊'},
+      {l:'Vorsteuer (MwSt)', v:fmtEur(mwstVorsteuer), c:'var(--blue)', i:'🧾'},
+    ].map(k => `<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${k.c};box-shadow:var(--shadow)">
+      <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${k.i} ${k.l}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;color:${k.c}">${k.v}</div>
+    </div>`).join('');
+  }
+
+  // Chart - monthly overview
+  const chartEl = document.getElementById('ausgaben-chart');
+  if(chartEl) {
+    const monthlyData = Array.from({length:12}, (_,m) => {
+      const monthStr = String(jahr) + '-' + String(m+1).padStart(2,'0');
+      const monthAusg = DB.ausgaben.filter(a => a.typ!=='einnahme' && a.datum?.startsWith(monthStr)).reduce((s,a)=>s+a.brutto,0);
+      const monthEinn = DB.ausgaben.filter(a => a.typ==='einnahme' && a.datum?.startsWith(monthStr)).reduce((s,a)=>s+a.brutto,0)
+        + DB.rechnungen.filter(r => r.status==='bezahlt' && r.datum?.startsWith(monthStr)).reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+      return {ausg: monthAusg, einn: monthEinn};
+    });
+    const maxVal = Math.max(...monthlyData.map(m => Math.max(m.ausg, m.einn)), 1);
+    chartEl.innerHTML = monthlyData.map(m => `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end">
+        <div style="width:100%;background:var(--green);border-radius:2px 2px 0 0;height:${Math.round(m.einn/maxVal*100)}%;min-height:${m.einn>0?'3px':'0'};transition:height .3s" title="Einnahmen: ${fmtEur(m.einn)}"></div>
+        <div style="width:100%;background:var(--red);border-radius:2px 2px 0 0;height:${Math.round(m.ausg/maxVal*100)}%;min-height:${m.ausg>0?'3px':'0'};opacity:.7;transition:height .3s" title="Ausgaben: ${fmtEur(m.ausg)}"></div>
+      </div>`).join('');
+  }
+
+  // Table
+  const tbody = document.getElementById('ausgaben-tbody');
+  if(!tbody) return;
+  if(!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="emo">💶</div><p>Noch keine Ausgaben fuer ${jahr}.<br>Klicke auf "+ Ausgabe".</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(a => `<tr>
+    <td style="color:var(--muted)">${fmtDate(a.datum)}</td>
+    <td class="bold">${a.desc}</td>
+    <td><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg);color:var(--muted);font-weight:600">${AG_KAT_ICONS[a.kat]||''} ${AG_KAT_LABELS[a.kat]||a.kat||'–'}</span></td>
+    <td class="mono">${a.typ==='einnahme'?'–':fmtEur(a.netto)}</td>
+    <td class="mono" style="color:var(--muted)">${a.mwstPct>0?a.mwstPct+'%':'–'}</td>
+    <td class="mono" style="font-weight:700;color:${a.typ==='einnahme'?'var(--green)':'var(--red)'}">${a.typ==='einnahme'?'+':'-'}${fmtEur(a.brutto)}</td>
+    <td>${a.beleg ? `<a href="${a.beleg}" download="${a.belegName||'beleg'}" style="font-size:11px;color:var(--blue);text-decoration:none" onclick="event.stopPropagation()">📎 ${a.belegName||'Beleg'}</a>` : '<span style="color:var(--border)">–</span>'}</td>
+    <td class="actions">
+      <button class="btn-ghost btn-sm" onclick="openAusgabeModal('${a.id}')">✏</button>
+      <button class="btn-danger" onclick="deleteAusgabe('${a.id}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function ausgabenPDF() {
+  const jahr = parseInt(document.getElementById('ausgaben-jahr')?.value || new Date().getFullYear());
+  const s = DB.settings;
+  const list = (DB.ausgaben||[]).filter(a => a.datum?.startsWith(String(jahr))).sort((a,b)=>a.datum.localeCompare(b.datum));
+  const ausgaben = list.filter(a=>a.typ!=='einnahme');
+  const einnahmenManuell = list.filter(a=>a.typ==='einnahme');
+  const rgEinnahmen = DB.rechnungen.filter(r=>r.status==='bezahlt'&&r.datum?.startsWith(String(jahr)));
+  const ausgabenSum = ausgaben.reduce((s,a)=>s+a.brutto,0);
+  const einnahmenSum = einnahmenManuell.reduce((s,a)=>s+a.brutto,0)+rgEinnahmen.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+  const gewinn = einnahmenSum - ausgabenSum;
+  const logoHtml = s.logo?`<img src="${s.logo}" style="height:36px;object-fit:contain;margin-bottom:6px;display:block">`:'';
+  const datum = new Date().toLocaleDateString('de-DE');
+
+  // Group Ausgaben by category
+  const byKat = {};
+  ausgaben.forEach(a => { if(!byKat[a.kat]) byKat[a.kat]=[]; byKat[a.kat].push(a); });
+
+  let html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>EUeR ${jahr}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:14mm 16mm;font-size:11px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f5c400}
+  table{width:100%;border-collapse:collapse;margin-bottom:14px}th{background:#f0ede7;padding:7px 10px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#666;text-align:left;border-bottom:2px solid #ddd}
+  td{padding:7px 10px;border-bottom:1px solid #eee}.right{text-align:right}.bold{font-weight:700}
+  .total-row{background:#f8f7f4;font-weight:700}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+  .kpi{background:#f8f7f4;border-radius:6px;padding:12px;border-top:3px solid #f5c400}
+  .kpi-l{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:5px}
+  .kpi-v{font-size:18px;font-weight:800;color:#111}
+  h2{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin:16px 0 8px}
+  @media print{body{padding:10mm};@page{margin:0;size:A4}}</style></head><body>
+  <div class="header"><div>${logoHtml}<div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:3px">VIRAL <span style="color:#f5c400">OUTLAWS</span></div>
+  <div style="font-size:11px;color:#666">${s.name||'Viral Outlaws'} ${s.inhaber?'· '+s.inhaber:''}</div></div>
+  <div style="text-align:right"><div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:2px">EINNAHMENüBERSCHUSS-RECHNUNG</div>
+  <div style="font-size:13px;color:#666;margin-top:4px">Wirtschaftsjahr ${jahr}</div>
+  <div style="font-size:11px;color:#888">Erstellt: ${datum}</div></div></div>
+  <div class="kpi-grid">
+    <div class="kpi" style="border-top-color:#1f9e5a"><div class="kpi-l">Einnahmen</div><div class="kpi-v" style="color:#1f9e5a">${fmtEur(einnahmenSum)}</div></div>
+    <div class="kpi" style="border-top-color:#d63030"><div class="kpi-l">Ausgaben</div><div class="kpi-v" style="color:#d63030">${fmtEur(ausgabenSum)}</div></div>
+    <div class="kpi" style="border-top-color:${gewinn>=0?'#1f9e5a':'#d63030'}"><div class="kpi-l">Gewinn / Verlust</div><div class="kpi-v" style="color:${gewinn>=0?'#1f9e5a':'#d63030'}">${fmtEur(gewinn)}</div></div>
+    <div class="kpi" style="border-top-color:#2563b8"><div class="kpi-l">Vorsteuer</div><div class="kpi-v" style="color:#2563b8">${fmtEur(ausgaben.reduce((s,a)=>s+a.mwstBetrag,0))}</div></div>
+  </div>
+
+  <h2>Einnahmen</h2>
+  <table><thead><tr><th>Datum</th><th>Beschreibung</th><th class="right">Betrag</th></tr></thead><tbody>
+  ${rgEinnahmen.map(r=>{const c=DB.contacts.find(x=>x.id===r.kundeId);return`<tr><td>${fmtDate(r.datum)}</td><td>Rechnung ${r.nr||''} – ${c?.firma||'?'}</td><td class="right bold">${fmtEur(sumPositions(r.positions).brutto)}</td></tr>`;}).join('')}
+  ${einnahmenManuell.map(a=>`<tr><td>${fmtDate(a.datum)}</td><td>${a.desc}</td><td class="right bold">${fmtEur(a.brutto)}</td></tr>`).join('')}
+  <tr class="total-row"><td colspan="2">Summe Einnahmen</td><td class="right">${fmtEur(einnahmenSum)}</td></tr></tbody></table>
+
+  <h2>Ausgaben nach Kategorien</h2>
+  ${Object.entries(byKat).map(([kat,items])=>`
+  <table><thead><tr><th colspan="4">${AG_KAT_ICONS[kat]||''} ${AG_KAT_LABELS[kat]||kat}</th></tr>
+  <tr><th>Datum</th><th>Beschreibung</th><th class="right">Netto</th><th class="right">Brutto</th></tr></thead><tbody>
+  ${items.map(a=>`<tr><td>${fmtDate(a.datum)}</td><td>${a.desc}</td><td class="right">${fmtEur(a.netto)}</td><td class="right bold">${fmtEur(a.brutto)}</td></tr>`).join('')}
+  <tr class="total-row"><td colspan="2">Summe</td><td class="right">${fmtEur(items.reduce((s,a)=>s+a.netto,0))}</td><td class="right">${fmtEur(items.reduce((s,a)=>s+a.brutto,0))}</td></tr>
+  </tbody></table>`).join('')}
+
+  <table><thead><tr><th colspan="3" style="font-size:12px;background:#111;color:#fff">Gewinn-Ermittlung ${jahr}</th></tr></thead><tbody>
+  <tr><td>Summe Einnahmen</td><td></td><td class="right bold" style="color:#1f9e5a">${fmtEur(einnahmenSum)}</td></tr>
+  <tr><td>Summe Ausgaben</td><td></td><td class="right bold" style="color:#d63030">-${fmtEur(ausgabenSum)}</td></tr>
+  <tr class="total-row" style="border-top:2px solid #111"><td colspan="2" style="font-size:13px">Gewinn / Verlust</td><td class="right" style="font-size:14px;color:${gewinn>=0?'#1f9e5a':'#d63030'}">${fmtEur(gewinn)}</td></tr>
+  </tbody></table>
+
+  <div style="margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:9px;color:#aaa;text-align:center">
+    ${s.name||'Viral Outlaws'} · ${s.inhaber||''} · ${s.steuer?'St.-Nr.: '+s.steuer:''} · Erstellt am ${datum}
+    <br>Hinweis: Diese Aufstellung ersetzt keine steuerliche Beratung.
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script></body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  window.open(URL.createObjectURL(blob),'_blank');
+}
+
+// ==================================================
+// KUNDENRADAR
+// ==================================================
+function initKundenradar() {
+  // Check if API key is set
+  const apiKey = DB.settings?.placesApiKey || '';
+  const hintEl = document.getElementById('radar-api-hint');
+  if(!apiKey && hintEl) {
+    hintEl.style.display = 'block';
+    const keyInput = document.getElementById('radar-api-key');
+    if(keyInput) keyInput.value = '';
+  } else if(hintEl) {
+    hintEl.style.display = 'none';
+  }
+  document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Branche und Ort eingeben und auf Suchen klicken.<br><span style="font-size:11px">z.B. "Elektriker" in "Memmingen" im Umkreis von 20 km</span></div>';
+}
+
+function saveRadarKey() {
+  const key = document.getElementById('radar-api-key').value.trim();
+  if(!key) { alert('Bitte API-Key eingeben.'); return; }
+  DB.settings.placesApiKey = key;
+  save();
+  document.getElementById('radar-api-hint').style.display = 'none';
+  alert('API-Key gespeichert!');
+}
+
+async function radarSearch() {
+  const query = document.getElementById('radar-query').value.trim();
+  const location = document.getElementById('radar-location').value.trim();
+  const radius = document.getElementById('radar-radius').value;
+  const apiKey = DB.settings?.placesApiKey || '';
+
+  if(!query) { alert('Bitte Branche / Suchbegriff eingeben.'); return; }
+  if(!location) { alert('Bitte Ort oder PLZ eingeben.'); return; }
+
+  if(!apiKey) {
+    document.getElementById('radar-api-hint').style.display = 'block';
+    alert('Bitte zuerst den Google Places API Key eintragen.');
+    return;
+  }
+
+  const btn = document.getElementById('radar-btn');
+  btn.textContent = '⏳ Suche...';
+  btn.disabled = true;
+
+  const resultsEl = document.getElementById('radar-results');
+  resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Suche läuft...</div>';
+
+  try {
+    // Step 1: Geocode location to lat/lng
+    const geoResp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`);
+    const geoData = await geoResp.json();
+    if(!geoData.results?.length) throw new Error('Ort nicht gefunden: ' + location);
+    const {lat, lng} = geoData.results[0].geometry.location;
+
+    // Step 2: Places Nearby Search
+    const placesResp = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(query)}&language=de&key=${apiKey}`);
+    const placesData = await placesResp.json();
+
+    if(placesData.status === 'REQUEST_DENIED') throw new Error('API-Key ungueltig oder Places API nicht aktiviert.');
+    if(!placesData.results?.length) { resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Keine Ergebnisse gefunden.</div>'; return; }
+
+    renderRadarResults(placesData.results, query, location);
+  } catch(err) {
+    resultsEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:14px 16px;color:var(--red);font-size:12px">
+      Fehler: ${err.message}<br><br>
+      Tipps: Places API in Google Cloud aktiviert? API-Key korrekt?
+    </div>`;
+  } finally {
+    btn.textContent = '🔍 Suchen';
+    btn.disabled = false;
+  }
+}
+
+function renderRadarResults(places, query, location) {
+  const resultsEl = document.getElementById('radar-results');
+  const existingFirmen = DB.contacts.map(c => c.firma.toLowerCase());
+
+  resultsEl.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${places.length} Ergebnisse fuer "${query}" in "${location}"</div>`
+    + `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">`
+    + places.map(p => {
+        const alreadyIn = existingFirmen.includes(p.name.toLowerCase());
+        const stars = p.rating ? '★'.repeat(Math.round(p.rating)) + ' ' + p.rating : '';
+        return `<div style="background:var(--paper);border:1px solid ${alreadyIn?'var(--green)':'var(--border)'};border-radius:6px;padding:14px;${alreadyIn?'opacity:.7':''}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700;color:var(--ink)">${p.name}</div>
+            ${alreadyIn?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700;flex-shrink:0">✓ Im CRM</span>':''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${p.vicinity||''}</div>
+          ${stars?`<div style="font-size:11px;color:var(--yellow2);margin-bottom:8px">${stars} (${p.user_ratings_total||0} Bewertungen)</div>`:''}
+          <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${p.types?.slice(0,2).join(', ')||''}</div>
+          ${!alreadyIn?`<button class="btn-yellow btn-sm" onclick="radarAddContact('${encodeURIComponent(JSON.stringify({name:p.name,addr:p.vicinity||'',placeId:p.place_id}))}')" style="width:100%">+ Ins CRM aufnehmen</button>`
+          :`<div style="font-size:11px;color:var(--green);text-align:center">Bereits als Kontakt vorhanden</div>`}
+        </div>`;
+      }).join('')
+    + '</div>';
+}
+
+function radarAddContact(encodedData) {
+  try {
+    const data = JSON.parse(decodeURIComponent(encodedData));
+    // Pre-fill contact modal
+    openContactModal();
+    setTimeout(() => {
+      document.getElementById('c-firma').value = data.name || '';
+      // Try to extract PLZ from address
+      const plzMatch = (data.addr||'').match(/\d{5}/);
+      if(plzMatch) document.getElementById('c-plz').value = plzMatch[0];
+      document.getElementById('c-status').value = 'offen';
+    }, 100);
+    showPage('contacts');
+  } catch(e) {
+    alert('Fehler beim Hinzufuegen.');
+  }
 }
 
 // Inject logo
