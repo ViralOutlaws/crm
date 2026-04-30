@@ -1433,18 +1433,22 @@ tr[onclick] { transition:background .1s; }
     </div>
 
     <!-- API Key hint -->
-    <div id="radar-api-hint" style="margin-top:12px;padding:10px 14px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px;font-size:11px;display:none">
-      <strong style="display:block;margin-bottom:6px">Einrichtung (einmalig, 5 Min):</strong>
-      <ol style="padding-left:16px;line-height:2">
-        <li>Gehe zu <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--blue)">workers.cloudflare.com</a> → neuen Worker erstellen</li>
-        <li>Code aus <strong>places-worker.js</strong> einfügen</li>
-        <li>In Zeile 3: <strong>DEIN_API_KEY_HIER</strong> durch deinen Google Places API Key ersetzen</li>
-        <li>Deploy → Worker-URL kopieren (z.B. <code>https://places-proxy.NAME.workers.dev</code>)</li>
-        <li>URL unten eintragen → Speichern</li>
-      </ol>
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-        <input id="radar-api-key" placeholder="https://places-proxy.NAME.workers.dev" style="flex:1;font-family:'DM Mono',monospace;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
-        <button class="btn-yellow" onclick="saveRadarKey()" style="height:32px;white-space:nowrap">Speichern</button>
+    <!-- API Key / Worker URL -->
+    <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Cloudflare Worker URL</label>
+          <input id="radar-api-key" placeholder="https://places-proxy.NAME.workers.dev" style="width:100%;font-family:'DM Mono',monospace;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
+        </div>
+        <button class="btn-yellow" onclick="saveRadarKey()" style="height:32px;white-space:nowrap;margin-top:18px">Speichern</button>
+      </div>
+      <div id="radar-api-hint" style="margin-top:10px;display:none">
+        <strong style="display:block;margin-bottom:6px;color:var(--yellow2)">Noch nicht eingerichtet – Anleitung:</strong>
+        <ol style="padding-left:16px;line-height:2;color:var(--ink2)">
+          <li>Gehe zu <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--blue)">workers.cloudflare.com</a> → neuen Worker erstellen</li>
+          <li>Code aus <strong>places-worker.js</strong> einfügen + API Key in Zeile 3 eintragen</li>
+          <li>Deploy → Worker-URL oben eintragen → Speichern</li>
+        </ol>
       </div>
     </div>
   </div>
@@ -5581,17 +5585,16 @@ function ausgabenPDF() {
 // KUNDENRADAR
 // ==================================================
 function initKundenradar() {
-  // Check if API key is set
   const apiKey = DB.settings?.placesApiKey || '';
+  const keyInput = document.getElementById('radar-api-key');
   const hintEl = document.getElementById('radar-api-hint');
-  if(!apiKey && hintEl) {
-    hintEl.style.display = 'block';
-    const keyInput = document.getElementById('radar-api-key');
-    if(keyInput) keyInput.value = '';
-  } else if(hintEl) {
-    hintEl.style.display = 'none';
+  if(keyInput) keyInput.value = apiKey;
+  if(hintEl) hintEl.style.display = apiKey ? 'none' : 'block';
+  if(!apiKey) {
+    document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Bitte zuerst die Worker-URL eintragen und speichern.</div>';
+  } else {
+    document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Branche und Ort eingeben und auf Suchen klicken.</div>';
   }
-  document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Branche und Ort eingeben und auf Suchen klicken.<br><span style="font-size:11px">z.B. "Elektriker" in "Memmingen" im Umkreis von 20 km</span></div>';
 }
 
 function saveRadarKey() {
