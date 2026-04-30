@@ -2015,7 +2015,7 @@ tr[onclick] { transition:background .1s; }
           <label>Vorlage wählen</label>
           <select id="em-template" onchange="applyEmailTemplate()" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
             <option value="">— Keine Vorlage —</option>
-            <option value="erstansprache">📨 Erstansprache (Kaltakquise)</option>
+            <option value="erstkontakt">📨 Erstansprache (Kaltakquise)</option>
             <option value="nachfassen">🔔 Nachfassen nach Erstgespräch</option>
             <option value="angebot">📋 Angebot zusenden</option>
             <option value="rechnung">🧾 Rechnung zusenden</option>
@@ -6659,13 +6659,26 @@ function applyEmailTemplate() {
   const tpl = EMAIL_TEMPLATES[key];
   if(!tpl) return;
   const c = _emCurrentContact;
-  const replace = (str) => str
-    .replace(/\{firma\}/g, c?.firma||'Ihr Unternehmen')
-    .replace(/\{person\}/g, c?.person?.split(' ')[0]||'Sehr geehrte Damen und Herren')
-    .replace(/\{name\}/g, c?.person||c?.firma||'')
-    .replace(/\{ort\}/g, c?.plz||'Ihrer Region');
-  document.getElementById('em-subject').value = replace(tpl.subject);
-  document.getElementById('em-body').value = replace(tpl.body);
+  const s = DB.settings||{};
+
+  // Support both old function-style and new string-style templates
+  let subject = typeof tpl.subject === 'function' ? tpl.subject(c,s) : tpl.subject;
+  let body = typeof tpl.body === 'function' ? tpl.body(c,s) : tpl.body;
+
+  // Apply string placeholders for new-style templates
+  if(typeof tpl.subject === 'string') {
+    const replace = (str) => str
+      .replace(/\{firma\}/g, c?.firma||'Ihr Unternehmen')
+      .replace(/\{person\}/g, c?.person?.split(' ')[0]||'Sehr geehrte Damen und Herren')
+      .replace(/\{name\}/g, c?.person||c?.firma||'')
+      .replace(/\{ort\}/g, c?.plz||'Ihrer Region');
+    subject = replace(subject);
+    body = replace(body);
+  }
+
+  document.getElementById('em-subject').value = subject;
+  document.getElementById('em-body').value = body;
+  document.getElementById('em-body').scrollTop = 0;
 }
 
 function emPreview() {
