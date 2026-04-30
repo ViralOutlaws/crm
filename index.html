@@ -555,9 +555,13 @@ tr[onclick] { transition:background .1s; }
       <span class="nav-item-icon">🎯</span>
       <span class="nav-item-label">Ziele & MRR</span>
     </div>
-    <div class="nav-item" onclick="showPage('ausgaben')" data-page="ausgaben">
-      <span class="nav-item-icon">💶</span>
-      <span class="nav-item-label">Ausgaben & EÜR</span>
+    <div class="nav-item" onclick="showPage('roi')" data-page="roi">
+      <span class="nav-item-icon">📈</span>
+      <span class="nav-item-label">ROI-Tracker</span>
+    </div>
+    <div class="nav-item" onclick="showPage('reporting')" data-page="reporting">
+      <span class="nav-item-icon">📑</span>
+      <span class="nav-item-label">Kampagnen-Report</span>
     </div>
     <div class="nav-item" onclick="showPage('kundenradar')" data-page="kundenradar">
       <span class="nav-item-icon">🗺</span>
@@ -982,6 +986,7 @@ tr[onclick] { transition:background .1s; }
 ════════════════════════════════════════ -->
 <div class="page" id="page-ziele">
   <div class="sec-header"><div class="sec-title">Ziele & 2-Jahres-Plan</div>
+    <button class="btn-ghost" onclick="generateRetainerRechnungen()">🧾 Retainer-Rechnungen erstellen</button>
     <button class="btn-primary" onclick="saveZiele()">💾 Speichern</button>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px">
@@ -1457,6 +1462,145 @@ tr[onclick] { transition:background .1s; }
   <div id="radar-results"></div>
 </div>
 
+<!-- ROI TRACKER -->
+<div class="page" id="page-roi">
+  <div class="sec-header">
+    <div class="sec-title">ROI-Tracker</div>
+    <select id="roi-kunde" onchange="renderROI()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none;min-width:200px">
+      <option value="">Alle Kunden</option>
+    </select>
+    <button class="btn-primary" onclick="openROIEintragModal()">+ Monatsdaten eintragen</button>
+  </div>
+  <div id="roi-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="dash-card">
+      <h3 style="margin-bottom:14px">📊 ROAS-Entwicklung (Monatlich)</h3>
+      <div id="roi-chart" style="display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px"></div>
+      <div id="roi-chart-labels" style="display:flex;gap:6px;margin-top:4px;font-size:9px;color:var(--muted)"></div>
+    </div>
+    <div class="dash-card">
+      <h3 style="margin-bottom:14px">💰 Kumulativer Umsatz</h3>
+      <div id="roi-cumulative" style="display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px"></div>
+      <div id="roi-cumulative-labels" style="display:flex;gap:6px;margin-top:4px;font-size:9px;color:var(--muted)"></div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Monat</th><th>Kunde</th><th>Kanal</th><th>Ads-Budget</th><th>Klicks</th><th>Leads</th><th>gemeld. Umsatz</th><th>ROAS</th><th>ROI</th><th>CPL</th><th></th></tr></thead>
+      <tbody id="roi-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- KAMPAGNEN REPORT -->
+<div class="page" id="page-reporting">
+  <div class="sec-header">
+    <div class="sec-title">Kampagnen-Report</div>
+    <button class="btn-primary" onclick="reportingPDF()">📄 PDF generieren</button>
+  </div>
+  <div style="display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">⚙ Report-Einstellungen</h3>
+        <div class="field"><label>Kunde *</label>
+          <select id="rep-kunde" onchange="repLoadData()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="">— Kunde wählen —</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Monat</label>
+            <select id="rep-monat" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+              <option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option>
+              <option value="4">April</option><option value="5">Mai</option><option value="6">Juni</option>
+              <option value="7">Juli</option><option value="8">August</option><option value="9">September</option>
+              <option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
+            </select>
+          </div>
+          <div class="field"><label>Jahr</label>
+            <input id="rep-jahr" type="number" value="2026" style="font-size:12px">
+          </div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">📊 Kampagnen-KPIs</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Impressionen</label><input id="rep-impressionen" type="number" placeholder="15000" style="font-size:12px"></div>
+          <div class="field"><label>Klicks</label><input id="rep-klicks" type="number" placeholder="450" style="font-size:12px"></div>
+          <div class="field"><label>Leads</label><input id="rep-leads" type="number" placeholder="18" style="font-size:12px"></div>
+          <div class="field"><label>Abschlüsse</label><input id="rep-abschluesse" type="number" placeholder="4" style="font-size:12px"></div>
+          <div class="field"><label>Ads-Budget (€)</label><input id="rep-budget" type="number" placeholder="500" oninput="repCalc()" style="font-size:12px"></div>
+          <div class="field"><label>Generierter Umsatz (€)</label><input id="rep-umsatz" type="number" placeholder="8000" oninput="repCalc()" style="font-size:12px"></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">🎯 Ziele & Vormonat</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Ziel Leads / Monat</label><input id="rep-ziel-leads" type="number" placeholder="20" style="font-size:12px"></div>
+          <div class="field"><label>Vormonat Leads</label><input id="rep-prev-leads" type="number" placeholder="15" style="font-size:12px"></div>
+          <div class="field"><label>Ziel Umsatz (€)</label><input id="rep-ziel-umsatz" type="number" placeholder="10000" style="font-size:12px"></div>
+          <div class="field"><label>Vormonat Umsatz (€)</label><input id="rep-prev-umsatz" type="number" placeholder="6500" style="font-size:12px"></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3 style="margin-bottom:14px">💬 Kommentar & Nächste Schritte</h3>
+        <div class="field"><label>Monatsfazit</label><textarea id="rep-fazit" rows="3" placeholder="Kampagne lief gut, CTR über Benchmark..." style="font-size:12px;resize:vertical"></textarea></div>
+        <div class="field"><label>Nächste Schritte</label><textarea id="rep-naechste" rows="3" placeholder="Budget erhöhen auf 600€, neue Creative-Varianten testen..." style="font-size:12px;resize:vertical"></textarea></div>
+      </div>
+    </div>
+    <div class="dash-card" id="rep-preview">
+      <h3 style="margin-bottom:14px">👁 Vorschau</h3>
+      <div id="rep-preview-content" style="font-size:12px;color:var(--muted);text-align:center;padding:20px">Felder ausfüllen für Vorschau</div>
+    </div>
+  </div>
+</div>
+
+<!-- ROI EINTRAG MODAL -->
+<div class="overlay" id="roi-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 id="roi-modal-title">Monatsdaten eintragen</h2>
+      <button class="modal-close" onclick="closeModal('roi-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Kunde *</label>
+          <select id="roi-m-kunde" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%"><option value="">— Kunde wählen —</option></select>
+        </div>
+        <div class="field"><label>Kanal</label>
+          <select id="roi-m-kanal" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="google">🔵 Google Ads</option>
+            <option value="meta">🟣 Meta Ads</option>
+            <option value="beide">🔵🟣 Google + Meta</option>
+            <option value="sonstige">Sonstige</option>
+          </select>
+        </div>
+        <div class="field"><label>Monat</label>
+          <select id="roi-m-monat" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option>
+            <option value="4">April</option><option value="5">Mai</option><option value="6">Juni</option>
+            <option value="7">Juli</option><option value="8">August</option><option value="9">September</option>
+            <option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
+          </select>
+        </div>
+        <div class="field"><label>Jahr</label><input id="roi-m-jahr" type="number" value="2026" style="font-size:12px"></div>
+        <div class="field"><label>Ads-Budget (€) *</label><input id="roi-m-budget" type="number" placeholder="500" oninput="roiModalCalc()" style="font-size:12px"></div>
+        <div class="field"><label>Klicks</label><input id="roi-m-klicks" type="number" placeholder="450" oninput="roiModalCalc()" style="font-size:12px"></div>
+        <div class="field"><label>Leads</label><input id="roi-m-leads" type="number" placeholder="18" oninput="roiModalCalc()" style="font-size:12px"></div>
+        <div class="field"><label>Abschlüsse</label><input id="roi-m-abschluesse" type="number" placeholder="4" oninput="roiModalCalc()" style="font-size:12px"></div>
+        <div class="field"><label>Gemeldeter Umsatz (€)</label><input id="roi-m-umsatz" type="number" placeholder="8000" oninput="roiModalCalc()" style="font-size:12px"></div>
+        <div class="field"><label>Notiz</label><input id="roi-m-notiz" placeholder="z.B. Budget erhöht" style="font-size:12px"></div>
+        <div class="field form-full" id="roi-modal-calc-preview" style="background:var(--bg);border-radius:6px;padding:12px;display:none">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center" id="roi-modal-calc-content"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('roi-modal')">Abbrechen</button>
+      <button class="btn-yellow" onclick="saveROIEintrag()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- RADAR DETAIL MODAL -->
 <div class="overlay" id="radar-detail-modal">
   <div class="modal" style="max-width:520px">
@@ -1808,6 +1952,17 @@ tr[onclick] { transition:background .1s; }
             <option value="gekuendigt">✗ Gekündigt</option>
           </select>
         </div>
+        <div class="field"><label>Rechnungstag (Tag des Monats)</label>
+          <select id="ret-abrechnungstag" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="1">1. des Monats</option>
+            <option value="5">5. des Monats</option>
+            <option value="10">10. des Monats</option>
+            <option value="15">15. des Monats</option>
+            <option value="20">20. des Monats</option>
+            <option value="25">25. des Monats</option>
+            <option value="letzter">Letzter des Monats</option>
+          </select>
+        </div>
         <div class="field"><label>Nächste Rechnung</label><input id="ret-next" type="date"></div>
       </div>
     </div>
@@ -2031,7 +2186,7 @@ const PAGE_TITLES = {
   ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
   rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
   wettbewerb:'Wettbewerbs-Analyse', ausgaben:'Ausgaben & EÜR',
-  kundenradar:'Kundenradar'
+  kundenradar:'Kundenradar', roi:'ROI-Tracker', reporting:'Kampagnen-Report'
 };
 
 function showPage(id) {
@@ -2067,6 +2222,8 @@ function showPage(id) {
   if(id==='wettbewerb') initWettbewerb();
   if(id==='ausgaben') initAusgaben();
   if(id==='kundenradar') initKundenradar();
+  if(id==='roi') initROI();
+  if(id==='reporting') initReporting();
   // contact-detail is handled by openContactDetail()
 }
 
@@ -3759,6 +3916,8 @@ function openRetainerModal(id) {
   document.getElementById('ret-start').value = r?.start||today();
   document.getElementById('ret-leistungen').value = r?.leistungen||'';
   document.getElementById('ret-status').value = r?.status||'aktiv';
+  const abt = document.getElementById('ret-abrechnungstag');
+  if(abt) abt.value = r?.abrechnungstag||'1';
   document.getElementById('ret-next').value = r?.next||addDays(today(),30);
   document.getElementById('retainer-modal').classList.add('open');
 }
@@ -3773,6 +3932,7 @@ function saveRetainer() {
     start: document.getElementById('ret-start').value,
     leistungen: document.getElementById('ret-leistungen').value,
     status: document.getElementById('ret-status').value,
+    abrechnungstag: document.getElementById('ret-abrechnungstag')?.value||'1',
     next: document.getElementById('ret-next').value,
   };
   if(editId) { const i=DB.retainer.findIndex(x=>x.id===editId); if(i>-1) DB.retainer[i]=obj; }
@@ -5837,6 +5997,466 @@ function radarAddContact(encodedData) {
     }, 100);
     showPage('contacts');
   } catch(e) { alert('Fehler beim Hinzufügen.'); }
+}
+
+// ==================================================
+// ROI TRACKER
+// ==================================================
+if(!DB.roi) DB.roi = [];
+const MONAT_LABELS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+function initROI() {
+  if(!DB.roi) DB.roi = [];
+  populateKundenSelect('roi-kunde');
+  // Add "Alle" option
+  const sel = document.getElementById('roi-kunde');
+  if(sel && !sel.querySelector('option[value=""]')) {
+    const opt = document.createElement('option'); opt.value=''; opt.textContent='Alle Kunden';
+    sel.prepend(opt);
+  }
+  renderROI();
+}
+
+function openROIEintragModal(id) {
+  editId = id||null;
+  const r = id ? DB.roi.find(x=>x.id===id) : null;
+  populateKundenSelect('roi-m-kunde');
+  document.getElementById('roi-m-kunde').value = r?.kundeId||'';
+  document.getElementById('roi-m-kanal').value = r?.kanal||'google';
+  document.getElementById('roi-m-monat').value = r?.monat||new Date().getMonth()+1;
+  document.getElementById('roi-m-jahr').value = r?.jahr||new Date().getFullYear();
+  document.getElementById('roi-m-budget').value = r?.budget||'';
+  document.getElementById('roi-m-klicks').value = r?.klicks||'';
+  document.getElementById('roi-m-leads').value = r?.leads||'';
+  document.getElementById('roi-m-abschluesse').value = r?.abschluesse||'';
+  document.getElementById('roi-m-umsatz').value = r?.umsatz||'';
+  document.getElementById('roi-m-notiz').value = r?.notiz||'';
+  document.getElementById('roi-modal-calc-preview').style.display = 'none';
+  document.getElementById('roi-modal').classList.add('open');
+}
+
+function roiModalCalc() {
+  const budget = parseFloat(document.getElementById('roi-m-budget').value)||0;
+  const umsatz = parseFloat(document.getElementById('roi-m-umsatz').value)||0;
+  const leads = parseFloat(document.getElementById('roi-m-leads').value)||0;
+  if(!budget && !umsatz) return;
+  const roas = budget>0 ? umsatz/budget : 0;
+  const roi = budget>0 ? ((umsatz-budget)/budget)*100 : 0;
+  const cpl = leads>0 ? budget/leads : 0;
+  const prev = document.getElementById('roi-modal-calc-preview');
+  const cont = document.getElementById('roi-modal-calc-content');
+  prev.style.display = 'block';
+  cont.innerHTML = [
+    ['ROAS', roas.toFixed(1)+'x', roas>=3?'var(--green)':roas>=1?'var(--orange)':'var(--red)'],
+    ['ROI', Math.round(roi)+'%', roi>=0?'var(--green)':'var(--red)'],
+    ['CPL', fmtEur(cpl), 'var(--blue)'],
+  ].map(([l,v,c]) => `<div><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${l}</div>
+    <div style="font-size:18px;font-weight:800;color:${c}">${v}</div></div>`).join('');
+}
+
+function saveROIEintrag() {
+  const kundeId = document.getElementById('roi-m-kunde').value;
+  const budget = parseFloat(document.getElementById('roi-m-budget').value)||0;
+  if(!kundeId || !budget) { alert('Bitte Kunde und Budget ausfullen.'); return; }
+  const umsatz = parseFloat(document.getElementById('roi-m-umsatz').value)||0;
+  const leads = parseFloat(document.getElementById('roi-m-leads').value)||0;
+  const obj = {
+    id: editId||uid(), kundeId,
+    kanal: document.getElementById('roi-m-kanal').value,
+    monat: parseInt(document.getElementById('roi-m-monat').value),
+    jahr: parseInt(document.getElementById('roi-m-jahr').value),
+    budget, klicks: parseFloat(document.getElementById('roi-m-klicks').value)||0,
+    leads, abschluesse: parseFloat(document.getElementById('roi-m-abschluesse').value)||0,
+    umsatz, notiz: document.getElementById('roi-m-notiz').value,
+    roas: budget>0?umsatz/budget:0,
+    roi: budget>0?((umsatz-budget)/budget)*100:0,
+    cpl: leads>0?budget/leads:0,
+    createdAt: new Date().toISOString()
+  };
+  if(editId) { const i=DB.roi.findIndex(x=>x.id===editId); if(i>-1) DB.roi[i]=obj; }
+  else DB.roi.unshift(obj);
+  save(); closeModal('roi-modal'); renderROI();
+  addActivity('ROI-Daten fuer '+new Date(obj.jahr,obj.monat-1).toLocaleDateString('de-DE',{month:'long',year:'numeric'})+' erfasst','blue');
+}
+
+function renderROI() {
+  if(!DB.roi) DB.roi=[];
+  const filterKunde = document.getElementById('roi-kunde')?.value||'';
+  let list = filterKunde ? DB.roi.filter(r=>r.kundeId===filterKunde) : DB.roi;
+  list = list.sort((a,b) => b.jahr!==a.jahr ? b.jahr-a.jahr : b.monat-a.monat);
+
+  // KPIs
+  const totalBudget = list.reduce((s,r)=>s+r.budget,0);
+  const totalUmsatz = list.reduce((s,r)=>s+r.umsatz,0);
+  const totalLeads  = list.reduce((s,r)=>s+r.leads,0);
+  const avgROAS     = totalBudget>0 ? totalUmsatz/totalBudget : 0;
+  const avgCPL      = totalLeads>0 ? totalBudget/totalLeads : 0;
+
+  const kpiEl = document.getElementById('roi-kpis');
+  if(kpiEl) kpiEl.innerHTML = [
+    {l:'Gesamt-Budget',v:fmtEur(totalBudget),c:'var(--blue)',i:'💰'},
+    {l:'Generierter Umsatz',v:fmtEur(totalUmsatz),c:'var(--green)',i:'📈'},
+    {l:'Ø ROAS',v:avgROAS.toFixed(1)+'x',c:avgROAS>=3?'var(--green)':avgROAS>=1?'var(--orange)':'var(--red)',i:'🎯'},
+    {l:'Gesamt-Leads',v:Math.round(totalLeads).toString(),c:'var(--blue)',i:'👥'},
+    {l:'Ø CPL',v:fmtEur(avgCPL),c:'var(--muted)',i:'🏷'},
+  ].map(k=>`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px;border-top:3px solid ${k.c};box-shadow:var(--shadow)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${k.i} ${k.l}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${k.c}">${k.v}</div>
+  </div>`).join('');
+
+  // Charts – last 6 months
+  const last6 = [...list].reverse().slice(-6);
+  const chartEl = document.getElementById('roi-chart');
+  const labelsEl = document.getElementById('roi-chart-labels');
+  const cumEl = document.getElementById('roi-cumulative');
+  const cumLabelsEl = document.getElementById('roi-cumulative-labels');
+
+  if(chartEl && last6.length) {
+    const maxROAS = Math.max(...last6.map(r=>r.roas), 1);
+    chartEl.innerHTML = last6.map(r => {
+      const h = Math.round(r.roas/maxROAS*100);
+      const c = r.roas>=3?'var(--green)':r.roas>=1?'var(--orange)':'var(--red)';
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end">
+        <div style="font-size:9px;font-weight:700;color:${c}">${r.roas.toFixed(1)}x</div>
+        <div style="width:100%;background:${c};border-radius:3px 3px 0 0;height:${h}%;min-height:4px;opacity:.85"></div>
+      </div>`;
+    }).join('');
+    if(labelsEl) labelsEl.innerHTML = last6.map(r=>`<div style="flex:1;text-align:center">${MONAT_LABELS[r.monat-1]}</div>`).join('');
+  }
+
+  if(cumEl && last6.length) {
+    let cum = 0;
+    const cumData = last6.map(r => { cum+=r.umsatz; return {umsatz:r.umsatz,cum,monat:r.monat}; });
+    const maxCum = Math.max(...cumData.map(r=>r.cum), 1);
+    cumEl.innerHTML = cumData.map(r => {
+      const h = Math.round(r.cum/maxCum*100);
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end">
+        <div style="font-size:8px;color:var(--green)">${fmtEur(r.cum).replace(' €','')}</div>
+        <div style="width:100%;background:var(--green);border-radius:3px 3px 0 0;height:${h}%;min-height:4px;opacity:.7"></div>
+      </div>`;
+    }).join('');
+    if(cumLabelsEl) cumLabelsEl.innerHTML = cumData.map(r=>`<div style="flex:1;text-align:center">${MONAT_LABELS[r.monat-1]}</div>`).join('');
+  }
+
+  // Table
+  const tbody = document.getElementById('roi-tbody');
+  if(!tbody) return;
+  if(!list.length) { tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="emo">📈</div><p>Noch keine ROI-Daten. Klicke auf "+ Monatsdaten eintragen".</p></div></td></tr>`; return; }
+  tbody.innerHTML = list.map(r => {
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const roasC = r.roas>=3?'var(--green)':r.roas>=1?'var(--orange)':'var(--red)';
+    const roiC = r.roi>=0?'var(--green)':'var(--red)';
+    const kanalMap = {google:'🔵 Google',meta:'🟣 Meta',beide:'🔵🟣 Beide',sonstige:'Sonstige'};
+    return `<tr>
+      <td style="font-weight:600">${MONAT_LABELS[r.monat-1]} ${r.jahr}</td>
+      <td>${c?.firma||'?'}</td>
+      <td><span style="font-size:11px">${kanalMap[r.kanal]||r.kanal}</span></td>
+      <td class="mono">${fmtEur(r.budget)}</td>
+      <td class="mono">${Math.round(r.klicks).toLocaleString('de-DE')}</td>
+      <td class="mono">${Math.round(r.leads)}</td>
+      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(r.umsatz)}</td>
+      <td class="mono" style="color:${roasC};font-weight:700">${r.roas.toFixed(1)}x</td>
+      <td class="mono" style="color:${roiC};font-weight:700">${Math.round(r.roi)}%</td>
+      <td class="mono">${r.cpl>0?fmtEur(r.cpl):'–'}</td>
+      <td class="actions">
+        <button class="btn-ghost btn-sm" onclick="openROIEintragModal('${r.id}')">✏</button>
+        <button class="btn-danger" onclick="deleteROI('${r.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteROI(id) {
+  if(!confirm('Eintrag loeschen?')) return;
+  DB.roi = DB.roi.filter(x=>x.id!==id);
+  save(); renderROI();
+}
+
+// ==================================================
+// RETAINER-RECHNUNGEN GENERATOR
+// ==================================================
+function generateRetainerRechnungen() {
+  const aktive = (DB.retainer||[]).filter(r=>r.status==='aktiv');
+  if(!aktive.length) { alert('Keine aktiven Retainer gefunden.'); return; }
+
+  let html = '<div style="display:flex;flex-direction:column;gap:10px">';
+  aktive.forEach(r => {
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const tag = r.abrechnungstag||1;
+    const tagLabel = tag==='letzter'?'letzten des Monats':tag+'. des Monats';
+    const alreadyExists = DB.rechnungen.some(rg => {
+      const rgDate = new Date(rg.datum);
+      const now = new Date();
+      return rg.kundeId===r.kundeId &&
+        rgDate.getMonth()===now.getMonth() &&
+        rgDate.getFullYear()===now.getFullYear() &&
+        rg.betreff?.includes('Retainer');
+    });
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);border-radius:6px;border:1px solid ${alreadyExists?'var(--green)':'var(--border)'}">
+      <input type="checkbox" id="ret-rg-${r.id}" ${alreadyExists?'disabled':'checked'} style="width:16px;height:16px;accent-color:var(--yellow)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">${c?.firma||'?'}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.paket||'Retainer'} · ${fmtEur(r.betrag)}/Monat · Abrechnung am ${tagLabel}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:700;color:var(--green)">${fmtEur(r.betrag)}</div>
+        ${alreadyExists?'<div style="font-size:10px;color:var(--green)">✓ Bereits erstellt</div>':''}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // Show in a simple confirm dialog
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `<div style="background:var(--paper);border-radius:8px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px">Retainer-Rechnungen erstellen</h2>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="padding:20px 24px">${html}</div>
+    <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn-ghost" onclick="this.closest('[style*=fixed]').remove()">Abbrechen</button>
+      <button class="btn-yellow" onclick="doGenerateRetainerRechnungen(this)">Rechnungen erstellen</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function doGenerateRetainerRechnungen(btn) {
+  const aktive = (DB.retainer||[]).filter(r=>r.status==='aktiv');
+  let count = 0;
+  aktive.forEach(r => {
+    const cb = document.getElementById('ret-rg-'+r.id);
+    if(!cb || !cb.checked || cb.disabled) return;
+    const c = DB.contacts.find(x=>x.id===r.kundeId);
+    const now = new Date();
+    const tag = r.abrechnungstag==='letzter' ? new Date(now.getFullYear(),now.getMonth()+1,0).getDate() : (r.abrechnungstag||1);
+    const datum = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(tag).padStart(2,'0')}`;
+    const faellig = addDays(datum, parseInt(DB.settings.zahlung||14));
+    const rg = {
+      id: uid(),
+      nr: 'R-'+now.getFullYear()+'-'+String(DB.rechnungen.length+1+count).padStart(3,'0'),
+      kundeId: r.kundeId,
+      betreff: `Retainer ${MONAT_LABELS[now.getMonth()]} ${now.getFullYear()} – ${r.paket||'Marketing Management'}`,
+      datum, faellig, status: 'offen-rg',
+      positions: [{ id:uid(), desc:r.paket||'Marketing Retainer', detail:r.leistungen||'', qty:1, price:r.betrag, total:r.betrag }],
+      createdAt: new Date().toISOString()
+    };
+    DB.rechnungen.unshift(rg);
+    // Update next billing date
+    const nextMonth = new Date(now.getFullYear(), now.getMonth()+1, tag);
+    r.next = nextMonth.toISOString().split('T')[0];
+    count++;
+  });
+  if(count>0) {
+    save();
+    addActivity(`${count} Retainer-Rechnung(en) erstellt`, 'green');
+    btn.closest('[style*=fixed]').remove();
+    alert(`✅ ${count} Rechnung(en) erstellt und im Bereich "Rechnungen" verfügbar.`);
+    showPage('rechnungen');
+  } else {
+    alert('Keine neuen Rechnungen zu erstellen.');
+  }
+}
+
+// Add retainer button to Ziele page (and update saveRetainer to include abrechnungstag)
+const _origSaveRetainer = typeof saveRetainer !== 'undefined' ? saveRetainer : null;
+
+// ==================================================
+// KAMPAGNEN REPORT
+// ==================================================
+function initReporting() {
+  populateKundenSelect('rep-kunde');
+  // Set current month
+  const now = new Date();
+  const monatSel = document.getElementById('rep-monat');
+  if(monatSel) monatSel.value = now.getMonth()+1;
+  const jahrInput = document.getElementById('rep-jahr');
+  if(jahrInput) jahrInput.value = now.getFullYear();
+}
+
+function repLoadData() {
+  const kundeId = document.getElementById('rep-kunde').value;
+  const monat = parseInt(document.getElementById('rep-monat').value);
+  const jahr = parseInt(document.getElementById('rep-jahr').value);
+  if(!kundeId) return;
+
+  // Load ROI data for this customer/month if available
+  const roiData = (DB.roi||[]).find(r => r.kundeId===kundeId && r.monat===monat && r.jahr===jahr);
+  if(roiData) {
+    document.getElementById('rep-budget').value = roiData.budget||'';
+    document.getElementById('rep-klicks').value = roiData.klicks||'';
+    document.getElementById('rep-leads').value = roiData.leads||'';
+    document.getElementById('rep-abschluesse').value = roiData.abschluesse||'';
+    document.getElementById('rep-umsatz').value = roiData.umsatz||'';
+  }
+  repCalc();
+}
+
+function repCalc() {
+  const budget = parseFloat(document.getElementById('rep-budget').value)||0;
+  const umsatz = parseFloat(document.getElementById('rep-umsatz').value)||0;
+  const leads  = parseFloat(document.getElementById('rep-leads').value)||0;
+  const klicks = parseFloat(document.getElementById('rep-klicks').value)||0;
+  const impr   = parseFloat(document.getElementById('rep-impressionen').value)||0;
+  const abschl = parseFloat(document.getElementById('rep-abschluesse').value)||0;
+  const zielLeads = parseFloat(document.getElementById('rep-ziel-leads').value)||0;
+  const prevLeads = parseFloat(document.getElementById('rep-prev-leads').value)||0;
+  const zielUmsatz = parseFloat(document.getElementById('rep-ziel-umsatz').value)||0;
+  const prevUmsatz = parseFloat(document.getElementById('rep-prev-umsatz').value)||0;
+
+  const roas = budget>0?umsatz/budget:0;
+  const cpl  = leads>0?budget/leads:0;
+  const ctr  = impr>0?(klicks/impr*100):0;
+  const cvr  = klicks>0?(leads/klicks*100):0;
+  const leadsTrend = prevLeads>0?((leads-prevLeads)/prevLeads*100):0;
+  const umsatzTrend = prevUmsatz>0?((umsatz-prevUmsatz)/prevUmsatz*100):0;
+  const leadsZiel = zielLeads>0?(leads/zielLeads*100):0;
+  const umsatzZiel = zielUmsatz>0?(umsatz/zielUmsatz*100):0;
+
+  const preview = document.getElementById('rep-preview-content');
+  if(!preview) return;
+
+  const trendIcon = (v) => v>0?'▲':'▼';
+  const trendColor = (v) => v>0?'var(--green)':'var(--red)';
+  const pct = (v) => Math.round(v)+'%';
+
+  preview.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      ${[[`ROAS`,roas.toFixed(1)+'x',roas>=3?'var(--green)':roas>=1?'var(--orange)':'var(--red)'],
+         [`Leads`,Math.round(leads),'var(--blue)'],
+         [`CPL`,fmtEur(cpl),'var(--muted)'],
+         [`CTR`,pct(ctr),'var(--blue)'],
+         [`CVR`,pct(cvr),'var(--green)'],
+         [`Abschlüsse`,Math.round(abschl),'var(--green)']
+      ].map(([l,v,c])=>`<div style="background:var(--bg);border-radius:4px;padding:10px;text-align:center">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:3px">${l}</div>
+        <div style="font-size:16px;font-weight:800;color:${c}">${v}</div>
+      </div>`).join('')}
+    </div>
+
+    ${(zielLeads||zielUmsatz)?`<div style="margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Zielerreichung</div>
+      ${zielLeads?`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span>Leads</span><span>${Math.round(leads)} / ${zielLeads} (${pct(leadsZiel)})</span></div>
+        <div style="height:6px;background:var(--border);border-radius:3px"><div style="height:100%;background:${leadsZiel>=100?'var(--green)':'var(--blue)'};border-radius:3px;width:${Math.min(100,leadsZiel)}%"></div></div></div>`:''}
+      ${zielUmsatz?`<div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span>Umsatz</span><span>${fmtEur(umsatz)} / ${fmtEur(zielUmsatz)} (${pct(umsatzZiel)})</span></div>
+        <div style="height:6px;background:var(--border);border-radius:3px"><div style="height:100%;background:${umsatzZiel>=100?'var(--green)':'var(--blue)'};border-radius:3px;width:${Math.min(100,umsatzZiel)}%"></div></div></div>`:''}
+    </div>`:''}
+
+    ${(prevLeads||prevUmsatz)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      ${prevLeads?`<div style="background:var(--bg);border-radius:4px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Leads vs. Vormonat</div>
+        <div style="font-size:16px;font-weight:700;color:${trendColor(leadsTrend)}">${trendIcon(leadsTrend)} ${Math.abs(Math.round(leadsTrend))}%</div>
+      </div>`:''}
+      ${prevUmsatz?`<div style="background:var(--bg);border-radius:4px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Umsatz vs. Vormonat</div>
+        <div style="font-size:16px;font-weight:700;color:${trendColor(umsatzTrend)}">${trendIcon(umsatzTrend)} ${Math.abs(Math.round(umsatzTrend))}%</div>
+      </div>`:''}
+    </div>`:''}`;
+}
+
+function reportingPDF() {
+  const kundeId = document.getElementById('rep-kunde').value;
+  if(!kundeId) { alert('Bitte Kunde waehlen.'); return; }
+  const c = DB.contacts.find(x=>x.id===kundeId)||{};
+  const monat = parseInt(document.getElementById('rep-monat').value);
+  const jahr = parseInt(document.getElementById('rep-jahr').value);
+  const monatName = ['Januar','Februar','Maerz','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][monat-1];
+  const s = DB.settings;
+  const datum = new Date().toLocaleDateString('de-DE');
+  const logoHtml = s.logo?`<img src="${s.logo}" style="height:40px;object-fit:contain;margin-bottom:6px;display:block">`:'';
+
+  const budget = parseFloat(document.getElementById('rep-budget').value)||0;
+  const umsatz = parseFloat(document.getElementById('rep-umsatz').value)||0;
+  const leads  = parseFloat(document.getElementById('rep-leads').value)||0;
+  const klicks = parseFloat(document.getElementById('rep-klicks').value)||0;
+  const impr   = parseFloat(document.getElementById('rep-impressionen').value)||0;
+  const abschl = parseFloat(document.getElementById('rep-abschluesse').value)||0;
+  const zielLeads = parseFloat(document.getElementById('rep-ziel-leads').value)||0;
+  const prevLeads = parseFloat(document.getElementById('rep-prev-leads').value)||0;
+  const zielUmsatz = parseFloat(document.getElementById('rep-ziel-umsatz').value)||0;
+  const prevUmsatz = parseFloat(document.getElementById('rep-prev-umsatz').value)||0;
+  const fazit = document.getElementById('rep-fazit').value||'';
+  const naechste = document.getElementById('rep-naechste').value||'';
+
+  const roas = budget>0?umsatz/budget:0;
+  const cpl  = leads>0?budget/leads:0;
+  const ctr  = impr>0?(klicks/impr*100):0;
+  const cvr  = klicks>0?(leads/klicks*100):0;
+  const leadsTrend = prevLeads>0?((leads-prevLeads)/prevLeads*100):0;
+  const umsatzTrend = prevUmsatz>0?((umsatz-prevUmsatz)/prevUmsatz*100):0;
+  const leadsZiel = zielLeads>0?(leads/zielLeads*100):0;
+  const umsatzZiel = zielUmsatz>0?(umsatz/zielUmsatz*100):0;
+  const roasC = roas>=3?'#1f9e5a':roas>=1?'#d97706':'#d63030';
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Kampagnen-Report ${monatName} ${jahr} - ${c.firma}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:14mm 16mm;font-size:12px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f5c400}
+  .logo{font-family:Arial,sans-serif;font-size:22px;font-weight:900;letter-spacing:3px}.logo span{color:#f5c400}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+  .kpi{background:#f8f7f4;border-radius:6px;padding:12px 14px;border-top:3px solid #f5c400}
+  .kpi-l{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:5px}
+  .kpi-v{font-size:20px;font-weight:800;color:#111}
+  h2{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid #eee}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f5f3ee;font-size:12px}
+  .progress-wrap{margin-bottom:10px}.progress-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+  .progress-bar{height:8px;background:#eee;border-radius:4px}.progress-fill{height:100%;border-radius:4px;transition:width .3s}
+  .trend-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .trend-box{background:#f8f7f4;border-radius:6px;padding:12px;text-align:center}
+  .box-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:4px}
+  .note-box{background:#fffbea;border-left:3px solid #f5c400;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.6}
+  .next-box{background:#eef7f2;border-left:3px solid #1f9e5a;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.6}
+  @media print{body{padding:10mm};@page{margin:0;size:A4}}</style></head><body>
+  <div class="header">
+    <div>${logoHtml}<div class="logo">VIRAL <span>OUTLAWS</span></div><div style="font-size:11px;color:#666">${s.name||'Viral Outlaws'}</div></div>
+    <div style="text-align:right">
+      <div style="font-family:Arial,sans-serif;font-size:18px;font-weight:900;letter-spacing:2px">KAMPAGNEN-REPORT</div>
+      <div style="font-size:14px;font-weight:600;color:#666;margin-top:4px">${c.firma}</div>
+      <div style="font-size:12px;color:#888">${monatName} ${jahr} | Erstellt: ${datum}</div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi" style="border-top-color:${roasC}"><div class="kpi-l">ROAS</div><div class="kpi-v" style="color:${roasC}">${roas.toFixed(1)}x</div></div>
+    <div class="kpi" style="border-top-color:#2563b8"><div class="kpi-l">Leads</div><div class="kpi-v" style="color:#2563b8">${Math.round(leads)}</div></div>
+    <div class="kpi" style="border-top-color:#1f9e5a"><div class="kpi-l">Umsatz</div><div class="kpi-v" style="color:#1f9e5a">${fmtEur(umsatz)}</div></div>
+    <div class="kpi"><div class="kpi-l">Ads-Budget</div><div class="kpi-v">${fmtEur(budget)}</div></div>
+  </div>
+
+  <h2>Performance-Kennzahlen</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px">
+    <div>
+      ${[['Impressionen',Math.round(impr).toLocaleString('de-DE')],['Klicks',Math.round(klicks).toLocaleString('de-DE')],['CTR',ctr.toFixed(2)+'%'],['CVR',cvr.toFixed(2)+'%']].map(([l,v])=>`<div class="row"><span>${l}</span><span style="font-weight:600">${v}</span></div>`).join('')}
+    </div>
+    <div>
+      ${[['Abschluesse',Math.round(abschl)],['CPL',fmtEur(cpl)],['Deckungsbeitrag',fmtEur(umsatz-budget)],['ROI',Math.round((umsatz-budget)/budget*100)+'%']].map(([l,v])=>`<div class="row"><span>${l}</span><span style="font-weight:600">${v}</span></div>`).join('')}
+    </div>
+  </div>
+
+  ${(zielLeads||zielUmsatz)?`<h2>Zielerreichung</h2>
+  ${zielLeads?`<div class="progress-wrap"><div class="progress-label"><span>Leads: ${Math.round(leads)} von ${zielLeads}</span><span style="font-weight:700;color:${leadsZiel>=100?'#1f9e5a':'#2563b8'}">${Math.round(leadsZiel)}%</span></div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,leadsZiel)}%;background:${leadsZiel>=100?'#1f9e5a':'#2563b8'}"></div></div></div>`:''}
+  ${zielUmsatz?`<div class="progress-wrap"><div class="progress-label"><span>Umsatz: ${fmtEur(umsatz)} von ${fmtEur(zielUmsatz)}</span><span style="font-weight:700;color:${umsatzZiel>=100?'#1f9e5a':'#2563b8'}">${Math.round(umsatzZiel)}%</span></div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,umsatzZiel)}%;background:${umsatzZiel>=100?'#1f9e5a':'#2563b8'}"></div></div></div>`:''}`:'' }
+
+  ${(prevLeads||prevUmsatz)?`<h2>Entwicklung zum Vormonat</h2>
+  <div class="trend-grid">
+    ${prevLeads?`<div class="trend-box"><div class="box-label">Leads</div><div style="font-size:24px;font-weight:800;color:${leadsTrend>=0?'#1f9e5a':'#d63030'}">${leadsTrend>=0?'+':''}${Math.round(leadsTrend)}%</div><div style="font-size:11px;color:#888;margin-top:2px">${Math.round(prevLeads)} → ${Math.round(leads)}</div></div>`:''}
+    ${prevUmsatz?`<div class="trend-box"><div class="box-label">Umsatz</div><div style="font-size:24px;font-weight:800;color:${umsatzTrend>=0?'#1f9e5a':'#d63030'}">${umsatzTrend>=0?'+':''}${Math.round(umsatzTrend)}%</div><div style="font-size:11px;color:#888;margin-top:2px">${fmtEur(prevUmsatz)} → ${fmtEur(umsatz)}</div></div>`:''}
+  </div>`:''}
+
+  ${fazit?`<h2>Monatsfazit</h2><div class="note-box">${fazit}</div>`:''}
+  ${naechste?`<h2>Naechste Schritte</h2><div class="next-box">${naechste}</div>`:''}
+
+  <div style="margin-top:28px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#aaa;display:flex;justify-content:space-between">
+    <span>${s.name||'Viral Outlaws'} | ${s.email||''}</span><span>Vertraulich – nur fuer ${c.firma}</span>
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script></body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  window.open(URL.createObjectURL(blob),'_blank');
+  setTimeout(()=>{}, 60000);
 }
 
 // Inject logo
