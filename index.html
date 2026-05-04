@@ -110,14 +110,15 @@ body.dark-mode #sidebar{background:#000;}
 #sidebar-logo-sub{font-size:9px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
 
 #sidebar-nav{
-  flex:1;padding:10px 0;
+  flex:1;padding:10px 0 20px;
   overflow-y:auto;overflow-x:hidden;
   min-height:0;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
+  scrollbar-width:none;
 }
-#sidebar-bottom{
-  flex-shrink:0;padding:12px;
+#sidebar-nav::-webkit-scrollbar{display:none}
+#sidebar-bottom{display:none}
   border-top:1px solid rgba(255,255,255,.08);
 }
 .nav-item{
@@ -647,16 +648,41 @@ tr[onclick] { transition:background .1s; }
       <span class="nav-item-icon">🔍</span>
       <span class="nav-item-label">Wettbewerbs-Analyse</span>
     </div>
+    <div class="nav-item" onclick="showPage('ausgaben')" data-page="ausgaben">
+      <span class="nav-item-icon">💶</span>
+      <span class="nav-item-label">Ausgaben & EÜR</span>
+    </div>
+
+    <!-- Bottom items INSIDE nav so they scroll together -->
+    <div class="nav-section" style="margin-top:8px">Aktionen</div>
+    <div class="nav-item" onclick="openEmailCompose(null)">
+      <span class="nav-item-icon">✉</span>
+      <span class="nav-item-label">E-Mail verfassen</span>
+    </div>
+    <div class="nav-item" onclick="showPage('users')">
+      <span class="nav-item-icon">👥</span>
+      <span class="nav-item-label">Nutzerverwaltung</span>
+    </div>
+    <div class="nav-item" id="btn-feature-mgr" onclick="openFeatureManager()" style="display:none">
+      <span class="nav-item-icon">⚡</span>
+      <span class="nav-item-label">Feature-Flags</span>
+    </div>
+    <div class="nav-item" onclick="openGlobalSearch()">
+      <span class="nav-item-icon">🔍</span>
+      <span class="nav-item-label">Suche <span style="opacity:.4;font-size:10px;margin-left:4px">Strg+K</span></span>
+    </div>
+    <div class="nav-item" onclick="showPage('settings')">
+      <span class="nav-item-icon">⚙</span>
+      <span class="nav-item-label">Einstellungen</span>
+    </div>
+    <div class="nav-item" onclick="_useSupabase?supabaseSignOut():logout()" style="margin-bottom:16px">
+      <span class="nav-item-icon">⏻</span>
+      <span class="nav-item-label">Abmelden</span>
+    </div>
   </nav>
 
-  <div id="sidebar-bottom">
-    <button class="sidebar-bottom-btn" onclick="openEmailCompose(null)">✉ E-Mail verfassen</button>
-    <button class="sidebar-bottom-btn" onclick="showPage('users')">👥 Nutzerverwaltung</button>
-    <button class="sidebar-bottom-btn" id="btn-feature-mgr" onclick="openFeatureManager()" style="display:none">⚡ Feature-Flags</button>
-    <button class="sidebar-bottom-btn" onclick="openGlobalSearch()">🔍 Suche <span style="opacity:.4;font-size:10px;margin-left:4px">Strg+K</span></button>
-    <button class="sidebar-bottom-btn" onclick="showPage('settings')">⚙ Einstellungen</button>
-    <button class="sidebar-bottom-btn" onclick="_useSupabase?supabaseSignOut():logout()">⏻ Abmelden</button>
-  </div>
+  <!-- sidebar-bottom now empty but kept for structure -->
+  <div id="sidebar-bottom" style="display:none"></div>
 </div>
 
 <!-- SIDEBAR OVERLAY (mobile) -->
