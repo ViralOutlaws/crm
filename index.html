@@ -1740,11 +1740,27 @@ tr[onclick] { transition:background .1s; }
 <!-- NUTZERVERWALTUNG -->
 <div class="page" id="page-users">
   <div class="sec-header">
-    <div class="sec-title" id="admin-page-title">Nutzerverwaltung</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap" id="admin-header-btns"></div>
+    <div class="sec-title">👥 Nutzerverwaltung</div>
+    <button class="btn-primary" onclick="openInviteUserModal()" id="invite-btn">+ Nutzer einladen</button>
   </div>
+
+  <!-- Workspace Info -->
+  <div id="users-workspace-card" style="margin-bottom:16px"></div>
+
+  <!-- Users list -->
   <div id="admin-content">
     <div style="text-align:center;padding:40px;color:var(--muted)">⏳ Lade...</div>
+  </div>
+
+  <!-- Roles info -->
+  <div class="dash-card" style="margin-top:16px">
+    <h3 style="margin-bottom:14px">🔐 Rollen-Übersicht</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+      <div style="background:var(--bg);border-radius:6px;padding:12px;border-left:3px solid var(--yellow)"><div style="font-size:12px;font-weight:700;margin-bottom:4px">👑 Admin</div><div style="font-size:11px;color:var(--muted)">Vollzugriff, kann Nutzer verwalten</div></div>
+      <div style="background:var(--bg);border-radius:6px;padding:12px;border-left:3px solid var(--blue)"><div style="font-size:12px;font-weight:700;margin-bottom:4px">👤 Standard</div><div style="font-size:11px;color:var(--muted)">Kontakte, Aufgaben, Kalender, Angebote, Rechnungen</div></div>
+      <div style="background:var(--bg);border-radius:6px;padding:12px;border-left:3px solid var(--muted)"><div style="font-size:12px;font-weight:700;margin-bottom:4px">👁 Nur Lesen</div><div style="font-size:11px;color:var(--muted)">Kann alles sehen, nichts bearbeiten</div></div>
+      <div style="background:var(--bg);border-radius:6px;padding:12px;border-left:3px solid var(--green)"><div style="font-size:12px;font-weight:700;margin-bottom:4px">💰 Finanzen</div><div style="font-size:11px;color:var(--muted)">Zusätzlich Ausgaben & EÜR sichtbar</div></div>
+    </div>
   </div>
 </div>
 
@@ -8550,30 +8566,28 @@ async function saveFMFeatures() {
 // ==================================================
 
 async function initUsersPage() {
-  const isSuperAdmin = _currentProfile?.role === 'superadmin';
-  const isAdmin = ['admin','superadmin'].includes(_currentProfile?.role);
-
-  const titleEl = document.getElementById('admin-page-title');
-  const headerBtns = document.getElementById('admin-header-btns');
-
-  if(isSuperAdmin) {
-    if(titleEl) titleEl.textContent = '🛡 Admin-Dashboard';
-    if(headerBtns) headerBtns.innerHTML = `
-      <button class="btn-primary" onclick="showAdminView('workspaces')">🏢 Alle Kunden</button>
-      <button class="btn-ghost" onclick="showAdminView('users')">👥 Nutzer</button>
-      <button class="btn-ghost" onclick="openNewWorkspaceModal()">+ Neuer Kunde</button>`;
-    await showAdminView('workspaces');
-  } else if(isAdmin) {
-    if(titleEl) titleEl.textContent = '👥 Nutzerverwaltung';
-    if(headerBtns) headerBtns.innerHTML = `
-      <button class="btn-primary" onclick="openInviteUserModal()">+ Nutzer einladen</button>`;
-    await renderWorkspaceUsers(_currentWorkspace?.id);
-  } else {
-    document.getElementById('admin-content').innerHTML = `
-      <div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:8px;padding:24px;max-width:500px">
-        <div style="font-size:14px;color:var(--ink2)">Du hast keinen Zugriff auf die Nutzerverwaltung.</div>
-      </div>`;
+  // Show workspace info
+  const wsCard = document.getElementById('users-workspace-card');
+  if(wsCard && _currentWorkspace) {
+    wsCard.innerHTML = `<div class="dash-card" style="border-left:3px solid var(--yellow)">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;border-radius:6px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--yellow)">${(_currentWorkspace.name||'VO').slice(0,2).toUpperCase()}</div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px">${_currentWorkspace.name||'Workspace'}</div>
+          <div style="font-size:11px;color:var(--muted)">Dein Workspace · ${_currentProfile?.role||''}</div>
+        </div>
+        <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="openWorkspaceSettings()">⚙ Branding</button>
+        ${_currentProfile?.role==='superadmin'?`<button class="btn-ghost btn-sm" onclick="openFeatureManager()">⚡ Features</button>`:''}
+      </div>
+    </div>`;
   }
+
+  // Show invite button only for admins
+  const isAdmin = ['admin','superadmin'].includes(_currentProfile?.role);
+  const inviteBtn = document.getElementById('invite-btn');
+  if(inviteBtn) inviteBtn.style.display = isAdmin ? '' : 'none';
+
+  await renderWorkspaceUsers(_currentWorkspace?.id || _FALLBACK_WORKSPACE_ID);
 }
 
 async function showAdminView(view) {
@@ -8803,6 +8817,9 @@ async function createNewWorkspace() {
     if(userErr) throw new Error('User-Fehler: ' + userErr.message);
     if(!userData.user) throw new Error('User konnte nicht erstellt werden');
     showStatus('✅ User erstellt...', true);
+
+    // Wait briefly for auth to propagate
+    await new Promise(r => setTimeout(r, 1500));
 
     // 3. Create profile
     const { error: profErr } = await sb.from('profiles').upsert({
