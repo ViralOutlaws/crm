@@ -1740,63 +1740,11 @@ tr[onclick] { transition:background .1s; }
 <!-- NUTZERVERWALTUNG -->
 <div class="page" id="page-users">
   <div class="sec-header">
-    <div class="sec-title">Nutzerverwaltung</div>
-    <button class="btn-primary" onclick="openInviteUserModal()" id="invite-btn" style="display:none">+ Nutzer einladen</button>
+    <div class="sec-title" id="admin-page-title">Nutzerverwaltung</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="admin-header-btns"></div>
   </div>
-
-  <!-- Not logged in via Supabase -->
-  <div id="users-no-supabase" style="display:none">
-    <div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:8px;padding:24px;max-width:500px">
-      <div style="font-size:18px;margin-bottom:8px">⚠️ Supabase nicht verbunden</div>
-      <div style="font-size:13px;color:var(--ink2);line-height:1.7">
-        Nutzerverwaltung ist nur mit Supabase-Login verfügbar.<br>
-        Logge dich mit deiner E-Mail-Adresse ein um diese Funktion zu nutzen.
-      </div>
-    </div>
-  </div>
-
-  <!-- Workspace Info -->
-  <div id="users-workspace-info" style="display:none;margin-bottom:16px">
-    <div class="dash-card" style="border-left:3px solid var(--yellow)">
-      <div style="display:flex;align-items:center;gap:16px">
-        <div id="users-ws-logo" style="width:48px;height:48px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--yellow)">VO</div>
-        <div>
-          <div id="users-ws-name" style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px"></div>
-          <div id="users-ws-plan" style="font-size:11px;color:var(--muted)"></div>
-        </div>
-        <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="openWorkspaceSettings()">⚙ Workspace-Einstellungen</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Users list -->
-  <div id="users-list" style="display:none">
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Nutzer</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Seit</th><th></th>
-        </tr></thead>
-        <tbody id="users-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Role description -->
-  <div id="users-roles-info" style="display:none;margin-top:16px">
-    <div class="dash-card">
-      <h3 style="margin-bottom:14px">🔐 Rollen-Übersicht</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-        ${[
-          ['👑 Admin','Vollzugriff, kann Nutzer verwalten','var(--yellow)'],
-          ['👤 Standard','Kontakte, Aufgaben, Kalender, Angebote, Rechnungen','var(--blue)'],
-          ['👁 Nur Lesen','Kann alles sehen, nichts bearbeiten','var(--muted)'],
-          ['💰 Finanzen','Zusätzlich Ausgaben & EÜR sichtbar','var(--green)'],
-        ].map(([r,d,c])=>`<div style="background:var(--bg);border-radius:6px;padding:12px;border-left:3px solid ${c}">
-          <div style="font-size:12px;font-weight:700;margin-bottom:4px">${r}</div>
-          <div style="font-size:11px;color:var(--muted)">${d}</div>
-        </div>`).join('')}
-      </div>
-    </div>
+  <div id="admin-content">
+    <div style="text-align:center;padding:40px;color:var(--muted)">⏳ Lade...</div>
   </div>
 </div>
 
@@ -8595,6 +8543,337 @@ async function saveFMFeatures() {
   } catch(e) {
     alert('Fehler: ' + e.message);
   }
+}
+
+// ==================================================
+// ADMIN DASHBOARD
+// ==================================================
+
+async function initUsersPage() {
+  const isSuperAdmin = _currentProfile?.role === 'superadmin';
+  const isAdmin = ['admin','superadmin'].includes(_currentProfile?.role);
+
+  const titleEl = document.getElementById('admin-page-title');
+  const headerBtns = document.getElementById('admin-header-btns');
+
+  if(isSuperAdmin) {
+    if(titleEl) titleEl.textContent = '🛡 Admin-Dashboard';
+    if(headerBtns) headerBtns.innerHTML = `
+      <button class="btn-primary" onclick="showAdminView('workspaces')">🏢 Alle Kunden</button>
+      <button class="btn-ghost" onclick="showAdminView('users')">👥 Nutzer</button>
+      <button class="btn-ghost" onclick="openNewWorkspaceModal()">+ Neuer Kunde</button>`;
+    await showAdminView('workspaces');
+  } else if(isAdmin) {
+    if(titleEl) titleEl.textContent = '👥 Nutzerverwaltung';
+    if(headerBtns) headerBtns.innerHTML = `
+      <button class="btn-primary" onclick="openInviteUserModal()">+ Nutzer einladen</button>`;
+    await renderWorkspaceUsers(_currentWorkspace?.id);
+  } else {
+    document.getElementById('admin-content').innerHTML = `
+      <div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:8px;padding:24px;max-width:500px">
+        <div style="font-size:14px;color:var(--ink2)">Du hast keinen Zugriff auf die Nutzerverwaltung.</div>
+      </div>`;
+  }
+}
+
+async function showAdminView(view) {
+  // Update button styles
+  document.querySelectorAll('#admin-header-btns button').forEach(b => {
+    b.className = b.onclick?.toString().includes(view) ? 'btn-primary' : 'btn-ghost';
+  });
+
+  if(view === 'workspaces') await renderWorkspacesOverview();
+  else if(view === 'users') await renderAllUsers();
+}
+
+async function renderWorkspacesOverview() {
+  const content = document.getElementById('admin-content');
+  content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">⏳ Lade Kunden...</div>';
+
+  try {
+    const sb = await getSupabase();
+    const { data: workspaces } = await sb.from('workspaces').select('*').order('created_at');
+    const { data: profiles } = await sb.from('profiles').select('*');
+
+    if(!workspaces?.length) {
+      content.innerHTML = `<div class="dash-card" style="text-align:center;padding:40px">
+        <div style="font-size:32px;margin-bottom:12px">🏢</div>
+        <div style="font-size:14px;color:var(--muted)">Noch keine Kunden angelegt.</div>
+        <button class="btn-primary" onclick="openNewWorkspaceModal()" style="margin-top:16px">+ Ersten Kunden anlegen</button>
+      </div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
+        ${workspaces.map(ws => {
+          const wsUsers = profiles?.filter(p => p.workspace_id === ws.id)||[];
+          const features = ws.features || {};
+          const activeFeatures = Object.values(features).filter(Boolean).length;
+          const totalFeatures = Object.keys(DEFAULT_FEATURES).length;
+          const admin = wsUsers.find(u => ['admin','superadmin'].includes(u.role));
+          return `<div class="dash-card" style="border-top:3px solid ${ws.primary_color||'var(--yellow)'};cursor:default">
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+              <div style="width:40px;height:40px;border-radius:6px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-size:16px;color:${ws.primary_color||'var(--yellow)'};font-family:'Bebas Neue',sans-serif;flex-shrink:0">
+                ${ws.name?.slice(0,2).toUpperCase()||'??'}
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ws.name}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:1px">${admin?.email||'Kein Admin'}</div>
+              </div>
+              <span style="font-size:9px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700;flex-shrink:0">Aktiv</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+              <div style="background:var(--bg);border-radius:4px;padding:8px;text-align:center">
+                <div style="font-size:16px;font-weight:700;color:var(--blue)">${wsUsers.length}</div>
+                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Nutzer</div>
+              </div>
+              <div style="background:var(--bg);border-radius:4px;padding:8px;text-align:center">
+                <div style="font-size:16px;font-weight:700;color:var(--green)">${activeFeatures}</div>
+                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Features</div>
+              </div>
+              <div style="background:var(--bg);border-radius:4px;padding:8px;text-align:center">
+                <div style="font-size:16px;font-weight:700;color:var(--yellow2)">${ws.primary_color?'✓':'–'}</div>
+                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Branding</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn-ghost btn-sm" onclick="openEditWorkspaceModal('${ws.id}')">✏ Bearbeiten</button>
+              <button class="btn-ghost btn-sm" onclick="openManageUsersModal('${ws.id}','${ws.name}')">👥 Nutzer</button>
+              <button class="btn-ghost btn-sm" onclick="openFeaturesForWorkspace('${ws.id}','${ws.name}')">⚡ Features</button>
+              <button class="btn-ghost btn-sm" onclick="loginAsWorkspace('${ws.id}')">👁 Ansicht</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--red);padding:20px">Fehler: ${e.message}</div>`;
+  }
+}
+
+async function renderAllUsers() {
+  const content = document.getElementById('admin-content');
+  content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">⏳ Lade...</div>';
+  try {
+    const sb = await getSupabase();
+    const { data: profiles } = await sb.from('profiles').select('*, workspaces(name)').order('created_at');
+    const roleLabels = { superadmin:'👑 Super-Admin', admin:'👑 Admin', standard:'👤 Standard', readonly:'👁 Lesen', finance:'💰 Finanzen' };
+    content.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name / E-Mail</th><th>Workspace</th><th>Rolle</th><th>Seit</th><th></th></tr></thead>
+      <tbody>${(profiles||[]).map(p => `<tr>
+        <td data-label="Nutzer"><div style="font-weight:600">${p.name||'–'}</div><div style="font-size:11px;color:var(--muted)">${p.email||'–'}</div></td>
+        <td data-label="Workspace">${p.workspaces?.name||'–'}</td>
+        <td data-label="Rolle"><span style="font-size:11px;font-weight:700;color:var(--yellow2)">${roleLabels[p.role]||p.role}</span></td>
+        <td data-label="Seit" style="color:var(--muted);font-size:11px">${new Date(p.created_at).toLocaleDateString('de-DE')}</td>
+        <td class="actions">
+          ${p.id !== _currentUser?.id ? `<button class="btn-danger" onclick="removeUserGlobal('${p.id}','${(p.name||p.email||'').replace(/'/g,'')}')">✕</button>` : '<span style="font-size:10px;color:var(--green)">● Du</span>'}
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--red)">Fehler: ${e.message}</div>`;
+  }
+}
+
+async function renderWorkspaceUsers(wsId) {
+  const content = document.getElementById('admin-content');
+  if(!wsId) return;
+  try {
+    const sb = await getSupabase();
+    const { data: profiles } = await sb.from('profiles').select('*').eq('workspace_id', wsId).order('created_at');
+    const roleLabels = { superadmin:'👑 Super-Admin', admin:'👑 Admin', standard:'👤 Standard', readonly:'👁 Lesen', finance:'💰 Finanzen' };
+    const isAdmin = ['admin','superadmin'].includes(_currentProfile?.role);
+    content.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Nutzer</th><th>E-Mail</th><th>Rolle</th><th>Seit</th><th></th></tr></thead>
+      <tbody>${(profiles||[]).map(p => `<tr>
+        <td data-label="Nutzer" class="bold">${p.name||'–'}</td>
+        <td data-label="E-Mail" style="color:var(--muted)">${p.email||'–'}</td>
+        <td data-label="Rolle">
+          ${isAdmin && p.id !== _currentUser?.id ? `<select onchange="changeUserRole('${p.id}',this.value)" style="font-family:Sora,sans-serif;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:4px 6px;background:var(--paper);color:var(--ink);outline:none">
+            <option value="standard" ${p.role==='standard'?'selected':''}>👤 Standard</option>
+            <option value="admin" ${p.role==='admin'?'selected':''}>👑 Admin</option>
+            <option value="readonly" ${p.role==='readonly'?'selected':''}>👁 Lesen</option>
+            <option value="finance" ${p.role==='finance'?'selected':''}>💰 Finanzen</option>
+          </select>` : `<span style="font-size:11px;font-weight:700">${roleLabels[p.role]||p.role}</span>`}
+        </td>
+        <td data-label="Seit" style="color:var(--muted);font-size:11px">${new Date(p.created_at).toLocaleDateString('de-DE')}</td>
+        <td class="actions">
+          ${isAdmin && p.id !== _currentUser?.id ? `<button class="btn-danger" onclick="removeUser('${p.id}','${(p.name||p.email||'').replace(/'/g,'')}')">✕</button>` : ''}
+          ${p.id === _currentUser?.id ? '<span style="font-size:10px;color:var(--green)">● Du</span>' : ''}
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--red)">Fehler: ${e.message}</div>`;
+  }
+}
+
+// ── New Workspace Modal ──
+function openNewWorkspaceModal() {
+  const modal = document.createElement('div');
+  modal.id = 'new-ws-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `<div style="background:var(--paper);border-radius:8px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px">🏢 Neuen Kunden anlegen</h2>
+      <button onclick="document.getElementById('new-ws-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+      <div class="field"><label>Firmenname *</label><input id="nw-name" placeholder="Müller Elektro GmbH" style="font-size:13px;font-weight:600"></div>
+      <div class="field"><label>Slug (URL-Name, keine Leerzeichen) *</label><input id="nw-slug" placeholder="mueller-elektro" style="font-size:12px;font-family:'DM Mono',monospace"></div>
+      <div class="field"><label>Slogan</label><input id="nw-slogan" placeholder="< CTRL + ALT + CREATE >" style="font-size:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Primärfarbe</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="color" id="nw-color" value="#f5c400" style="width:40px;height:36px;border:1.5px solid var(--border);border-radius:4px;cursor:pointer;padding:2px">
+            <input id="nw-color-hex" value="#f5c400" style="font-size:11px;font-family:'DM Mono',monospace;flex:1" oninput="document.getElementById('nw-color').value=this.value">
+          </div>
+        </div>
+        <div class="field"><label>Logo URL (optional)</label><input id="nw-logo" placeholder="https://..." style="font-size:11px"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Admin-Account für diesen Kunden</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>E-Mail *</label><input id="nw-email" type="email" placeholder="chef@firma.de" style="font-size:12px"></div>
+          <div class="field"><label>Name</label><input id="nw-uname" placeholder="Max Müller" style="font-size:12px"></div>
+          <div class="field"><label>Passwort *</label><input id="nw-pass" type="text" placeholder="Mind. 8 Zeichen" style="font-size:12px"></div>
+          <div class="field"><label>Paket</label>
+            <select id="nw-paket" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+              <option value="starter">📦 Starter (Kontakte, Angebote, Rechnungen)</option>
+              <option value="professional" selected>🚀 Professional (+ ROI, Report, Konfigurator)</option>
+              <option value="full">⭐ Full (Alles)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="nw-status" style="display:none;padding:10px;border-radius:6px;font-size:12px;font-weight:600"></div>
+    </div>
+    <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn-ghost" onclick="document.getElementById('new-ws-modal').remove()">Abbrechen</button>
+      <button class="btn-yellow" onclick="createNewWorkspace()" id="nw-save-btn">🚀 Kunde anlegen</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  // Auto-generate slug from name
+  document.getElementById('nw-name').oninput = function() {
+    document.getElementById('nw-slug').value = this.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  };
+}
+
+async function createNewWorkspace() {
+  const name = document.getElementById('nw-name').value.trim();
+  const slug = document.getElementById('nw-slug').value.trim();
+  const email = document.getElementById('nw-email').value.trim();
+  const pass = document.getElementById('nw-pass').value.trim();
+  const paket = document.getElementById('nw-paket').value;
+  const statusEl = document.getElementById('nw-status');
+  const btn = document.getElementById('nw-save-btn');
+
+  if(!name||!slug||!email||!pass) { alert('Bitte alle Pflichtfelder ausfüllen.'); return; }
+  if(pass.length < 8) { alert('Passwort mind. 8 Zeichen.'); return; }
+
+  btn.disabled = true; btn.textContent = '⏳ Wird angelegt...';
+  const showStatus = (msg, ok) => {
+    statusEl.style.cssText = `display:block;background:var(--${ok?'green':'red'}-bg);border:1px solid var(--${ok?'green':'red'});color:var(--${ok?'green':'red'});padding:10px;border-radius:6px;font-size:12px;font-weight:600;margin-top:8px`;
+    statusEl.textContent = msg;
+  };
+
+  try {
+    const sb = await getSupabase();
+
+    // 1. Create workspace
+    const features = FM_PAKETE[paket] || FM_PAKETE.professional;
+    const { data: ws, error: wsErr } = await sb.from('workspaces').insert({
+      name, slug,
+      slogan: document.getElementById('nw-slogan').value || '< CTRL + ALT + CREATE >',
+      primary_color: document.getElementById('nw-color-hex').value || '#f5c400',
+      logo_url: document.getElementById('nw-logo').value || null,
+      features
+    }).select().single();
+    if(wsErr) throw new Error('Workspace-Fehler: ' + wsErr.message);
+    showStatus('✅ Workspace erstellt...', true);
+
+    // 2. Create user
+    const { data: userData, error: userErr } = await sb.auth.signUp({
+      email, password: pass,
+      options: { data: { name: document.getElementById('nw-uname').value } }
+    });
+    if(userErr) throw new Error('User-Fehler: ' + userErr.message);
+    if(!userData.user) throw new Error('User konnte nicht erstellt werden');
+    showStatus('✅ User erstellt...', true);
+
+    // 3. Create profile
+    const { error: profErr } = await sb.from('profiles').upsert({
+      id: userData.user.id,
+      workspace_id: ws.id,
+      email,
+      name: document.getElementById('nw-uname').value || '',
+      role: 'admin'
+    });
+    if(profErr) throw new Error('Profil-Fehler: ' + profErr.message);
+
+    showStatus(`✅ Fertig! Login: ${email} / ${pass}`, true);
+    addActivity(`Neuer Kunde "${name}" angelegt`, 'green');
+
+    btn.textContent = '✅ Angelegt!';
+    setTimeout(() => {
+      document.getElementById('new-ws-modal')?.remove();
+      renderWorkspacesOverview();
+    }, 2500);
+
+  } catch(e) {
+    showStatus('Fehler: ' + e.message, false);
+    btn.disabled = false; btn.textContent = '🚀 Kunde anlegen';
+  }
+}
+
+function openEditWorkspaceModal(wsId) {
+  // Reuse workspace settings modal but for any workspace
+  openWorkspaceSettings(wsId);
+}
+
+function openManageUsersModal(wsId, wsName) {
+  const content = document.getElementById('admin-content');
+  const titleEl = document.getElementById('admin-page-title');
+  if(titleEl) titleEl.textContent = `👥 Nutzer: ${wsName}`;
+  const headerBtns = document.getElementById('admin-header-btns');
+  if(headerBtns) headerBtns.innerHTML = `
+    <button class="btn-ghost" onclick="showAdminView('workspaces')">← Alle Kunden</button>
+    <button class="btn-primary" onclick="openInviteUserToWorkspace('${wsId}')">+ Nutzer einladen</button>`;
+  renderWorkspaceUsers(wsId);
+}
+
+function openFeaturesForWorkspace(wsId, wsName) {
+  // Load workspace then open feature manager
+  getSupabase().then(sb => sb.from('workspaces').select('*').eq('id', wsId).single()).then(({data}) => {
+    window._fmWorkspaces = window._fmWorkspaces || [];
+    const existing = window._fmWorkspaces.findIndex(w => w.id === wsId);
+    if(existing >= 0) window._fmWorkspaces[existing] = data;
+    else window._fmWorkspaces.push(data);
+    openFeatureManager(wsId);
+  });
+}
+
+function loginAsWorkspace(wsId) {
+  // Preview mode: temporarily switch to that workspace's view
+  alert('Diese Funktion kommt bald – du kannst die Kundenansicht dann direkt previewen.');
+}
+
+function openInviteUserToWorkspace(wsId) {
+  window._inviteToWorkspace = wsId;
+  openInviteUserModal();
+}
+
+async function removeUserGlobal(userId, name) {
+  if(!confirm(`Nutzer "${name}" wirklich entfernen?`)) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('profiles').update({ workspace_id: null }).eq('id', userId);
+    showAdminView('users');
+    addActivity('Nutzer entfernt: ' + name, 'red');
+  } catch(e) { alert('Fehler: ' + e.message); }
 }
 
 // Inject logo
