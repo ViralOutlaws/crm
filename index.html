@@ -2416,6 +2416,10 @@ async function supabaseSignIn(email, password) {
   if(error) throw new Error(error.message);
   _currentUser = data.user;
   await loadUserProfile();
+  // Load all data
+  await loadAllFromSupabase();
+  // Init realtime
+  await initRealtime();
   return data;
 }
 
@@ -2557,7 +2561,11 @@ async function initSupabaseAuth() {
       // Hide login, show app
       const ls = document.getElementById('login-screen');
       if(ls) ls.style.display = 'none';
+      // Load all data from Supabase
+      await loadAllFromSupabase();
       showPage('dashboard');
+      // Init realtime
+      await initRealtime();
       return true;
     }
   } catch(e) {
@@ -2865,7 +2873,8 @@ function saveContact() {
   const firma = document.getElementById('c-firma').value.trim();
   if(!firma) { alert('Firmenname ist erforderlich.'); return; }
   const photoData = document.getElementById('c-photo-data')?.value||'';
-  const existingPhoto = editId ? DB.contacts.find(x=>x.id===editId)?.photo||'' : '';
+  const existingContact = editId ? DB.contacts.find(x=>x.id===editId) : null;
+  const existingPhoto = existingContact?.photo||'';
   const obj = {
     id: editId||uid(), firma,
     person: document.getElementById('c-person').value,
@@ -2882,16 +2891,21 @@ function saveContact() {
     ana: document.getElementById('c-ana').value,
     notes: document.getElementById('c-notes').value,
     photo: photoData||existingPhoto,
+    notizen: existingContact?.notizen||[],
+    dokumente: existingContact?.dokumente||[],
+    checks: existingContact?.checks||[],
     updatedAt: new Date().toISOString()
   };
   if(editId) { const i = DB.contacts.findIndex(x=>x.id===editId); if(i>-1) DB.contacts[i]=obj; }
   else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue'); }
+  sbSaveContact(obj);
   save(); closeModal('contact-modal'); renderContacts(); renderDashboard();
 }
 
 function deleteContact(id) {
   if(!confirm('Kontakt wirklich löschen?')) return;
   DB.contacts = DB.contacts.filter(x=>x.id!==id);
+  sbDeleteContact(id);
   save(); renderContacts(); renderDashboard();
 }
 
@@ -3000,6 +3014,7 @@ function saveAngebot(forceStatus) {
   };
   if(editId) { const i=DB.angebote.findIndex(x=>x.id===editId); if(i>-1) DB.angebote[i]=obj; }
   else { DB.angebote.unshift(obj); DB.nextAngebotNr++; const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr} für "${c?.firma||'?'}" erstellt`,'orange'); }
+  sbSaveAngebot(obj);
   save(); closeModal('angebot-modal'); renderAngebote(); renderDashboard();
   if(!forceStatus) printDoc('angebot', obj.id);
 }
@@ -3007,6 +3022,7 @@ function saveAngebot(forceStatus) {
 function deleteAngebot(id) {
   if(!confirm('Angebot löschen?')) return;
   DB.angebote = DB.angebote.filter(x=>x.id!==id);
+  sbDeleteAngebot(id);
   save(); renderAngebote(); renderDashboard();
 }
 
@@ -3098,6 +3114,7 @@ function saveRechnung() {
   };
   if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
   else{DB.rechnungen.unshift(obj);DB.nextRechnungNr++;const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`Rechnung ${obj.nr} für "${c?.firma||'?'}" erstellt`,'green');}
+  sbSaveRechnung(obj);
   save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
   printDoc('rechnung',obj.id);
 }
@@ -3105,6 +3122,7 @@ function saveRechnung() {
 function deleteRechnung(id){
   if(!confirm('Rechnung löschen?'))return;
   DB.rechnungen=DB.rechnungen.filter(x=>x.id!==id);
+  sbDeleteRechnung(id);
   save();renderRechnungen();renderDashboard();
 }
 
@@ -3114,6 +3132,7 @@ function markBezahlt(id){
   r.status='bezahlt';
   const c=DB.contacts.find(x=>x.id===r.kundeId);
   addActivity(`Rechnung ${r.nr} bezahlt von "${c?.firma||'?'}"`, 'green');
+  sbSaveRechnung(r);
   save();renderRechnungen();renderDashboard();
 }
 
@@ -3736,13 +3755,424 @@ function setAutoSaveIndicator(state) {
 
 // patch save() – auto-sync to Drive 4s after every change
 const _origSave = save;
+// ══════════════════════════════════════════
+// UNIFIED SAVE / LOAD
+// Supabase wenn eingeloggt, sonst Legacy
+// ══════════════════════════════════════════
 function save() {
   try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
-  if(_driveConnected && _driveToken) {
+  if(_useSupabase && _currentWorkspace) {
+    clearTimeout(window._sbSyncDebounce);
+    window._sbSyncDebounce = setTimeout(() => syncToSupabase().catch(console.warn), 1500);
+  } else if(_driveConnected && _driveToken) {
     clearTimeout(window._autoSyncDebounce);
     window._autoSyncDebounce = setTimeout(() => driveSave(true).catch(()=>{}), 4000);
   }
 }
+
+// Full sync: push local DB to Supabase
+async function syncToSupabase() {
+  if(!_useSupabase || !_currentWorkspace) return;
+  // We do targeted upserts, not full replace
+  // This is called after local changes – specific functions handle individual records
+}
+
+// ── CONTACTS ──
+async function sbSaveContact(contact) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    const row = {
+      id: contact.id,
+      workspace_id: _currentWorkspace.id,
+      firma: contact.firma,
+      person: contact.person||null,
+      email: contact.email||null,
+      tel: contact.tel||null,
+      plz: contact.plz||null,
+      web: contact.web||null,
+      instagram: contact.instagram||null,
+      facebook: contact.facebook||null,
+      gbusiness: contact.gbusiness||null,
+      branche: contact.branche||null,
+      status: contact.status||'offen',
+      notes: contact.notes||null,
+      photo: contact.photo||null,
+      notizen: contact.notizen||[],
+      dokumente: contact.dokumente||[],
+      checks: contact.checks||[],
+      updated_at: new Date().toISOString()
+    };
+    await sb.from('contacts').upsert(row);
+  } catch(e) { console.warn('sbSaveContact:', e.message); }
+}
+
+async function sbDeleteContact(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('contacts').delete().eq('id', id); }
+  catch(e) { console.warn('sbDeleteContact:', e.message); }
+}
+
+async function sbLoadContacts() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('contacts').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('created_at', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, firma: r.firma, person: r.person||'',
+      email: r.email||'', tel: r.tel||'', plz: r.plz||'',
+      web: r.web||'', instagram: r.instagram||'', facebook: r.facebook||'',
+      gbusiness: r.gbusiness||'', branche: r.branche||'', status: r.status||'offen',
+      notes: r.notes||'', photo: r.photo||'', notizen: r.notizen||[],
+      dokumente: r.dokumente||[], checks: r.checks||[],
+      updatedAt: r.updated_at, createdAt: r.created_at
+    }));
+  } catch(e) { console.warn('sbLoadContacts:', e.message); return null; }
+}
+
+// ── ANGEBOTE ──
+async function sbSaveAngebot(a) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('angebote').upsert({
+      id: a.id, workspace_id: _currentWorkspace.id,
+      kunde_id: a.kundeId||null, nr: a.nr||null,
+      betreff: a.betreff||null, datum: a.datum||null,
+      valid_bis: a.validBis||null, status: a.status||'entwurf',
+      positions: a.positions||[], notes: a.notes||null,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e) { console.warn('sbSaveAngebot:', e.message); }
+}
+
+async function sbDeleteAngebot(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('angebote').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadAngebote() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('angebote').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('created_at', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
+      datum: r.datum, validBis: r.valid_bis, status: r.status,
+      positions: r.positions||[], notes: r.notes, createdAt: r.created_at
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── RECHNUNGEN ──
+async function sbSaveRechnung(r) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('rechnungen').upsert({
+      id: r.id, workspace_id: _currentWorkspace.id,
+      kunde_id: r.kundeId||null, nr: r.nr||null,
+      betreff: r.betreff||null, datum: r.datum||null,
+      faellig: r.faellig||null, status: r.status||'offen-rg',
+      positions: r.positions||[], notes: r.notes||null,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e) { console.warn('sbSaveRechnung:', e.message); }
+}
+
+async function sbDeleteRechnung(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('rechnungen').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadRechnungen() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('rechnungen').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('created_at', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
+      datum: r.datum, faellig: r.faellig, status: r.status,
+      positions: r.positions||[], notes: r.notes, createdAt: r.created_at
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── AUFGABEN ──
+async function sbSaveAufgabe(a) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('aufgaben').upsert({
+      id: a.id, workspace_id: _currentWorkspace.id,
+      kontakt_id: a.kontaktId||null, titel: a.titel,
+      beschreibung: a.beschreibung||null, status: a.status||'offen',
+      prioritaet: a.prioritaet||'mittel', faellig: a.faellig||null,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbDeleteAufgabe(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('aufgaben').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadAufgaben() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('aufgaben').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('created_at', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, kontaktId: r.kontakt_id, titel: r.titel,
+      beschreibung: r.beschreibung||'', status: r.status||'offen',
+      prioritaet: r.prioritaet||'mittel', faellig: r.faellig||null,
+      createdAt: r.created_at
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── KALENDER ──
+async function sbSaveKalEvent(e) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('kal_events').upsert({
+      id: e.id, workspace_id: _currentWorkspace.id,
+      titel: e.titel, datum: e.datum, zeit: e.zeit||null,
+      typ: e.typ||'termin', kontakt_id: e.kontaktId||null, notiz: e.notiz||null
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbDeleteKalEvent(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('kal_events').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadKalEvents() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('kal_events').select('*')
+      .eq('workspace_id', _currentWorkspace.id);
+    return (data||[]).map(r => ({
+      id: r.id, titel: r.titel, datum: r.datum,
+      zeit: r.zeit||'', typ: r.typ||'termin',
+      kontaktId: r.kontakt_id, notiz: r.notiz||''
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── WIEDERVORLAGEN ──
+async function sbSaveWv(w) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('wiedervorlagen').upsert({
+      id: w.id, workspace_id: _currentWorkspace.id,
+      kontakt_id: w.kontaktId||null, text: w.text,
+      datum: w.datum, done: w.done||false
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbDeleteWv(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('wiedervorlagen').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadWv() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('wiedervorlagen').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('datum');
+    return (data||[]).map(r => ({
+      id: r.id, kontaktId: r.kontakt_id, text: r.text,
+      datum: r.datum, done: r.done||false
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── RETAINER ──
+async function sbSaveRetainer(r) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('retainer').upsert({
+      id: r.id, workspace_id: _currentWorkspace.id,
+      kunde_id: r.kundeId||null, paket: r.paket||null,
+      betrag: r.betrag||0, start_datum: r.start||null,
+      abrechnungstag: r.abrechnungstag||'1',
+      next_datum: r.next||null, status: r.status||'aktiv',
+      leistungen: r.leistungen||null,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbLoadRetainer() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('retainer').select('*')
+      .eq('workspace_id', _currentWorkspace.id);
+    return (data||[]).map(r => ({
+      id: r.id, kundeId: r.kunde_id, paket: r.paket||'',
+      betrag: r.betrag||0, start: r.start_datum, abrechnungstag: r.abrechnungstag||'1',
+      next: r.next_datum, status: r.status||'aktiv', leistungen: r.leistungen||''
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── AUSGABEN ──
+async function sbSaveAusgabe(a) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('ausgaben').upsert({
+      id: a.id, workspace_id: _currentWorkspace.id,
+      typ: a.typ||'ausgabe', datum: a.datum,
+      beschreibung: a.desc, kategorie: a.kat||null,
+      netto: a.netto||0, mwst_pct: a.mwstPct||0,
+      mwst_betrag: a.mwstBetrag||0, brutto: a.brutto||0,
+      notiz: a.notiz||null, beleg_name: a.belegName||null
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbDeleteAusgabe(id) {
+  if(!_useSupabase) return;
+  try { const sb = await getSupabase(); await sb.from('ausgaben').delete().eq('id', id); }
+  catch(e) { console.warn(e); }
+}
+
+async function sbLoadAusgaben() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('ausgaben').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('datum', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, typ: r.typ||'ausgabe', datum: r.datum,
+      desc: r.beschreibung, kat: r.kategorie,
+      netto: r.netto||0, mwstPct: r.mwst_pct||0,
+      mwstBetrag: r.mwst_betrag||0, brutto: r.brutto||0,
+      notiz: r.notiz||'', belegName: r.beleg_name||null
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ── ROI ──
+async function sbSaveROI(r) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('roi_daten').upsert({
+      id: r.id, workspace_id: _currentWorkspace.id,
+      kunde_id: r.kundeId||null, kanal: r.kanal||'google',
+      monat: r.monat, jahr: r.jahr,
+      budget: r.budget||0, klicks: r.klicks||0,
+      leads: r.leads||0, abschluesse: r.abschluesse||0,
+      umsatz: r.umsatz||0, roas: r.roas||0,
+      roi: r.roi||0, cpl: r.cpl||0, notiz: r.notiz||null
+    });
+  } catch(e) { console.warn(e); }
+}
+
+async function sbLoadROI() {
+  if(!_useSupabase) return null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('roi_daten').select('*')
+      .eq('workspace_id', _currentWorkspace.id)
+      .order('jahr', { ascending: false });
+    return (data||[]).map(r => ({
+      id: r.id, kundeId: r.kunde_id, kanal: r.kanal,
+      monat: r.monat, jahr: r.jahr, budget: r.budget||0,
+      klicks: r.klicks||0, leads: r.leads||0,
+      abschluesse: r.abschluesse||0, umsatz: r.umsatz||0,
+      roas: r.roas||0, roi: r.roi||0, cpl: r.cpl||0, notiz: r.notiz||''
+    }));
+  } catch(e) { console.warn(e); return null; }
+}
+
+// ══════════════════════════════════════════
+// LOAD ALL DATA FROM SUPABASE
+// ══════════════════════════════════════════
+async function loadAllFromSupabase() {
+  if(!_useSupabase || !_currentWorkspace) return;
+
+  showLoadingOverlay('Lade Daten...');
+
+  try {
+    const [contacts, angebote, rechnungen, aufgaben, kalEvents, wv, retainer, ausgaben, roi] = await Promise.all([
+      sbLoadContacts(), sbLoadAngebote(), sbLoadRechnungen(),
+      sbLoadAufgaben(), sbLoadKalEvents(), sbLoadWv(),
+      sbLoadRetainer(), sbLoadAusgaben(), sbLoadROI()
+    ]);
+
+    if(contacts !== null) DB.contacts = contacts;
+    if(angebote !== null) DB.angebote = angebote;
+    if(rechnungen !== null) DB.rechnungen = rechnungen;
+    if(aufgaben !== null) DB.kanban = aufgaben;
+    if(kalEvents !== null) DB.kalEvents = kalEvents;
+    if(wv !== null) DB.wiedervorlagen = wv;
+    if(retainer !== null) DB.retainer = retainer;
+    if(ausgaben !== null) DB.ausgaben = ausgaben;
+    if(roi !== null) DB.roi = roi;
+
+    // Save to localStorage as cache
+    try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
+
+    renderDashboard(); renderMiniCal(); renderDashCalEvents();
+
+  } catch(e) {
+    console.error('loadAllFromSupabase:', e);
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
+function showLoadingOverlay(msg) {
+  let el = document.getElementById('sb-loading');
+  if(!el) {
+    el = document.createElement('div');
+    el.id = 'sb-loading';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+    el.innerHTML = `<div style="background:var(--paper);border-radius:8px;padding:24px 32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-size:24px;margin-bottom:8px">⏳</div>
+      <div id="sb-loading-msg" style="font-size:13px;font-weight:600;color:var(--ink)">${msg}</div>
+    </div>`;
+    document.body.appendChild(el);
+  } else {
+    document.getElementById('sb-loading-msg').textContent = msg;
+    el.style.display = 'flex';
+  }
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('sb-loading');
+  if(el) el.style.display = 'none';
+}
+
+
 
 
 // ==================================================
@@ -4537,16 +4967,24 @@ function saveKanbanTask() {
   };
   if(editId) { const i=DB.kanban.findIndex(x=>x.id===editId); if(i>-1) DB.kanban[i]=obj; }
   else DB.kanban.push(obj);
+  sbSaveAufgabe({ id:obj.id, kontaktId:obj.kontaktId, titel:obj.text,
+    beschreibung:obj.notiz, status:obj.col, prioritaet:obj.prio, faellig:obj.datum||null });
   save(); closeModal('kanban-modal'); renderKanban();
 }
 
 function moveKanbanTask(id,col) {
   const t=DB.kanban.find(x=>x.id===id);
-  if(t){t.col=col;save();renderKanban();}
+  if(t){
+    t.col=col;
+    sbSaveAufgabe({ id:t.id, kontaktId:t.kontaktId, titel:t.text,
+      beschreibung:t.notiz, status:col, prioritaet:t.prio, faellig:t.datum||null });
+    save();renderKanban();
+  }
 }
 
 function deleteKanbanTask(id) {
   DB.kanban=DB.kanban.filter(x=>x.id!==id);
+  sbDeleteAufgabe(id);
   save(); renderKanban();
 }
 
@@ -5924,6 +6362,7 @@ function saveNotiz() {
     createdAt: new Date().toISOString()
   });
   c.updatedAt = new Date().toISOString();
+  sbSaveContact(c);
   save(); closeModal('notiz-modal'); renderContactDetail(currentDetailContactId);
   addActivity('Notiz fuer "'+c.firma+'" hinzugefuegt', 'blue');
 }
@@ -5962,6 +6401,7 @@ function saveDoc() {
   if(!c) return;
   if(!c.dokumente) c.dokumente = [];
   c.dokumente.push({ id:uid(), name, data, type: document.getElementById('doc-file')._type||'', date: today() });
+  sbSaveContact(c);
   save(); closeModal('doc-modal'); renderContactDetail(currentDocContactId);
 }
 
@@ -6123,6 +6563,7 @@ function saveAusgabe() {
 
   if(editId) { const i=DB.ausgaben.findIndex(x=>x.id===editId); if(i>-1) DB.ausgaben[i]=obj; }
   else { DB.ausgaben.unshift(obj); }
+  sbSaveAusgabe(obj);
   save(); closeModal('ausgabe-modal'); renderAusgaben();
   addActivity((obj.typ==='einnahme'?'Einnahme':'Ausgabe') + ' "'+desc+'" (' + fmtEur(obj.brutto) + ') erfasst', obj.typ==='einnahme'?'green':'red');
 }
@@ -6130,6 +6571,7 @@ function saveAusgabe() {
 function deleteAusgabe(id) {
   if(!confirm('Wirklich loeschen?')) return;
   DB.ausgaben = DB.ausgaben.filter(x=>x.id!==id);
+  sbDeleteAusgabe(id);
   save(); renderAusgaben();
 }
 
@@ -6541,6 +6983,7 @@ function saveROIEintrag() {
   };
   if(editId) { const i=DB.roi.findIndex(x=>x.id===editId); if(i>-1) DB.roi[i]=obj; }
   else DB.roi.unshift(obj);
+  sbSaveROI(obj);
   save(); closeModal('roi-modal'); renderROI();
   addActivity('ROI-Daten fuer '+new Date(obj.jahr,obj.monat-1).toLocaleDateString('de-DE',{month:'long',year:'numeric'})+' erfasst','blue');
 }
@@ -6635,6 +7078,7 @@ function renderROI() {
 function deleteROI(id) {
   if(!confirm('Eintrag loeschen?')) return;
   DB.roi = DB.roi.filter(x=>x.id!==id);
+  sbDeleteAusgabe(id); // reuse delete pattern
   save(); renderROI();
 }
 
