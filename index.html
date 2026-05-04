@@ -94,14 +94,14 @@ body{background:var(--bg);font-family:'Sora',sans-serif;color:var(--ink);min-hei
 
 /* Sidebar */
 #sidebar{
-  width:240px;min-width:240px;height:100vh;position:fixed;left:0;top:0;
+  width:240px;min-width:240px;height:100%;height:100dvh;position:fixed;left:0;top:0;
   background:var(--ink);display:flex;flex-direction:column;z-index:200;
   transition:transform .3s ease;overflow:hidden;
 }
 body.dark-mode #sidebar{background:#000;}
 #sidebar-logo{
   padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08);
-  display:flex;align-items:center;gap:12px;
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
 }
 #sidebar-logo img{width:32px;height:32px;object-fit:contain;flex-shrink:0}
 #sidebar-logo-text{display:flex;flex-direction:column}
@@ -109,8 +109,17 @@ body.dark-mode #sidebar{background:#000;}
 #sidebar-logo-name span{color:var(--yellow)}
 #sidebar-logo-sub{font-size:9px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
 
-#sidebar-nav{flex:1;padding:10px 0;overflow-y:auto;overflow-x:hidden;min-height:0;-webkit-overflow-scrolling:touch}
-#sidebar-bottom{flex-shrink:0;padding:12px;border-top:1px solid rgba(255,255,255,.08)}
+#sidebar-nav{
+  flex:1;padding:10px 0;
+  overflow-y:auto;overflow-x:hidden;
+  min-height:0;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+#sidebar-bottom{
+  flex-shrink:0;padding:12px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
 .nav-item{
   display:flex;align-items:center;gap:12px;padding:10px 20px;
   cursor:pointer;transition:all .15s;color:rgba(255,255,255,.45);
@@ -158,7 +167,9 @@ body.dark-mode #sidebar{background:#000;}
 .page.active{display:block}
 
 /* Mobile overlay */
-#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;-webkit-tap-highlight-color:transparent}
+#sidebar-overlay.open{display:block}
+body.sidebar-open{overflow:hidden;position:fixed;width:100%;top:0;left:0;right:0}
 
 /* Mobile hamburger */
 #mobile-menu-btn{display:none;background:transparent;border:none;color:var(--ink);font-size:22px;cursor:pointer;padding:4px;margin-right:4px}
@@ -641,6 +652,7 @@ tr[onclick] { transition:background .1s; }
   <div id="sidebar-bottom">
     <button class="sidebar-bottom-btn" onclick="openEmailCompose(null)">✉ E-Mail verfassen</button>
     <button class="sidebar-bottom-btn" onclick="showPage('users')">👥 Nutzerverwaltung</button>
+    <button class="sidebar-bottom-btn" id="btn-feature-mgr" onclick="openFeatureManager()" style="display:none">⚡ Feature-Flags</button>
     <button class="sidebar-bottom-btn" onclick="openGlobalSearch()">🔍 Suche <span style="opacity:.4;font-size:10px;margin-left:4px">Strg+K</span></button>
     <button class="sidebar-bottom-btn" onclick="showPage('settings')">⚙ Einstellungen</button>
     <button class="sidebar-bottom-btn" onclick="_useSupabase?supabaseSignOut():logout()">⏻ Abmelden</button>
@@ -2575,6 +2587,13 @@ async function loadUserProfile() {
       _currentWorkspace = { id: _FALLBACK_WORKSPACE_ID, name: 'Viral Outlaws' };
       console.log('Using fallback workspace ID');
     }
+    // Apply feature flags after DOM is ready
+    setTimeout(() => {
+      applyFeatureFlags();
+      // Show feature manager for superadmin
+      const fmBtn = document.getElementById('btn-feature-mgr');
+      if(fmBtn) fmBtn.style.display = _currentProfile?.role === 'superadmin' ? '' : 'none';
+    }, 200);
   } catch(e) {
     console.error('loadUserProfile exception:', e.message);
     _useSupabase = false;
@@ -2829,12 +2848,21 @@ function showPage(id) {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen = sidebar.classList.contains('open');
+  if(isOpen) {
+    closeSidebar();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    document.body.classList.add('sidebar-open');
+  }
 }
 function closeSidebar() {
   document.getElementById('sidebar')?.classList.remove('open');
   document.getElementById('sidebar-overlay')?.classList.remove('open');
+  document.body.classList.remove('sidebar-open');
 }
 
 // ==================================================
@@ -8375,6 +8403,196 @@ async function loadFromDrive() {
     } catch(e) {}
   }
   return null;
+}
+
+// ==================================================
+// FEATURE FLAGS
+// ==================================================
+
+// Default: alle Features an
+const DEFAULT_FEATURES = {
+  kontakte:true, angebote:true, rechnungen:true, kalender:true,
+  aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true,
+  kundenradar:true, konfigurator:true, wettbewerb:true, email:true
+};
+
+function getFeatures() {
+  if(_currentWorkspace?.features) return { ...DEFAULT_FEATURES, ..._currentWorkspace.features };
+  return DEFAULT_FEATURES;
+}
+
+function hasFeature(key) {
+  return getFeatures()[key] !== false;
+}
+
+function applyFeatureFlags() {
+  const f = getFeatures();
+  // Map feature keys to nav items and pages
+  const featureMap = {
+    kalender:    ['kalender'],
+    aufgaben:    ['kanban'],
+    ziele:       ['ziele'],
+    ausgaben:    ['ausgaben'],
+    roi:         ['roi'],
+    reporting:   ['reporting'],
+    kundenradar: ['kundenradar'],
+    konfigurator:['konfigurator'],
+    wettbewerb:  ['wettbewerb'],
+    email:       [], // handled separately (email compose button)
+  };
+
+  Object.entries(featureMap).forEach(([feature, pages]) => {
+    const enabled = f[feature] !== false;
+    pages.forEach(page => {
+      // Hide/show nav items
+      const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+      if(navItem) navItem.style.display = enabled ? '' : 'none';
+    });
+  });
+
+  // Email compose button
+  const emailBtn = document.querySelector('.sidebar-bottom-btn[onclick*="openEmailCompose"]');
+  if(emailBtn) emailBtn.style.display = f.email !== false ? '' : 'none';
+
+  console.log('Feature flags applied:', Object.entries(f).filter(([k,v])=>!v).map(([k])=>k).join(', ') || 'all enabled');
+}
+
+// ==================================================
+// ADMIN: WORKSPACE FEATURE MANAGEMENT
+// ==================================================
+async function loadAllWorkspaces() {
+  if(!_useSupabase || _currentProfile?.role !== 'superadmin') return [];
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.from('workspaces').select('*, profiles(email, role, name)');
+    return data||[];
+  } catch(e) { return []; }
+}
+
+async function updateWorkspaceFeatures(wsId, features) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('workspaces').update({ features }).eq('id', wsId);
+  if(error) throw error;
+}
+
+async function openFeatureManager() {
+  if(_currentProfile?.role !== 'superadmin') {
+    alert('Nur Super-Admins können Feature-Flags verwalten.');
+    return;
+  }
+  const workspaces = await loadAllWorkspaces();
+  if(!workspaces.length) { alert('Keine Workspaces gefunden.'); return; }
+
+  const featureLabels = {
+    kontakte:'👥 Kontakte', angebote:'📋 Angebote', rechnungen:'🧾 Rechnungen',
+    kalender:'📅 Kalender', aufgaben:'🗂 Aufgaben', ziele:'🎯 Ziele & MRR',
+    ausgaben:'💶 Ausgaben & EÜR', roi:'📈 ROI-Tracker', reporting:'📑 Kampagnen-Report',
+    kundenradar:'🗺 Kundenradar', konfigurator:'🛒 Angebots-Konfigurator',
+    wettbewerb:'🔍 Wettbewerbs-Analyse', email:'✉ E-Mail Versand'
+  };
+
+  const modal = document.createElement('div');
+  modal.id = 'feature-manager-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+
+  const wsOptions = workspaces.map(ws => `<option value="${ws.id}">${ws.name}</option>`).join('');
+
+  modal.innerHTML = `<div style="background:var(--paper);border-radius:8px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--paper);z-index:1">
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px">⚡ Feature-Flags verwalten</h2>
+      <button onclick="document.getElementById('feature-manager-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="padding:20px 24px">
+      <div class="field" style="margin-bottom:20px">
+        <label>Workspace auswählen</label>
+        <select id="fm-workspace" onchange="loadFMFeatures()" style="font-family:Sora,sans-serif;font-size:13px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+          ${wsOptions}
+        </select>
+      </div>
+
+      <!-- Pakete Schnellauswahl -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Paket-Vorlage anwenden</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="applyFMPaket('starter')" class="btn-ghost btn-sm">📦 Starter</button>
+          <button onclick="applyFMPaket('professional')" class="btn-ghost btn-sm">🚀 Professional</button>
+          <button onclick="applyFMPaket('full')" class="btn-ghost btn-sm">⭐ Full</button>
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Features einzeln an/ausschalten</div>
+      <div id="fm-features" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:14px;border-top:1px solid var(--border)">
+        <button class="btn-ghost" onclick="document.getElementById('feature-manager-modal').remove()">Abbrechen</button>
+        <button class="btn-yellow" onclick="saveFMFeatures()">💾 Speichern</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+
+  // Store workspaces for later use
+  window._fmWorkspaces = workspaces;
+  window._fmFeatureLabels = featureLabels;
+  loadFMFeatures();
+}
+
+function loadFMFeatures() {
+  const wsId = document.getElementById('fm-workspace')?.value;
+  const ws = window._fmWorkspaces?.find(w => w.id === wsId);
+  if(!ws) return;
+  const features = { ...DEFAULT_FEATURES, ...(ws.features||{}) };
+  const container = document.getElementById('fm-features');
+  if(!container) return;
+  container.innerHTML = Object.entries(window._fmFeatureLabels).map(([key, label]) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:6px;cursor:pointer;border:1.5px solid ${features[key]?'var(--green)':'var(--border)'};" id="fm-item-${key}">
+      <input type="checkbox" id="fm-${key}" ${features[key]?'checked':''} onchange="updateFMItem('${key}')"
+        style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;flex-shrink:0">
+      <span style="font-size:12px;font-weight:500">${label}</span>
+    </label>`).join('');
+}
+
+function updateFMItem(key) {
+  const checked = document.getElementById('fm-'+key)?.checked;
+  const item = document.getElementById('fm-item-'+key);
+  if(item) item.style.borderColor = checked ? 'var(--green)' : 'var(--border)';
+}
+
+const FM_PAKETE = {
+  starter:      { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:false, ausgaben:false, roi:false, reporting:false, kundenradar:false, konfigurator:false, wettbewerb:false, email:false },
+  professional: { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, kundenradar:false, konfigurator:true, wettbewerb:true, email:true },
+  full:         { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, kundenradar:true, konfigurator:true, wettbewerb:true, email:true }
+};
+
+function applyFMPaket(paket) {
+  const features = FM_PAKETE[paket];
+  if(!features) return;
+  Object.entries(features).forEach(([key, val]) => {
+    const cb = document.getElementById('fm-'+key);
+    if(cb) { cb.checked = val; updateFMItem(key); }
+  });
+}
+
+async function saveFMFeatures() {
+  const wsId = document.getElementById('fm-workspace')?.value;
+  if(!wsId) return;
+  const features = {};
+  Object.keys(window._fmFeatureLabels).forEach(key => {
+    features[key] = document.getElementById('fm-'+key)?.checked !== false;
+  });
+  try {
+    await updateWorkspaceFeatures(wsId, features);
+    // If saving own workspace, apply immediately
+    if(wsId === _currentWorkspace?.id) {
+      _currentWorkspace.features = features;
+      applyFeatureFlags();
+    }
+    document.getElementById('feature-manager-modal').remove();
+    alert('✅ Feature-Flags gespeichert!');
+  } catch(e) {
+    alert('Fehler: ' + e.message);
+  }
 }
 
 // Inject logo
