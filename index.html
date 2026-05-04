@@ -96,7 +96,7 @@ body{background:var(--bg);font-family:'Sora',sans-serif;color:var(--ink);min-hei
 #sidebar{
   width:240px;min-width:240px;height:100vh;position:fixed;left:0;top:0;
   background:var(--ink);display:flex;flex-direction:column;z-index:200;
-  transition:transform .3s ease;
+  transition:transform .3s ease;overflow:hidden;
 }
 body.dark-mode #sidebar{background:#000;}
 #sidebar-logo{
@@ -109,7 +109,8 @@ body.dark-mode #sidebar{background:#000;}
 #sidebar-logo-name span{color:var(--yellow)}
 #sidebar-logo-sub{font-size:9px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
 
-#sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
+#sidebar-nav{flex:1;padding:10px 0;overflow-y:auto;overflow-x:hidden;min-height:0;-webkit-overflow-scrolling:touch}
+#sidebar-bottom{flex-shrink:0;padding:12px;border-top:1px solid rgba(255,255,255,.08)}
 .nav-item{
   display:flex;align-items:center;gap:12px;padding:10px 20px;
   cursor:pointer;transition:all .15s;color:rgba(255,255,255,.45);
@@ -366,9 +367,28 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
   #page-title{font-size:17px}
 
   /* ── SIDEBAR scrollbar fix ── */
-  #sidebar{display:flex;flex-direction:column;overflow:hidden}
-  #sidebar-nav{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:8px}
-  #sidebar-bottom{flex-shrink:0;overflow-y:auto;max-height:220px;-webkit-overflow-scrolling:touch}
+  #sidebar{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    height:100vh;
+  }
+  #sidebar-logo{flex-shrink:0}
+  #sidebar-nav{
+    flex:1;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    min-height:0;
+  }
+  #sidebar-bottom{
+    flex-shrink:0;
+    border-top:1px solid rgba(255,255,255,.08);
+    background:var(--ink);
+    position:relative;
+    z-index:1;
+  }
+  body.dark-mode #sidebar-bottom{background:#000}
 
   /* ── KPI GRIDS ── */
   .dash-grid,.kpi-grid-5{grid-template-columns:1fr 1fr !important;gap:8px}
