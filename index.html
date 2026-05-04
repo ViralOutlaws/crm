@@ -2446,49 +2446,50 @@ async function supabaseSignOut() {
 async function loadUserProfile() {
   const sb = await getSupabase();
   try {
-    // Load profile
-    const { data: profile, error: profErr } = await sb.from('profiles')
-      .select('*').eq('id', _currentUser.id).single();
+    // Load profile with workspace in single query
+    const { data: profile, error: profErr } = await sb
+      .from('profiles')
+      .select('*, workspaces(*)')
+      .eq('id', _currentUser.id)
+      .single();
 
-    if(profErr) {
-      console.warn('loadUserProfile error:', profErr.message);
-      // Profile might not exist yet - create it
-      _currentProfile = { id: _currentUser.id, role: 'admin', email: _currentUser.email };
-    } else {
-      _currentProfile = profile;
-      console.log('Profile loaded:', profile?.role, 'workspace:', profile?.workspace_id);
-    }
-
-    // Load workspace
-    if(_currentProfile?.workspace_id) {
-      const { data: ws, error: wsErr } = await sb.from('workspaces')
-        .select('*').eq('id', _currentProfile.workspace_id).single();
-      if(wsErr) {
-        console.warn('Workspace load error:', wsErr.message);
-      } else {
-        _currentWorkspace = ws;
-        console.log('Workspace loaded:', ws?.name, ws?.id);
-        applyWorkspaceBranding(ws);
+    if(profErr || !profile) {
+      console.warn('Profile load error:', profErr?.message);
+      // Try without join
+      const { data: p2 } = await sb.from('profiles').select('*').eq('id', _currentUser.id).single();
+      if(p2) {
+        _currentProfile = p2;
+        // Load workspace separately
+        if(p2.workspace_id) {
+          const { data: ws } = await sb.from('workspaces').select('*').eq('id', p2.workspace_id).single();
+          if(ws) { _currentWorkspace = ws; console.log('Workspace loaded (fallback):', ws.name); applyWorkspaceBranding(ws); }
+        }
       }
     } else {
-      // Try to find any workspace
-      const { data: allWs } = await sb.from('workspaces').select('*').limit(1);
-      if(allWs?.length) {
-        _currentWorkspace = allWs[0];
-        console.log('Workspace found via fallback:', _currentWorkspace?.name);
-        // Update profile with workspace_id
-        await sb.from('profiles').upsert({
-          id: _currentUser.id,
-          workspace_id: _currentWorkspace.id,
-          email: _currentUser.email,
-          role: _currentProfile?.role || 'admin'
-        });
+      _currentProfile = { ...profile, workspaces: undefined };
+      if(profile.workspaces) {
+        _currentWorkspace = profile.workspaces;
+        console.log('Workspace loaded (join):', _currentWorkspace.name);
         applyWorkspaceBranding(_currentWorkspace);
-      } else {
-        console.error('No workspace found!');
+      } else if(profile.workspace_id) {
+        const { data: ws } = await sb.from('workspaces').select('*').eq('id', profile.workspace_id).single();
+        if(ws) { _currentWorkspace = ws; console.log('Workspace loaded (separate):', ws.name); applyWorkspaceBranding(ws); }
       }
     }
-    _useSupabase = true;
+
+    // Last resort: find any workspace
+    if(!_currentWorkspace) {
+      console.warn('Workspace still null, trying direct lookup...');
+      const wsId = _currentProfile?.workspace_id;
+      if(wsId) {
+        const { data: ws, error: wsE } = await sb.from('workspaces').select('*').eq('id', wsId).single();
+        console.log('Direct workspace lookup:', ws, wsE);
+        if(ws) { _currentWorkspace = ws; applyWorkspaceBranding(ws); }
+      }
+    }
+
+    console.log('Final state - profile:', _currentProfile?.role, 'workspace:', _currentWorkspace?.name || 'NULL');
+    _useSupabase = !!_currentWorkspace;
   } catch(e) {
     console.error('loadUserProfile exception:', e.message);
     _useSupabase = false;
