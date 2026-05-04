@@ -2767,7 +2767,17 @@ function fmtEur(n) { return Number(n||0).toLocaleString('de-DE',{minimumFraction
 function fmtDate(d) { if(!d) return '–'; try { return new Date(d).toLocaleDateString('de-DE'); } catch(e) { return d; } }
 function today() { return new Date().toISOString().split('T')[0]; }
 function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().split('T')[0]; }
-function uid() { return Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function uid() {
+  // Generate proper UUID v4 for Supabase compatibility
+  if(typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback UUID v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0;
+    return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+  });
+}
 function initials(s) { if(!s) return '?'; const w=s.trim().split(' '); return w.length>1?(w[0][0]+w[w.length-1][0]).toUpperCase():s.slice(0,2).toUpperCase(); }
 
 function getBadge(status) {
@@ -3836,8 +3846,9 @@ async function syncToSupabase() {
 
 // ── CONTACTS ──
 async function sbSaveContact(contact) {
-  if(!_useSupabase && !_currentUser) { console.log('sbSaveContact: not logged in'); return; }
+  if(!_currentUser) return; // Not logged in at all
   const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
+  if(!wsId) { console.warn('No workspace ID available'); return; }
   try {
     const sb = await getSupabase();
     const row = {
@@ -3863,8 +3874,8 @@ async function sbSaveContact(contact) {
     };
     console.log('Saving contact:', row.firma, 'ws:', wsId);
     const { data, error } = await sb.from('contacts').upsert(row).select();
-    if(error) console.error('sbSaveContact error:', error.message);
-    else console.log('Contact saved OK:', data?.[0]?.firma);
+    if(error) console.error('sbSaveContact error:', error.message, error.code);
+    else console.log('✅ Contact saved:', data?.[0]?.firma);
   } catch(e) { console.error('sbSaveContact exception:', e.message); }
 }
 
