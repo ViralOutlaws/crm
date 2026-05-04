@@ -2415,7 +2415,9 @@ function getSupabase() {
 let _currentUser = null;
 let _currentWorkspace = null;
 let _currentProfile = null;
-let _useSupabase = false; // false = legacy Google Drive mode
+let _useSupabase = false;
+// Fallback workspace ID (viral-outlaws)
+const _FALLBACK_WORKSPACE_ID = '566f2d4d-5b66-4ba8-b6a1-1edf413a1689';
 
 // ══════════════════════════════════════════
 // SUPABASE AUTH
@@ -2489,7 +2491,13 @@ async function loadUserProfile() {
     }
 
     console.log('Final state - profile:', _currentProfile?.role, 'workspace:', _currentWorkspace?.name || 'NULL');
-    _useSupabase = !!_currentWorkspace;
+    // Use Supabase if user is logged in, even if workspace didn't load perfectly
+    _useSupabase = !!_currentUser;
+    // If workspace still null, set fallback
+    if(!_currentWorkspace) {
+      _currentWorkspace = { id: _FALLBACK_WORKSPACE_ID, name: 'Viral Outlaws' };
+      console.log('Using fallback workspace ID');
+    }
   } catch(e) {
     console.error('loadUserProfile exception:', e.message);
     _useSupabase = false;
@@ -2528,7 +2536,7 @@ function applyWorkspaceBranding(ws) {
 async function sbSelect(table, query) {
   const sb = await getSupabase();
   let q = sb.from(table).select(query||'*');
-  if(_currentWorkspace) q = q.eq('workspace_id', _currentWorkspace.id);
+  if(_currentWorkspace) q = q.eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID);
   const { data, error } = await q.order('created_at', { ascending: false });
   if(error) throw error;
   return data||[];
@@ -2627,7 +2635,7 @@ async function initSupabaseAuth() {
 // REALTIME SUBSCRIPTIONS
 // ══════════════════════════════════════════
 async function initRealtime() {
-  if(!_useSupabase || !_currentWorkspace) return;
+  if(!_currentUser) return; // Allow if logged in even without workspace loaded
   const sb = await getSupabase();
   
   const channel = sb.channel('crm-changes')
@@ -3821,20 +3829,20 @@ function save() {
 
 // Full sync: push local DB to Supabase
 async function syncToSupabase() {
-  if(!_useSupabase || !_currentWorkspace) return;
+  if(!_currentUser) return; // Allow if logged in even without workspace loaded
   // We do targeted upserts, not full replace
   // This is called after local changes – specific functions handle individual records
 }
 
 // ── CONTACTS ──
 async function sbSaveContact(contact) {
-  if(!_useSupabase) { console.log('sbSaveContact: Supabase not active'); return; }
-  if(!_currentWorkspace?.id) { console.warn('sbSaveContact: no workspace_id'); return; }
+  if(!_useSupabase && !_currentUser) { console.log('sbSaveContact: not logged in'); return; }
+  const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
   try {
     const sb = await getSupabase();
     const row = {
       id: contact.id,
-      workspace_id: _currentWorkspace.id,
+      workspace_id: wsId,
       firma: contact.firma,
       person: contact.person||null,
       email: contact.email||null,
@@ -3853,13 +3861,10 @@ async function sbSaveContact(contact) {
       checks: contact.checks||[],
       updated_at: new Date().toISOString()
     };
-    console.log('Saving contact to Supabase:', row.firma, 'workspace:', row.workspace_id);
+    console.log('Saving contact:', row.firma, 'ws:', wsId);
     const { data, error } = await sb.from('contacts').upsert(row).select();
-    if(error) {
-      console.error('sbSaveContact error:', error.message, error.details, error.hint);
-    } else {
-      console.log('Contact saved OK:', data);
-    }
+    if(error) console.error('sbSaveContact error:', error.message);
+    else console.log('Contact saved OK:', data?.[0]?.firma);
   } catch(e) { console.error('sbSaveContact exception:', e.message); }
 }
 
@@ -3870,11 +3875,12 @@ async function sbDeleteContact(id) {
 }
 
 async function sbLoadContacts() {
-  if(!_useSupabase) return null;
+  if(!_currentUser) return null;
   try {
     const sb = await getSupabase();
+    const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
     const { data } = await sb.from('contacts').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, firma: r.firma, person: r.person||'',
@@ -3894,7 +3900,7 @@ async function sbSaveAngebot(a) {
   try {
     const sb = await getSupabase();
     await sb.from('angebote').upsert({
-      id: a.id, workspace_id: _currentWorkspace.id,
+      id: a.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kunde_id: a.kundeId||null, nr: a.nr||null,
       betreff: a.betreff||null, datum: a.datum||null,
       valid_bis: a.validBis||null, status: a.status||'entwurf',
@@ -3915,7 +3921,7 @@ async function sbLoadAngebote() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('angebote').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
@@ -3931,7 +3937,7 @@ async function sbSaveRechnung(r) {
   try {
     const sb = await getSupabase();
     await sb.from('rechnungen').upsert({
-      id: r.id, workspace_id: _currentWorkspace.id,
+      id: r.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kunde_id: r.kundeId||null, nr: r.nr||null,
       betreff: r.betreff||null, datum: r.datum||null,
       faellig: r.faellig||null, status: r.status||'offen-rg',
@@ -3952,7 +3958,7 @@ async function sbLoadRechnungen() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('rechnungen').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
@@ -3968,7 +3974,7 @@ async function sbSaveAufgabe(a) {
   try {
     const sb = await getSupabase();
     await sb.from('aufgaben').upsert({
-      id: a.id, workspace_id: _currentWorkspace.id,
+      id: a.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kontakt_id: a.kontaktId||null, titel: a.titel,
       beschreibung: a.beschreibung||null, status: a.status||'offen',
       prioritaet: a.prioritaet||'mittel', faellig: a.faellig||null,
@@ -3988,7 +3994,7 @@ async function sbLoadAufgaben() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('aufgaben').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, kontaktId: r.kontakt_id, titel: r.titel,
@@ -4005,7 +4011,7 @@ async function sbSaveKalEvent(e) {
   try {
     const sb = await getSupabase();
     await sb.from('kal_events').upsert({
-      id: e.id, workspace_id: _currentWorkspace.id,
+      id: e.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       titel: e.titel, datum: e.datum, zeit: e.zeit||null,
       typ: e.typ||'termin', kontakt_id: e.kontaktId||null, notiz: e.notiz||null
     });
@@ -4023,7 +4029,7 @@ async function sbLoadKalEvents() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('kal_events').select('*')
-      .eq('workspace_id', _currentWorkspace.id);
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID);
     return (data||[]).map(r => ({
       id: r.id, titel: r.titel, datum: r.datum,
       zeit: r.zeit||'', typ: r.typ||'termin',
@@ -4038,7 +4044,7 @@ async function sbSaveWv(w) {
   try {
     const sb = await getSupabase();
     await sb.from('wiedervorlagen').upsert({
-      id: w.id, workspace_id: _currentWorkspace.id,
+      id: w.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kontakt_id: w.kontaktId||null, text: w.text,
       datum: w.datum, done: w.done||false
     });
@@ -4056,7 +4062,7 @@ async function sbLoadWv() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('wiedervorlagen').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('datum');
     return (data||[]).map(r => ({
       id: r.id, kontaktId: r.kontakt_id, text: r.text,
@@ -4071,7 +4077,7 @@ async function sbSaveRetainer(r) {
   try {
     const sb = await getSupabase();
     await sb.from('retainer').upsert({
-      id: r.id, workspace_id: _currentWorkspace.id,
+      id: r.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kunde_id: r.kundeId||null, paket: r.paket||null,
       betrag: r.betrag||0, start_datum: r.start||null,
       abrechnungstag: r.abrechnungstag||'1',
@@ -4087,7 +4093,7 @@ async function sbLoadRetainer() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('retainer').select('*')
-      .eq('workspace_id', _currentWorkspace.id);
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID);
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, paket: r.paket||'',
       betrag: r.betrag||0, start: r.start_datum, abrechnungstag: r.abrechnungstag||'1',
@@ -4102,7 +4108,7 @@ async function sbSaveAusgabe(a) {
   try {
     const sb = await getSupabase();
     await sb.from('ausgaben').upsert({
-      id: a.id, workspace_id: _currentWorkspace.id,
+      id: a.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       typ: a.typ||'ausgabe', datum: a.datum,
       beschreibung: a.desc, kategorie: a.kat||null,
       netto: a.netto||0, mwst_pct: a.mwstPct||0,
@@ -4123,7 +4129,7 @@ async function sbLoadAusgaben() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('ausgaben').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('datum', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, typ: r.typ||'ausgabe', datum: r.datum,
@@ -4141,7 +4147,7 @@ async function sbSaveROI(r) {
   try {
     const sb = await getSupabase();
     await sb.from('roi_daten').upsert({
-      id: r.id, workspace_id: _currentWorkspace.id,
+      id: r.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       kunde_id: r.kundeId||null, kanal: r.kanal||'google',
       monat: r.monat, jahr: r.jahr,
       budget: r.budget||0, klicks: r.klicks||0,
@@ -4157,7 +4163,7 @@ async function sbLoadROI() {
   try {
     const sb = await getSupabase();
     const { data } = await sb.from('roi_daten').select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('jahr', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, kanal: r.kanal,
@@ -4173,7 +4179,7 @@ async function sbLoadROI() {
 // LOAD ALL DATA FROM SUPABASE
 // ══════════════════════════════════════════
 async function loadAllFromSupabase() {
-  if(!_useSupabase || !_currentWorkspace) return;
+  if(!_currentUser) return; // Allow if logged in even without workspace loaded
 
   showLoadingOverlay('Lade Daten...');
 
@@ -7851,7 +7857,7 @@ async function renderUsersTable() {
     const sb = await getSupabase();
     const { data: profiles, error } = await sb.from('profiles')
       .select('*')
-      .eq('workspace_id', _currentWorkspace.id)
+      .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at');
 
     if(error) throw error;
@@ -7932,7 +7938,7 @@ async function createUser() {
     // Create profile
     await sb.from('profiles').upsert({
       id: data.user.id,
-      workspace_id: _currentWorkspace.id,
+      workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       email, name, role,
       created_at: new Date().toISOString()
     });
