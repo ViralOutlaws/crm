@@ -8282,27 +8282,37 @@ async function migrateFromDrive() {
 }
 
 async function loadFromDrive() {
-  // First try localStorage
+  // Try stored Drive token + file ID directly from localStorage
+  const token = localStorage.getItem('vo_drive_token');
+  const fileId = localStorage.getItem('vo_drive_file_id');
+
+  if(token && fileId) {
+    try {
+      console.log('Loading from Google Drive, file:', fileId);
+      const resp = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if(resp.ok) {
+        const text = await resp.text();
+        console.log('Drive data loaded, length:', text.length);
+        return text;
+      } else {
+        console.warn('Drive fetch failed:', resp.status);
+      }
+    } catch(e) { console.warn('Drive load failed:', e.message); }
+  }
+
+  // Fallback: localStorage
   const local = localStorage.getItem('vo_crm');
   if(local) {
     try {
       const parsed = JSON.parse(local);
-      // Return if it has any of the expected keys
-      if(parsed.contacts !== undefined || parsed.angebote !== undefined) {
-        console.log('Migration data found in localStorage:', Object.keys(parsed));
+      if(parsed.contacts !== undefined) {
+        console.log('Using localStorage data');
         return local;
       }
-    } catch(e) { console.warn('localStorage parse error:', e); }
-  }
-  // Try Google Drive
-  if(_driveConnected && _driveToken && _driveFileId) {
-    try {
-      const resp = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${_driveFileId}?alt=media`,
-        { headers: { Authorization: `Bearer ${_driveToken}` } }
-      );
-      if(resp.ok) return await resp.text();
-    } catch(e) { console.warn('Drive load failed:', e); }
+    } catch(e) {}
   }
   return null;
 }
