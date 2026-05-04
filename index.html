@@ -354,68 +354,108 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
-  /* Layout */
-  #sidebar{transform:translateX(-100%)}
+  /* ── LAYOUT ── */
+  #sidebar{transform:translateX(-100%);width:280px;min-width:280px}
   #sidebar.open{transform:translateX(0)}
   #sidebar-overlay.open{display:block}
-  #main-content{margin-left:0}
+  #main-content{margin-left:0;max-width:100vw;overflow-x:hidden}
   #mobile-menu-btn{display:block}
   #bottom-nav{display:flex}
-  .page{padding:12px 12px 90px}
+  .page{padding:12px 12px 90px;max-width:100vw;overflow-x:hidden}
   #top-header{padding:0 12px;height:50px}
   #page-title{font-size:17px}
 
-  /* KPI grid: 2x2 on mobile */
-  .dash-grid,.kpi-grid-5{grid-template-columns:1fr 1fr !important;gap:10px}
-  .kpi{padding:14px}
-  .kpi-val{font-size:28px}
-  .kpi-icon{font-size:20px}
+  /* ── SIDEBAR scrollbar fix ── */
+  #sidebar{display:flex;flex-direction:column;overflow:hidden}
+  #sidebar-nav{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:8px}
+  #sidebar-bottom{flex-shrink:0;overflow-y:auto;max-height:220px;-webkit-overflow-scrolling:touch}
 
-  /* All dash rows stack vertically */
-  .dash-row,.dash-row.three{grid-template-columns:1fr !important}
+  /* ── KPI GRIDS ── */
+  .dash-grid,.kpi-grid-5{grid-template-columns:1fr 1fr !important;gap:8px}
+  .kpi{padding:12px}
+  .kpi-val{font-size:24px}
+  .kpi-icon{font-size:18px}
 
-  /* Forms stack */
+  /* ── DASHBOARD ROWS ── */
+  .dash-row,.dash-row.three{grid-template-columns:1fr !important;gap:10px}
+
+  /* ── FORMS ── */
   .form-grid,.form-grid.three{grid-template-columns:1fr !important}
 
-  /* Tables: horizontal scroll */
-  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table{min-width:500px}
-  th,td{padding:8px 10px;font-size:11px}
+  /* ── TABLES: card view on mobile ── */
+  .table-wrap{overflow-x:hidden;width:100%}
+  table{width:100%;min-width:unset;border-collapse:collapse}
+  thead{display:none}
+  table tr{display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;padding:12px;box-shadow:var(--shadow)}
+  table tr:hover{background:var(--paper)}
+  table td{display:flex;align-items:flex-start;justify-content:space-between;padding:4px 0;border:none;font-size:12px;min-height:0}
+  table td:before{content:attr(data-label);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);min-width:90px;flex-shrink:0;padding-top:1px}
+  table td.actions{justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)}
+  table td.actions:before{display:none}
 
-  /* Summary strips: 2x2 */
+  /* ── SUMMARY STRIPS ── */
   #angebote-summary,#rechnungen-summary{grid-template-columns:1fr 1fr !important}
 
-  /* Kanban: single column */
+  /* ── SEC HEADER ── */
+  .sec-header{flex-wrap:wrap;gap:8px}
+  .sec-header .btn-primary,.sec-header .btn-yellow{margin-left:0}
+  .sec-title{font-size:18px}
+
+  /* ── FILTER BUTTONS: horizontal scroll ── */
+  .filter-row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin-bottom:8px;flex-wrap:nowrap}
+  .filter-row::-webkit-scrollbar{display:none}
+  .filters-bar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .filters-bar::-webkit-scrollbar{display:none}
+  .filter-chip{flex-shrink:0;white-space:nowrap}
+
+  /* ── MODALS ── */
+  .overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:16px 16px 0 0;max-height:92vh;max-width:100%;width:100%}
+  .modal-body{max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+  /* ── KANBAN ── */
   #kanban-board{grid-template-columns:1fr !important}
 
-  /* Kalender: no side panel */
+  /* ── KALENDER ── */
   #kal-bottom{grid-template-columns:1fr !important}
 
-  /* Competitor grid: stack */
-  .comp-grid{grid-template-columns:1fr !important}
-  .pot-grid{grid-template-columns:1fr 1fr !important}
+  /* ── RECHNER / KONFIGURATOR LAYOUT ── */
+  #rechner-layout,#konf-layout{grid-template-columns:1fr !important}
+  #rechner-layout > div:last-child{position:static !important}
 
-  /* Section headers */
-  .sec-header{flex-wrap:wrap;gap:8px}
-  .sec-header .btn-primary{margin-left:0}
-
-  /* Modal: full screen on mobile */
-  .overlay{padding:0;align-items:flex-end}
-  .modal{border-radius:16px 16px 0 0;max-height:92vh;max-width:100%}
-
-  /* Hide less important header buttons */
+  /* ── HEADER BUTTONS ── */
   #header-right .header-btn:not(#dark-toggle){display:none}
 
-  /* Mini calendar full width */
-  .mini-cal-grid{gap:3px}
-  .mini-cal-cell{font-size:12px;min-height:32px}
+  /* ── MINI CALENDAR ── */
+  .mini-cal-grid{gap:2px}
+  .mini-cal-cell{font-size:11px;min-height:28px}
 
-  /* FAB position */
+  /* ── FAB ── */
   #fab{bottom:80px;right:16px}
 
-  /* Global search */
+  /* ── GLOBAL SEARCH ── */
   #global-search-box{max-width:100%;border-radius:12px 12px 0 0}
   #global-search-overlay{align-items:flex-end;padding:0}
+
+  /* ── CONTACT DETAIL ── */
+  #contact-detail-content > div{grid-template-columns:1fr !important}
+
+  /* ── WETTBEWERB ── */
+  #page-wettbewerb > div{grid-template-columns:1fr !important}
+
+  /* ── ROI CHARTS ── */
+  #page-roi > div:nth-child(2){grid-template-columns:1fr !important}
+
+  /* ── PREVENT OVERFLOW ── */
+  *{max-width:100%;word-break:break-word}
+  img{max-width:100%;height:auto}
+}
+
+/* Extra small */
+@media(max-width:380px){
+  .dash-grid,.kpi-grid-5{grid-template-columns:1fr !important}
+  .kpi-val{font-size:20px}
+  .page{padding:8px 8px 90px}
 }
 
 /* Extra small phones */
@@ -3016,19 +3056,19 @@ function renderContacts() {
     const wert = rgs.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
     const lastUpdate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('de-DE') : '–';
     return `<tr style="cursor:pointer" onclick="openContactDetail('${c.id}')">
-      <td class="bold"><div style="display:flex;align-items:center;gap:10px">
+      <td data-label="Firma" class="bold"><div style="display:flex;align-items:center;gap:10px">
         ${c.photo
           ? `<img src="${c.photo}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
           : `<div style="width:30px;height:30px;border-radius:4px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--yellow);flex-shrink:0">${initials(c.firma)}</div>`
         }
         <div><div>${c.firma}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${c.person}</div>`:''}</div>
       </div></td>
-      <td><span class="badge ${brancheClass(c.branche)}" style="font-size:9px;padding:2px 7px">${brancheLabel(c.branche)}</span></td>
-      <td>${c.plz||'–'}</td>
-      <td>${c.tel?`<a href="tel:${c.tel}" onclick="event.stopPropagation()" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
-      <td>${getBadge(c.status)}</td>
-      <td class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
-      <td style="color:var(--muted);font-size:11px">${lastUpdate}</td>
+      <td data-label="Branche"><span class="badge ${brancheClass(c.branche)}" style="font-size:9px;padding:2px 7px">${brancheLabel(c.branche)}</span></td>
+      <td data-label="PLZ">${c.plz||'–'}</td>
+      <td data-label="Telefon">${c.tel?`<a href="tel:${c.tel}" onclick="event.stopPropagation()" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
+      <td data-label="Status">${getBadge(c.status)}</td>
+      <td data-label="Umsatz" class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
+      <td data-label="Zuletzt" style="color:var(--muted);font-size:11px">${lastUpdate}</td>
       <td class="actions" onclick="event.stopPropagation()">
         <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Angebot</button>
         <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal('${c.id}')" title="Erinnerung">🔔</button>
@@ -3131,12 +3171,12 @@ function renderAngebote() {
     const c=DB.contacts.find(x=>x.id===a.kundeId);
     const sum=sumPositions(a.positions);
     return `<tr style="cursor:pointer" onclick="printDoc('angebot','${a.id}')">
-      <td class="mono" style="font-weight:600;color:var(--blue)">${a.nr||'–'}</td>
-      <td class="bold">${c?.firma||'Unbekannt'}</td>
-      <td>${a.betreff}</td>
-      <td style="color:var(--muted)">${fmtDate(a.datum)}</td>
-      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
-      <td>${getBadge(a.status)}</td>
+      <td data-label="Nr." class="mono" style="font-weight:600;color:var(--blue)">${a.nr||'–'}</td>
+      <td data-label="Kunde" class="bold">${c?.firma||'Unbekannt'}</td>
+      <td data-label="Betreff">${a.betreff}</td>
+      <td data-label="Datum" style="color:var(--muted)">${fmtDate(a.datum)}</td>
+      <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
+      <td data-label="Status">${getBadge(a.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
         <button class="btn-ghost btn-sm" onclick="angebotToRechnung('${a.id}')">→ Rechnung</button>
         <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨 PDF</button>
@@ -3243,13 +3283,13 @@ function renderRechnungen(){
     const isUeber=r.status==='offen-rg'&&r.faellig&&new Date(r.faellig)<new Date();
     if(isUeber&&r.status==='offen-rg'){r.status='ueberfaellig';}
     return `<tr style="cursor:pointer" onclick="printDoc('rechnung','${r.id}')">
-      <td class="mono" style="font-weight:600;color:var(--blue)">${r.nr||'–'}</td>
-      <td class="bold">${c?.firma||'Unbekannt'}</td>
-      <td>${r.betreff}</td>
-      <td style="color:var(--muted)">${fmtDate(r.datum)}</td>
-      <td style="color:${isUeber?'var(--red)':'var(--muted)'};font-weight:${isUeber?'600':'400'}">${fmtDate(r.faellig)}</td>
-      <td class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
-      <td>${getBadge(r.status)}</td>
+      <td data-label="Nr." class="mono" style="font-weight:600;color:var(--blue)">${r.nr||'–'}</td>
+      <td data-label="Kunde" class="bold">${c?.firma||'Unbekannt'}</td>
+      <td data-label="Betreff">${r.betreff}</td>
+      <td data-label="Datum" style="color:var(--muted)">${fmtDate(r.datum)}</td>
+      <td data-label="Fällig" style="color:${isUeber?'var(--red)':'var(--muted)'};font-weight:${isUeber?'600':'400'}">${fmtDate(r.faellig)}</td>
+      <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
+      <td data-label="Status">${getBadge(r.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
         ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
         <button class="btn-ghost btn-sm" onclick="printDoc('rechnung','${r.id}')">🖨 PDF</button>
