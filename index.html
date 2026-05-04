@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <title>Viral Outlaws CRM</title>
 
 <!-- PWA -->
@@ -2385,20 +2386,29 @@ tr[onclick] { transition:background .1s; }
 const SUPABASE_URL = 'https://jjfmxiqippkgqkwihgek.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_gw9k2OPbyyacc_s6BoOM8Q_z1SwC7wB';
 
-// Load Supabase client dynamically
 let _supabase = null;
-async function getSupabase() {
-  if(_supabase) return _supabase;
-  // Import supabase-js from CDN
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  _supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true
+function getSupabase() {
+  if(_supabase) return Promise.resolve(_supabase);
+  return new Promise((resolve, reject) => {
+    if(window.supabase) {
+      _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
+      });
+      resolve(_supabase);
+      return;
     }
+    // Load supabase-js via script tag
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+    script.onload = () => {
+      _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
+      });
+      resolve(_supabase);
+    };
+    script.onerror = () => reject(new Error('Supabase konnte nicht geladen werden'));
+    document.head.appendChild(script);
   });
-  return _supabase;
 }
 
 // Current session state
@@ -3779,7 +3789,8 @@ async function syncToSupabase() {
 
 // ── CONTACTS ──
 async function sbSaveContact(contact) {
-  if(!_useSupabase) return;
+  if(!_useSupabase) { console.log('sbSaveContact: Supabase not active'); return; }
+  if(!_currentWorkspace?.id) { console.warn('sbSaveContact: no workspace_id'); return; }
   try {
     const sb = await getSupabase();
     const row = {
@@ -3803,8 +3814,14 @@ async function sbSaveContact(contact) {
       checks: contact.checks||[],
       updated_at: new Date().toISOString()
     };
-    await sb.from('contacts').upsert(row);
-  } catch(e) { console.warn('sbSaveContact:', e.message); }
+    console.log('Saving contact to Supabase:', row.firma, 'workspace:', row.workspace_id);
+    const { data, error } = await sb.from('contacts').upsert(row).select();
+    if(error) {
+      console.error('sbSaveContact error:', error.message, error.details, error.hint);
+    } else {
+      console.log('Contact saved OK:', data);
+    }
+  } catch(e) { console.error('sbSaveContact exception:', e.message); }
 }
 
 async function sbDeleteContact(id) {
