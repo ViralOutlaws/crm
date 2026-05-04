@@ -853,6 +853,23 @@ tr[onclick] { transition:background .1s; }
       </div>
     </div>
 
+    <!-- DATENMIGRATION -->
+    <div class="dash-card" style="grid-column:1/-1;border-left:3px solid var(--green)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px">📦</div>
+        <div>
+          <h3>Google Drive → Supabase Migration</h3>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Bestehende Daten einmalig nach Supabase übertragen</div>
+        </div>
+        <button class="btn-primary" onclick="migrateFromDrive()" style="margin-left:auto">🚀 Jetzt migrieren</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.8">
+        ✅ Kontakte, Angebote, Rechnungen, Aufgaben, Kalender, Retainer, Ausgaben, ROI-Daten<br>
+        ✅ Bestehende Supabase-Daten werden nicht überschrieben<br>
+        ✅ Funktioniert nur wenn Google Drive verbunden ist
+      </div>
+    </div>
+
     <!-- E-MAIL VERSAND -->
     <div class="dash-card" style="grid-column:1/-1;border-left:3px solid var(--blue)">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
@@ -8039,6 +8056,246 @@ async function saveWorkspaceSettings() {
   } catch(e) {
     alert('Fehler: ' + e.message);
   }
+}
+
+// ==================================================
+// DATENMIGRATION: Google Drive → Supabase
+// ==================================================
+async function migrateFromDrive() {
+  if(!_currentUser) { alert('Bitte zuerst einloggen.'); return; }
+  const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
+
+  // Step 1: Load data from Google Drive
+  const driveData = await loadFromDrive();
+  if(!driveData) {
+    alert('Keine Google Drive Daten gefunden.\nBitte zuerst mit Google Drive verbinden.');
+    return;
+  }
+
+  let data;
+  try { data = JSON.parse(driveData); }
+  catch(e) { alert('Fehler beim Lesen der Drive-Daten: ' + e.message); return; }
+
+  const counts = {
+    contacts: data.contacts?.length||0,
+    angebote: data.angebote?.length||0,
+    rechnungen: data.rechnungen?.length||0,
+    kanban: data.kanban?.length||0,
+    kalEvents: data.kalEvents?.length||0,
+    wiedervorlagen: data.wiedervorlagen?.length||0,
+    retainer: data.retainer?.length||0,
+    ausgaben: data.ausgaben?.length||0,
+    roi: data.roi?.length||0,
+  };
+
+  const msg = `Folgende Daten werden von Google Drive nach Supabase migriert:\n\n`
+    + `👥 Kontakte: ${counts.contacts}\n`
+    + `📋 Angebote: ${counts.angebote}\n`
+    + `🧾 Rechnungen: ${counts.rechnungen}\n`
+    + `🗂 Aufgaben: ${counts.kanban}\n`
+    + `📅 Kalender: ${counts.kalEvents}\n`
+    + `🔔 Wiedervorlagen: ${counts.wiedervorlagen}\n`
+    + `🔄 Retainer: ${counts.retainer}\n`
+    + `💶 Ausgaben: ${counts.ausgaben}\n`
+    + `📈 ROI-Daten: ${counts.roi}\n\n`
+    + `Bestehende Supabase-Daten werden NICHT überschrieben.\nJetzt migrieren?`;
+
+  if(!confirm(msg)) return;
+
+  showLoadingOverlay('Migriere Daten...');
+  const sb = await getSupabase();
+  let errors = 0;
+  let success = 0;
+
+  try {
+    // Helper: batch upsert with UUID validation
+    const isUUID = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const toUUID = id => isUUID(id) ? id : uid(); // generate new UUID if old format
+
+    // Migrate contacts
+    if(data.contacts?.length) {
+      showLoadingOverlay(`Migriere ${data.contacts.length} Kontakte...`);
+      for(const c of data.contacts) {
+        try {
+          const newId = toUUID(c.id);
+          await sb.from('contacts').upsert({
+            id: newId, workspace_id: wsId,
+            firma: c.firma||'Unbekannt', person: c.person||null,
+            email: c.email||null, tel: c.tel||null, plz: c.plz||null,
+            web: c.web||null, instagram: c.instagram||null,
+            facebook: c.facebook||null, gbusiness: c.gbusiness||null,
+            branche: c.branche||null, status: c.status||'offen',
+            notes: c.notes||null, photo: c.photo||null,
+            notizen: c.notizen||[], dokumente: c.dokumente||[], checks: c.checks||[]
+          });
+          success++;
+        } catch(e) { errors++; console.warn('Contact migration error:', e.message); }
+      }
+    }
+
+    // Migrate Angebote
+    if(data.angebote?.length) {
+      showLoadingOverlay(`Migriere ${data.angebote.length} Angebote...`);
+      for(const a of data.angebote) {
+        try {
+          await sb.from('angebote').upsert({
+            id: toUUID(a.id), workspace_id: wsId,
+            kunde_id: isUUID(a.kundeId) ? a.kundeId : null,
+            nr: a.nr||null, betreff: a.betreff||null,
+            datum: a.datum||null, valid_bis: a.validBis||null,
+            status: a.status||'entwurf', positions: a.positions||[], notes: a.notes||null
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate Rechnungen
+    if(data.rechnungen?.length) {
+      showLoadingOverlay(`Migriere ${data.rechnungen.length} Rechnungen...`);
+      for(const r of data.rechnungen) {
+        try {
+          await sb.from('rechnungen').upsert({
+            id: toUUID(r.id), workspace_id: wsId,
+            kunde_id: isUUID(r.kundeId) ? r.kundeId : null,
+            nr: r.nr||null, betreff: r.betreff||null,
+            datum: r.datum||null, faellig: r.faellig||null,
+            status: r.status||'offen-rg', positions: r.positions||[], notes: r.notes||null
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate Kanban
+    if(data.kanban?.length) {
+      showLoadingOverlay(`Migriere ${data.kanban.length} Aufgaben...`);
+      for(const k of data.kanban) {
+        try {
+          await sb.from('aufgaben').upsert({
+            id: toUUID(k.id), workspace_id: wsId,
+            kontakt_id: isUUID(k.kontaktId) ? k.kontaktId : null,
+            titel: k.text||'Aufgabe', beschreibung: k.notiz||null,
+            status: k.col||'offen', prioritaet: k.prio||'normal',
+            faellig: k.datum||null
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate Kalender
+    if(data.kalEvents?.length) {
+      showLoadingOverlay(`Migriere ${data.kalEvents.length} Kalendereinträge...`);
+      for(const e of data.kalEvents) {
+        try {
+          await sb.from('kal_events').upsert({
+            id: toUUID(e.id), workspace_id: wsId,
+            titel: e.titel||'Termin', datum: e.datum||null,
+            zeit: e.zeit||null, typ: e.typ||'termin',
+            kontakt_id: isUUID(e.kontaktId) ? e.kontaktId : null,
+            notiz: e.notiz||null
+          });
+          success++;
+        } catch(e2) { errors++; }
+      }
+    }
+
+    // Migrate Wiedervorlagen
+    if(data.wiedervorlagen?.length) {
+      for(const w of data.wiedervorlagen) {
+        try {
+          await sb.from('wiedervorlagen').upsert({
+            id: toUUID(w.id), workspace_id: wsId,
+            kontakt_id: isUUID(w.kontaktId) ? w.kontaktId : null,
+            text: w.text||'Erinnerung', datum: w.datum||null, done: w.done||false
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate Retainer
+    if(data.retainer?.length) {
+      for(const r of data.retainer) {
+        try {
+          await sb.from('retainer').upsert({
+            id: toUUID(r.id), workspace_id: wsId,
+            kunde_id: isUUID(r.kundeId) ? r.kundeId : null,
+            paket: r.paket||null, betrag: r.betrag||0,
+            start_datum: r.start||null, abrechnungstag: r.abrechnungstag||'1',
+            next_datum: r.next||null, status: r.status||'aktiv',
+            leistungen: r.leistungen||null
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate Ausgaben
+    if(data.ausgaben?.length) {
+      showLoadingOverlay(`Migriere ${data.ausgaben.length} Ausgaben...`);
+      for(const a of data.ausgaben) {
+        try {
+          await sb.from('ausgaben').upsert({
+            id: toUUID(a.id), workspace_id: wsId,
+            typ: a.typ||'ausgabe', datum: a.datum||null,
+            beschreibung: a.desc||a.beschreibung||'Ausgabe',
+            kategorie: a.kat||null, netto: a.netto||0,
+            mwst_pct: a.mwstPct||0, mwst_betrag: a.mwstBetrag||0,
+            brutto: a.brutto||0, notiz: a.notiz||null,
+            beleg_name: a.belegName||null
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    // Migrate ROI
+    if(data.roi?.length) {
+      for(const r of data.roi) {
+        try {
+          await sb.from('roi_daten').upsert({
+            id: toUUID(r.id), workspace_id: wsId,
+            kunde_id: isUUID(r.kundeId) ? r.kundeId : null,
+            kanal: r.kanal||'google', monat: r.monat, jahr: r.jahr,
+            budget: r.budget||0, klicks: r.klicks||0, leads: r.leads||0,
+            abschluesse: r.abschluesse||0, umsatz: r.umsatz||0,
+            roas: r.roas||0, roi: r.roi||0, cpl: r.cpl||0
+          });
+          success++;
+        } catch(e) { errors++; }
+      }
+    }
+
+    hideLoadingOverlay();
+    alert(`✅ Migration abgeschlossen!\n\n${success} Datensätze erfolgreich migriert.${errors>0?'\n⚠ '+errors+' Fehler (werden übersprungen)':''}\n\nDas CRM wird jetzt neu geladen.`);
+
+    // Reload data from Supabase
+    await loadAllFromSupabase();
+    renderDashboard();
+
+  } catch(e) {
+    hideLoadingOverlay();
+    alert('Fehler bei Migration: ' + e.message);
+  }
+}
+
+async function loadFromDrive() {
+  // Try to load from Google Drive if connected
+  if(_driveConnected && _driveToken && _driveFileId) {
+    try {
+      const resp = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${_driveFileId}?alt=media`,
+        { headers: { Authorization: `Bearer ${_driveToken}` } }
+      );
+      if(resp.ok) return await resp.text();
+    } catch(e) { console.warn('Drive load failed:', e); }
+  }
+  // Fallback: try localStorage
+  const local = localStorage.getItem('vo_crm');
+  if(local) return local;
+  return null;
 }
 
 // Inject logo
