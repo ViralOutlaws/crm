@@ -2445,16 +2445,54 @@ async function supabaseSignOut() {
 
 async function loadUserProfile() {
   const sb = await getSupabase();
-  // Load profile
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', _currentUser.id).single();
-  _currentProfile = profile;
-  // Load workspace
-  if(profile?.workspace_id) {
-    const { data: ws } = await sb.from('workspaces').select('*').eq('id', profile.workspace_id).single();
-    _currentWorkspace = ws;
-    applyWorkspaceBranding(ws);
+  try {
+    // Load profile
+    const { data: profile, error: profErr } = await sb.from('profiles')
+      .select('*').eq('id', _currentUser.id).single();
+
+    if(profErr) {
+      console.warn('loadUserProfile error:', profErr.message);
+      // Profile might not exist yet - create it
+      _currentProfile = { id: _currentUser.id, role: 'admin', email: _currentUser.email };
+    } else {
+      _currentProfile = profile;
+      console.log('Profile loaded:', profile?.role, 'workspace:', profile?.workspace_id);
+    }
+
+    // Load workspace
+    if(_currentProfile?.workspace_id) {
+      const { data: ws, error: wsErr } = await sb.from('workspaces')
+        .select('*').eq('id', _currentProfile.workspace_id).single();
+      if(wsErr) {
+        console.warn('Workspace load error:', wsErr.message);
+      } else {
+        _currentWorkspace = ws;
+        console.log('Workspace loaded:', ws?.name, ws?.id);
+        applyWorkspaceBranding(ws);
+      }
+    } else {
+      // Try to find any workspace
+      const { data: allWs } = await sb.from('workspaces').select('*').limit(1);
+      if(allWs?.length) {
+        _currentWorkspace = allWs[0];
+        console.log('Workspace found via fallback:', _currentWorkspace?.name);
+        // Update profile with workspace_id
+        await sb.from('profiles').upsert({
+          id: _currentUser.id,
+          workspace_id: _currentWorkspace.id,
+          email: _currentUser.email,
+          role: _currentProfile?.role || 'admin'
+        });
+        applyWorkspaceBranding(_currentWorkspace);
+      } else {
+        console.error('No workspace found!');
+      }
+    }
+    _useSupabase = true;
+  } catch(e) {
+    console.error('loadUserProfile exception:', e.message);
+    _useSupabase = false;
   }
-  _useSupabase = true;
 }
 
 function applyWorkspaceBranding(ws) {
