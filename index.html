@@ -8282,24 +8282,19 @@ async function migrateFromDrive() {
 }
 
 async function loadFromDrive() {
-  // First try localStorage (most reliable)
+  // First try localStorage
   const local = localStorage.getItem('vo_crm');
   if(local) {
     try {
       const parsed = JSON.parse(local);
-      // Check if it has actual data
-      const hasData = parsed.contacts?.length || parsed.angebote?.length || parsed.rechnungen?.length;
-      if(hasData) {
-        console.log('Loaded from localStorage:', {
-          contacts: parsed.contacts?.length,
-          angebote: parsed.angebote?.length,
-          rechnungen: parsed.rechnungen?.length
-        });
+      // Return if it has any of the expected keys
+      if(parsed.contacts !== undefined || parsed.angebote !== undefined) {
+        console.log('Migration data found in localStorage:', Object.keys(parsed));
         return local;
       }
-    } catch(e) {}
+    } catch(e) { console.warn('localStorage parse error:', e); }
   }
-  // Try Google Drive if connected
+  // Try Google Drive
   if(_driveConnected && _driveToken && _driveFileId) {
     try {
       const resp = await fetch(
