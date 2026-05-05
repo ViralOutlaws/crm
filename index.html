@@ -7167,46 +7167,6 @@ async function radarShowDetail(encoded) {
   }
 }
 
-    content.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">
-        <div style="width:48px;height:48px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--yellow);flex-shrink:0">${name.slice(0,2).toUpperCase()}</div>
-        <div style="flex:1">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">${name}</div>
-          ${rating?`<div style="font-size:12px;color:var(--yellow2);margin-top:2px">${'★'.repeat(Math.round(rating))} ${rating} <span style="color:var(--muted)">(${reviews} Bewertungen)</span></div>`:''}
-        </div>
-        ${alreadyIn?'<span style="font-size:11px;background:var(--green-bg);color:var(--green);padding:4px 10px;border-radius:10px;font-weight:700">✓ Im CRM</span>':''}
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-        ${addr?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">📍</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Adresse</div>
-          <div style="font-size:12px;color:var(--ink)">${addr}</div></div>
-        </div>`:''}
-        ${tel?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">📞</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Telefon</div>
-          <a href="tel:${tel}" style="font-size:13px;color:var(--blue);font-weight:600;text-decoration:none">${tel}</a></div>
-        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">📞 Keine Telefonnummer gefunden</div>'}
-        ${web?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">🌐</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Website</div>
-          <a href="${web}" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:none;word-break:break-all">${web.replace(/^https?:\/\//,'')}</a></div>
-        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">🌐 Keine Website gefunden</div>'}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;width:100%;margin-bottom:4px">Schnelllinks</div>
-          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+plz)}" target="_blank" class="btn-ghost btn-sm">🔍 Google</a>
-          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+plz+' Facebook')}" target="_blank" class="btn-ghost btn-sm">👥 Facebook suchen</a>
-          <a href="https://www.instagram.com/explore/search/?q=${encodeURIComponent(name)}" target="_blank" class="btn-ghost btn-sm">📸 Instagram suchen</a>
-          ${web?`<a href="https://pagespeed.web.dev/report?url=${encodeURIComponent(web)}" target="_blank" class="btn-ghost btn-sm">⚡ PageSpeed</a>`:''}
-        </div>
-      </div>
-
-      ${!alreadyIn?`<button class="btn-primary" style="width:100%" onclick="radarAddContact('${encoded2}');closeModal('radar-detail-modal')">+ Jetzt ins CRM aufnehmen</button>`
-      :`<div style="text-align:center;padding:10px;background:var(--green-bg);border-radius:6px;font-size:12px;color:var(--green);font-weight:600">✓ Bereits als Kontakt im CRM vorhanden</div>`}`;
-  } catch(e) {
-    content.innerHTML = `<div style="color:var(--red);font-size:12px">Fehler beim Laden: ${e.message}</div>`;
-  }
 }
 
 function radarAddContact(encodedData) {
