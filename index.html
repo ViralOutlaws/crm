@@ -7140,14 +7140,18 @@ async function radarShowDetail(encoded) {
         </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">🌐 Keine Website gefunden</div>'}
 
         <!-- Email Search -->
-        <div style="padding:10px 12px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px">
-          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">✉ E-Mail Adresse finden</div>
+        <div id="email-scanner-box" style="padding:10px 12px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px">
+          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">✉ E-Mail automatisch suchen</div>
+          ${web ? `
+          <button class="btn-yellow" onclick="scanEmailFromWebsite('${web.replace(/^https?:\/\//,'')}','email-scanner-box')" style="width:100%;margin-bottom:6px">
+            🔍 Impressum & Website scannen
+          </button>` : ''}
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <a href="${emailSearchGoogle}" target="_blank" class="btn-ghost btn-sm">🔍 Google-Suche</a>
-            ${emailSearchWeb?`<a href="${emailSearchWeb}" target="_blank" class="btn-ghost btn-sm">🌐 Kontaktseite</a>`:''}
+            <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' E-Mail Kontakt')}" target="_blank" class="btn-ghost btn-sm">🔍 Google</a>
             ${web?`<a href="https://${web.replace(/^https?:\/\//,'')}/impressum" target="_blank" class="btn-ghost btn-sm">📄 Impressum</a>`:''}
+            ${web?`<a href="https://${web.replace(/^https?:\/\//,'')}/kontakt" target="_blank" class="btn-ghost btn-sm">📬 Kontakt</a>`:''}
           </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:6px">💡 Google Places gibt keine E-Mail-Adressen direkt zurück – über die Links findest du sie schnell</div>
+          <div id="email-scan-result" style="margin-top:8px"></div>
         </div>
 
         <!-- Quick links -->
@@ -9030,6 +9034,74 @@ async function removeUserGlobal(userId, name) {
     showAdminView('users');
     addActivity('Nutzer entfernt: ' + name, 'red');
   } catch(e) { alert('Fehler: ' + e.message); }
+}
+
+// ==================================================
+// EMAIL SCANNER
+// ==================================================
+async function scanEmailFromWebsite(website, boxId) {
+  const workerUrl = (DB.settings?.placesApiKey||'').replace(/\/$/, '');
+  if(!workerUrl) {
+    alert('Bitte zuerst den Places API Worker in den Einstellungen eintragen.');
+    return;
+  }
+
+  const resultEl = document.getElementById('email-scan-result');
+  const btn = document.querySelector(`#${boxId} button`);
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ Scanne Website...'; }
+  if(resultEl) resultEl.innerHTML = '<div style="font-size:11px;color:var(--muted)">⏳ Scanne Impressum und Kontaktseite...</div>';
+
+  try {
+    const resp = await fetch(`${workerUrl}?action=scan_email&website=${encodeURIComponent(website)}`, {
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await resp.json();
+
+    if(data.ok && data.email) {
+      if(resultEl) resultEl.innerHTML = `
+        <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:6px;padding:10px 12px">
+          <div style="font-size:10px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">✅ E-Mail gefunden</div>
+          <div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:8px">${data.email}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn-yellow btn-sm" onclick="useScannedEmail('${data.email}')">+ Ins CRM übernehmen</button>
+            <a href="mailto:${data.email}" class="btn-ghost btn-sm">✉ Direkt schreiben</a>
+            <button class="btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${data.email}').then(()=>alert('Kopiert!'))">📋 Kopieren</button>
+          </div>
+          ${data.allEmails?.length > 1 ? `<div style="margin-top:8px;font-size:10px;color:var(--muted)">Weitere gefunden: ${data.allEmails.slice(1).join(', ')}</div>` : ''}
+          <div style="margin-top:6px;font-size:9px;color:var(--muted)">Quelle: ${data.source}</div>
+        </div>`;
+    } else {
+      if(resultEl) resultEl.innerHTML = `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+          <div style="font-size:11px;color:var(--muted)">⚠ Keine E-Mail automatisch gefunden.<br>Bitte manuell im Impressum nachschauen.</div>
+        </div>`;
+    }
+  } catch(e) {
+    if(resultEl) resultEl.innerHTML = `<div style="font-size:11px;color:var(--red)">Fehler: ${e.message}</div>`;
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '🔍 Impressum & Website scannen'; }
+  }
+}
+
+// Übernimmt die gefundene E-Mail in den aktuell offenen Kontakt
+function useScannedEmail(email) {
+  // If contact detail is open, update it
+  if(currentDetailContactId) {
+    const c = DB.contacts.find(x => x.id === currentDetailContactId);
+    if(c) {
+      c.email = email;
+      sbSaveContact(c);
+      save();
+      renderContactDetail(currentDetailContactId);
+      closeModal('radar-detail-modal');
+      alert('✅ E-Mail "' + email + '" wurde beim Kontakt gespeichert!');
+      return;
+    }
+  }
+  // Otherwise copy to clipboard
+  navigator.clipboard.writeText(email).then(() => {
+    alert('E-Mail "' + email + '" in Zwischenablage kopiert!\nBeim nächsten Kontakt einfügen.');
+  });
 }
 
 // Inject logo
