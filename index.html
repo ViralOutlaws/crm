@@ -1959,7 +1959,8 @@ tr[onclick] { transition:background .1s; }
           </select>
         </div>
         <div class="field"><label>Straße & Nr.</label><input id="c-str" placeholder="Hauptstr. 1"></div>
-        <div class="field"><label>PLZ & Ort</label><input id="c-plz" placeholder="87700 Memmingen"></div>
+        <div class="field"><label>PLZ</label><input id="c-plz" placeholder="87700"></div>
+        <div class="field"><label>Ort</label><input id="c-ort" placeholder="Memmingen"></div>
         <div class="field"><label>Telefon</label><input id="c-tel" placeholder="08331 / …"></div>
         <div class="field"><label>E-Mail</label><input id="c-email" placeholder="info@firma.de"></div>
         <div class="field"><label>Website</label><input id="c-web" placeholder="firma.de"></div>
@@ -2989,6 +2990,7 @@ function openContactModal(id) {
   document.getElementById('c-branche').value = c?.branche||'handwerk';
   document.getElementById('c-str').value = c?.str||'';
   document.getElementById('c-plz').value = c?.plz||'';
+  const ortEl = document.getElementById('c-ort'); if(ortEl) ortEl.value = c?.ort||'';
   document.getElementById('c-tel').value = c?.tel||'';
   document.getElementById('c-email').value = c?.email||'';
   document.getElementById('c-web').value = c?.web||'';
@@ -3019,6 +3021,7 @@ function saveContact() {
     branche: document.getElementById('c-branche').value,
     str: document.getElementById('c-str').value,
     plz: document.getElementById('c-plz').value,
+    ort: document.getElementById('c-ort')?.value||'',
     tel: document.getElementById('c-tel').value,
     email: document.getElementById('c-email').value,
     web: document.getElementById('c-web').value,
@@ -3078,7 +3081,7 @@ function renderContacts() {
         <div><div>${c.firma}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${c.person}</div>`:''}</div>
       </div></td>
       <td data-label="Branche"><span class="badge ${brancheClass(c.branche)}" style="font-size:9px;padding:2px 7px">${brancheLabel(c.branche)}</span></td>
-      <td data-label="PLZ">${c.plz||'–'}</td>
+      <td data-label="PLZ / Ort">${[c.plz, c.ort].filter(Boolean).join(' ')||'–'}</td>
       <td data-label="Telefon">${c.tel?`<a href="tel:${c.tel}" onclick="event.stopPropagation()" style="color:var(--blue);text-decoration:none">${c.tel}</a>`:'–'}</td>
       <td data-label="Status">${getBadge(c.status)}</td>
       <td data-label="Umsatz" class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
@@ -6332,7 +6335,7 @@ function renderContactDetail(cid) {
             ${c.person ? `<span>👤 ${c.person}</span>` : ''}
             ${c.tel ? `<span>📞 <a href="tel:${c.tel}" style="color:var(--blue)">${c.tel}</a></span>` : ''}
             ${c.email ? `<span>✉ <a href="mailto:${c.email}" style="color:var(--blue)">${c.email}</a></span>` : ''}
-            ${c.plz ? `<span>📍 ${c.plz}</span>` : ''}
+            ${c.plz||c.ort ? `<span>📍 ${[c.plz, c.ort].filter(Boolean).join(' ')}</span>` : ''}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
             ${c.web ? `<a href="https://${c.web}" target="_blank" class="btn-ghost btn-sm">🌐 Website</a>` : ''}
@@ -7081,15 +7084,88 @@ async function radarShowDetail(encoded) {
 
     const name = details.name || data.name;
     const addr = details.formatted_address || data.addr || '';
-    const tel  = details.formatted_phone_number || '';
+    const tel  = details.formatted_phone_number || details.international_phone_number || '';
     const web  = details.website || '';
     const rating = details.rating || '';
     const reviews = details.user_ratings_total || '';
     const alreadyIn = DB.contacts.some(c => c.firma.toLowerCase() === name.toLowerCase());
-    const plzMatch = addr.match(/\d{5}/);
-    const plz = plzMatch ? plzMatch[0] : '';
 
-    const encoded2 = encodeURIComponent(JSON.stringify({name, addr, placeId:data.placeId, tel, web, plz}));
+    // Extract PLZ and Ort from address_components
+    let plz = '', ort = '';
+    if(details.address_components) {
+      details.address_components.forEach(comp => {
+        if(comp.types.includes('postal_code')) plz = comp.long_name;
+        if(comp.types.includes('locality')) ort = comp.long_name;
+      });
+    }
+    // Fallback: extract from formatted_address
+    if(!plz) { const m = addr.match(/\b(\d{5})\b/); if(m) plz = m[1]; }
+    if(!ort && plz) { const parts = addr.split(plz); if(parts[1]) ort = parts[1].replace(/,/g,'').trim().split(',')[0].trim(); }
+
+    const encoded2 = encodeURIComponent(JSON.stringify({name, addr, placeId:data.placeId, tel, web, plz, ort}));
+
+    // Email search links
+    const emailSearchGoogle = `https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' E-Mail Kontakt')}`;
+    const emailSearchWeb = web ? `https://${web.replace(/^https?:\/\//,'')}/kontakt` : '';
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">
+        <div style="width:48px;height:48px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--yellow);flex-shrink:0">${name.slice(0,2).toUpperCase()}</div>
+        <div style="flex:1">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">${name}</div>
+          ${rating?`<div style="font-size:12px;color:var(--yellow2);margin-top:2px">${'★'.repeat(Math.round(rating))} ${rating} <span style="color:var(--muted)">(${reviews} Bewertungen)</span></div>`:''}
+        </div>
+        ${alreadyIn?'<span style="font-size:11px;background:var(--green-bg);color:var(--green);padding:4px 10px;border-radius:10px;font-weight:700">✓ Im CRM</span>':''}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+        ${addr?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
+          <span style="font-size:16px">📍</span>
+          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Adresse</div>
+          <div style="font-size:12px">${addr}</div>
+          ${plz||ort?`<div style="font-size:11px;color:var(--muted);margin-top:2px">PLZ: <strong>${plz}</strong> · Ort: <strong>${ort}</strong></div>`:''}
+          </div>
+        </div>`:''}
+
+        ${tel?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
+          <span style="font-size:16px">📞</span>
+          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Telefon</div>
+          <a href="tel:${tel}" style="font-size:13px;color:var(--blue);font-weight:600;text-decoration:none">${tel}</a></div>
+        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">📞 Keine Telefonnummer gefunden</div>'}
+
+        ${web?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
+          <span style="font-size:16px">🌐</span>
+          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Website</div>
+          <a href="${web}" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:none;word-break:break-all">${web.replace(/^https?:\/\//,'')}</a></div>
+        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">🌐 Keine Website gefunden</div>'}
+
+        <!-- Email Search -->
+        <div style="padding:10px 12px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px">
+          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">✉ E-Mail Adresse finden</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a href="${emailSearchGoogle}" target="_blank" class="btn-ghost btn-sm">🔍 Google-Suche</a>
+            ${emailSearchWeb?`<a href="${emailSearchWeb}" target="_blank" class="btn-ghost btn-sm">🌐 Kontaktseite</a>`:''}
+            ${web?`<a href="https://${web.replace(/^https?:\/\//,'')}/impressum" target="_blank" class="btn-ghost btn-sm">📄 Impressum</a>`:''}
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">💡 Google Places gibt keine E-Mail-Adressen direkt zurück – über die Links findest du sie schnell</div>
+        </div>
+
+        <!-- Quick links -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;background:var(--bg);border-radius:6px">
+          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;width:100%;margin-bottom:4px">Schnelllinks</div>
+          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort)}" target="_blank" class="btn-ghost btn-sm">🔍 Google</a>
+          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' Facebook')}" target="_blank" class="btn-ghost btn-sm">👥 Facebook</a>
+          <a href="https://www.instagram.com/explore/search/?q=${encodeURIComponent(name)}" target="_blank" class="btn-ghost btn-sm">📸 Instagram</a>
+          ${web?`<a href="https://pagespeed.web.dev/report?url=${encodeURIComponent(web)}" target="_blank" class="btn-ghost btn-sm">⚡ PageSpeed</a>`:''}
+        </div>
+      </div>
+
+      ${!alreadyIn?`<button class="btn-primary" style="width:100%" onclick="radarAddContact('${encoded2}');closeModal('radar-detail-modal')">+ Jetzt ins CRM aufnehmen</button>`
+      :`<div style="text-align:center;padding:10px;background:var(--green-bg);border-radius:6px;font-size:12px;color:var(--green);font-weight:600">✓ Bereits als Kontakt im CRM vorhanden</div>`}`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--red);font-size:12px">Fehler beim Laden: ${e.message}</div>`;
+  }
+}
 
     content.innerHTML = `
       <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">
@@ -7140,6 +7216,7 @@ function radarAddContact(encodedData) {
     setTimeout(() => {
       document.getElementById('c-firma').value = data.name || '';
       if(data.plz) document.getElementById('c-plz').value = data.plz;
+      if(data.ort) { const ortEl = document.getElementById('c-ort'); if(ortEl) ortEl.value = data.ort; }
       if(data.tel) document.getElementById('c-tel').value = data.tel;
       if(data.web) document.getElementById('c-web').value = data.web.replace(/^https?:\/\//,'');
       document.getElementById('c-status').value = 'offen';
