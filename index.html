@@ -6943,25 +6943,122 @@ async function radarSearch() {
 function renderRadarResults(places, query, location) {
   const resultsEl = document.getElementById('radar-results');
   const existingFirmen = DB.contacts.map(c => c.firma.toLowerCase());
+  const newPlaces = places.filter(p => !existingFirmen.includes(p.name.toLowerCase()));
 
-  resultsEl.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${places.length} Ergebnisse für "${query}" in "${location}" – <strong>Klicke auf einen Betrieb für Details</strong></div>`
-    + `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">`
-    + places.map(p => {
-        const alreadyIn = existingFirmen.includes(p.name.toLowerCase());
-        const stars = p.rating ? '★'.repeat(Math.round(p.rating)) + ' ' + p.rating : '';
-        const encoded = encodeURIComponent(JSON.stringify({name:p.name, addr:p.vicinity||'', placeId:p.place_id}));
-        return `<div onclick="radarShowDetail('${encoded}')" style="background:var(--paper);border:1.5px solid ${alreadyIn?'var(--green)':'var(--border)'};border-radius:6px;padding:14px;cursor:pointer;transition:all .15s;${alreadyIn?'opacity:.8':''}" onmouseover="this.style.borderColor='var(--yellow)';this.style.boxShadow='0 4px 20px rgba(245,196,0,.15)'" onmouseout="this.style.borderColor='${alreadyIn?'var(--green)':'var(--border)'}'  ;this.style.boxShadow=''">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
+  resultsEl.innerHTML = `
+    <!-- Toolbar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:12px 16px;background:var(--paper);border:1px solid var(--border);border-radius:6px">
+      <div style="font-size:12px;color:var(--muted)">
+        <strong>${places.length}</strong> Ergebnisse · <strong>${newPlaces.length}</strong> noch nicht im CRM
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+          <input type="checkbox" id="radar-select-all" onchange="radarToggleAll(this.checked)" style="width:15px;height:15px;accent-color:var(--yellow)">
+          Alle auswählen
+        </label>
+        <button class="btn-yellow" onclick="radarImportSelected()" id="radar-import-btn" style="display:none">
+          + Ausgewählte ins CRM (<span id="radar-selected-count">0</span>)
+        </button>
+      </div>
+    </div>
+    <!-- Grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px" id="radar-grid">
+    ${places.map((p,i) => {
+      const alreadyIn = existingFirmen.includes(p.name.toLowerCase());
+      const stars = p.rating ? '★'.repeat(Math.round(p.rating)) + ' ' + p.rating : '';
+      const encoded = encodeURIComponent(JSON.stringify({name:p.name, addr:p.vicinity||'', placeId:p.place_id}));
+      return `<div style="background:var(--paper);border:1.5px solid ${alreadyIn?'var(--green)':'var(--border)'};border-radius:6px;padding:14px;position:relative;transition:all .15s" id="radar-card-${i}">
+        ${!alreadyIn ? `<div style="position:absolute;top:10px;right:10px" onclick="event.stopPropagation()">
+          <input type="checkbox" class="radar-check" data-encoded="${encoded}" data-idx="${i}"
+            onchange="radarUpdateSelection()"
+            style="width:18px;height:18px;accent-color:var(--yellow);cursor:pointer">
+        </div>` : ''}
+        <div onclick="radarShowDetail('${encoded}')" style="cursor:pointer">
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding-right:${!alreadyIn?'24px':'0'}">
             <div style="font-size:13px;font-weight:700;color:var(--ink);flex:1">${p.name}</div>
-            ${alreadyIn?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700;flex-shrink:0;margin-left:6px">✓ CRM</span>':''}
+            ${alreadyIn?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700;flex-shrink:0">✓ CRM</span>':''}
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">📍 ${p.vicinity||'–'}</div>
-          ${stars?`<div style="font-size:11px;color:var(--yellow2);margin-bottom:6px">${stars} <span style="color:var(--muted)">(${p.user_ratings_total||0})</span></div>`:''}
-          <div style="font-size:10px;color:var(--border2)">${p.types?.slice(0,2).join(', ')||''}</div>
-          <div style="margin-top:10px;font-size:10px;color:var(--blue);font-weight:600">Details ansehen →</div>
-        </div>`;
-      }).join('')
-    + '</div>';
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">📍 ${p.vicinity||'–'}</div>
+          ${stars?`<div style="font-size:11px;color:var(--yellow2);margin-bottom:4px">${stars} <span style="color:var(--muted)">(${p.user_ratings_total||0})</span></div>`:''}
+          <div style="margin-top:8px;font-size:10px;color:var(--blue);font-weight:600">Details ansehen →</div>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>`;
+}
+
+function radarToggleAll(checked) {
+  document.querySelectorAll('.radar-check').forEach(cb => {
+    cb.checked = checked;
+    const card = document.getElementById('radar-card-'+cb.dataset.idx);
+    if(card) card.style.borderColor = checked ? 'var(--yellow)' : 'var(--border)';
+  });
+  radarUpdateSelection();
+}
+
+function radarUpdateSelection() {
+  const checked = document.querySelectorAll('.radar-check:checked');
+  const btn = document.getElementById('radar-import-btn');
+  const count = document.getElementById('radar-selected-count');
+  const allCb = document.getElementById('radar-select-all');
+  const total = document.querySelectorAll('.radar-check').length;
+
+  if(count) count.textContent = checked.length;
+  if(btn) btn.style.display = checked.length > 0 ? '' : 'none';
+  if(allCb) allCb.checked = checked.length === total && total > 0;
+
+  // Update card borders
+  document.querySelectorAll('.radar-check').forEach(cb => {
+    const card = document.getElementById('radar-card-'+cb.dataset.idx);
+    if(card && !card.style.borderColor.includes('green')) {
+      card.style.borderColor = cb.checked ? 'var(--yellow)' : 'var(--border)';
+      card.style.background = cb.checked ? 'var(--yellow-bg)' : 'var(--paper)';
+    }
+  });
+}
+
+function radarImportSelected() {
+  const checked = document.querySelectorAll('.radar-check:checked');
+  if(!checked.length) return;
+
+  let imported = 0;
+  checked.forEach(cb => {
+    try {
+      const data = JSON.parse(decodeURIComponent(cb.dataset.encoded));
+      const plzMatch = (data.addr||'').match(/\d{5}/);
+      const contact = {
+        id: uid(), firma: data.name,
+        person: '', email: '', tel: data.tel||'',
+        web: (data.web||'').replace(/^https?:\/\//,''),
+        plz: plzMatch ? plzMatch[0] : '',
+        status: 'offen', branche: '', notes: '',
+        notizen: [], dokumente: [], checks: [],
+        updatedAt: new Date().toISOString()
+      };
+      DB.contacts.unshift(contact);
+      sbSaveContact(contact);
+      imported++;
+    } catch(e) { console.warn('Import error:', e); }
+  });
+
+  save();
+  addActivity(`${imported} Betriebe aus Kundenradar ins CRM importiert`, 'blue');
+  alert(`✅ ${imported} Betriebe ins CRM aufgenommen!\n\nDu findest sie unter Kontakte mit Status "Offen".`);
+
+  // Uncheck all and refresh
+  document.querySelectorAll('.radar-check').forEach(cb => { cb.checked = false; });
+  document.getElementById('radar-select-all').checked = false;
+  radarUpdateSelection();
+
+  // Mark imported cards as already in CRM
+  checked.forEach(cb => {
+    const card = document.getElementById('radar-card-'+cb.dataset.idx);
+    if(card) {
+      card.style.borderColor = 'var(--green)';
+      card.style.background = 'var(--paper)';
+      card.style.opacity = '0.7';
+    }
+  });
 }
 
 async function radarShowDetail(encoded) {
@@ -7722,6 +7819,12 @@ async function sendEmail() {
           id:uid(), typ:'email', datum:today(), text:'E-Mail gesendet: "'+subject+'"',
           createdAt:new Date().toISOString()
         });
+        // Auto-set status to "kontaktiert" if still "offen"
+        if(_emCurrentContact.status === 'offen') {
+          _emCurrentContact.status = 'kontakt';
+          addActivity(`Status von "${_emCurrentContact.firma}" auf "Kontaktiert" gesetzt`, 'blue');
+        }
+        sbSaveContact(_emCurrentContact);
         save();
       }
       addActivity('E-Mail an "'+(to)+'" gesendet: '+subject, 'blue');
