@@ -6953,6 +6953,7 @@ function renderRadarResults(places, query, location) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:12px 16px;background:var(--paper);border:1px solid var(--border);border-radius:6px">
       <div style="font-size:12px;color:var(--muted)">
         <strong>${places.length}</strong> Ergebnisse · <strong>${newPlaces.length}</strong> noch nicht im CRM
+        <span id="radar-scan-status" style="margin-left:10px;color:var(--yellow2);font-weight:600"></span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
@@ -6983,11 +6984,90 @@ function renderRadarResults(places, query, location) {
           </div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">📍 ${p.vicinity||'–'}</div>
           ${stars?`<div style="font-size:11px;color:var(--yellow2);margin-bottom:4px">${stars} <span style="color:var(--muted)">(${p.user_ratings_total||0})</span></div>`:''}
+          <div id="radar-email-${i}" style="font-size:11px;margin-top:6px;min-height:18px">
+            <span style="color:var(--muted);font-size:10px">✉ wird gesucht...</span>
+          </div>
           <div style="margin-top:8px;font-size:10px;color:var(--blue);font-weight:600">Details ansehen →</div>
         </div>
       </div>`;
     }).join('')}
     </div>`;
+
+  // Store places for email scanning
+  window._radarPlaces = places;
+
+  // Start auto email scan in background
+  autoScanEmails(places);
+}
+
+async function autoScanEmails(places) {
+  const workerUrl = (DB.settings?.placesApiKey||'').replace(/\/$/, '');
+  if(!workerUrl) return;
+
+  const statusEl = document.getElementById('radar-scan-status');
+  let scanned = 0;
+  let found = 0;
+  const total = places.filter(p => p.website || p.vicinity).length;
+
+  // First get details for all places to get websites
+  for(let i = 0; i < places.length; i++) {
+    const p = places[i];
+    const emailEl = document.getElementById(`radar-email-${i}`);
+    if(!emailEl) continue;
+
+    try {
+      // Get place details to find website
+      let website = p.website || '';
+      if(!website && p.place_id) {
+        const detailResp = await fetch(`${workerUrl}?action=details&place_id=${p.place_id}`, {
+          signal: AbortSignal.timeout(8000)
+        });
+        const detailData = await detailResp.json();
+        website = detailData.result?.website || '';
+        // Store phone too
+        if(detailData.result?.formatted_phone_number) p.tel = detailData.result.formatted_phone_number;
+        // Store address components for PLZ/Ort
+        if(detailData.result?.address_components) p.address_components = detailData.result.address_components;
+      }
+
+      if(website) {
+        // Scan for email
+        if(statusEl) statusEl.textContent = `✉ Scanne ${scanned+1}/${places.length}...`;
+        const scanResp = await fetch(`${workerUrl}?action=scan_email&website=${encodeURIComponent(website)}`, {
+          signal: AbortSignal.timeout(10000)
+        });
+        const scanData = await scanResp.json();
+
+        if(scanData.ok && scanData.email) {
+          found++;
+          // Store email on place object
+          p.email = scanData.email;
+          p.website = website;
+          // Update card
+          if(emailEl) emailEl.innerHTML = `<a href="mailto:${scanData.email}" onclick="event.stopPropagation()" style="color:var(--green);font-size:11px;font-weight:600;text-decoration:none">✉ ${scanData.email}</a>`;
+          // Update encoded data in checkbox
+          const cb = document.querySelector(`.radar-check[data-idx="${i}"]`);
+          if(cb) {
+            const existingData = JSON.parse(decodeURIComponent(cb.dataset.encoded));
+            existingData.email = scanData.email;
+            existingData.web = website;
+            cb.dataset.encoded = encodeURIComponent(JSON.stringify(existingData));
+          }
+        } else {
+          if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ keine E-Mail gefunden</span>`;
+        }
+      } else {
+        if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ keine Website</span>`;
+      }
+    } catch(e) {
+      if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ –</span>`;
+    }
+
+    scanned++;
+    if(statusEl) statusEl.textContent = scanned < places.length
+      ? `✉ Scanne ${scanned}/${places.length}...`
+      : `✅ ${found} E-Mails gefunden`;
+  }
 }
 
 function radarToggleAll(checked) {
@@ -7031,9 +7111,10 @@ function radarImportSelected() {
       const plzMatch = (data.addr||'').match(/\d{5}/);
       const contact = {
         id: uid(), firma: data.name,
-        person: '', email: '', tel: data.tel||'',
+        person: '', email: data.email||'', tel: data.tel||'',
         web: (data.web||'').replace(/^https?:\/\//,''),
-        plz: plzMatch ? plzMatch[0] : '',
+        plz: data.plz || (plzMatch ? plzMatch[0] : ''),
+        ort: data.ort||'',
         status: 'offen', branche: '', notes: '',
         notizen: [], dokumente: [], checks: [],
         updatedAt: new Date().toISOString()
