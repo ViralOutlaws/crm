@@ -7983,7 +7983,7 @@ function getEmailTemplates() {
   // Merge saved custom templates with defaults
   if(DB.emailTemplates) {
     Object.entries(DB.emailTemplates).forEach(([k,v]) => {
-      EMAIL_TEMPLATES[k] = { subject: v.subject, body: v.body, custom: v.custom };
+      EMAIL_TEMPLATES[k] = { label: v.label, subject: v.subject, body: v.body, custom: v.custom };
     });
   }
   return EMAIL_TEMPLATES;
