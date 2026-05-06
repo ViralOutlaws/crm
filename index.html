@@ -7927,7 +7927,7 @@ async function sendEmail() {
     const resp = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, html: htmlBody, text: body, bcc: 'info@viraloutlaws.de' }),
+      body: JSON.stringify({ to, subject, html: htmlBody, text: body, bcc: bccEmail }),
       signal: AbortSignal.timeout(20000)
     });
     const data = await resp.json();
