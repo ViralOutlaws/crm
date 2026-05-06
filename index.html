@@ -7923,10 +7923,11 @@ async function sendEmail() {
 
   try {
     const bccEmail = DB.settings?.email || 'info@viraloutlaws.de';
+    console.log('Sending email to:', to, '| BCC:', bccEmail);
     const resp = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, html: htmlBody, text: body, bcc: bccEmail }),
+      body: JSON.stringify({ to, subject, html: htmlBody, text: body, bcc: 'info@viraloutlaws.de' }),
       signal: AbortSignal.timeout(20000)
     });
     const data = await resp.json();
