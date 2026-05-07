@@ -1917,7 +1917,12 @@ tr[onclick] { transition:background .1s; }
         <div class="field"><label>Abrechnungsart</label>
           <select id="ke-typ" style="font-family:'Sora',sans-serif;font-size:13px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
             <option value="einmalig">Einmalig</option>
+            <option value="pauschal">Pauschal</option>
             <option value="monatlich">Monatlich</option>
+            <option value="jaehrlich">Jährlich</option>
+            <option value="stuendlich">Stündlich</option>
+            <option value="taeglich">Täglich</option>
+            <option value="nach-aufwand">Nach Aufwand</option>
           </select>
         </div>
       </div>
@@ -2062,6 +2067,17 @@ tr[onclick] { transition:background .1s; }
         </div>
         <div class="field form-full"><label>Anmerkungen</label><textarea id="r-notes" placeholder="Zahlungshinweise, Projektdetails…"></textarea></div>
         <div class="field"><label>Fälligkeitsdatum</label><input id="r-faellig" type="date"></div>
+        <div class="field"><label>Abrechnungsart</label>
+          <select id="r-abrechnungsart" style="font-family:'Sora',sans-serif;font-size:13px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="einmalig">Einmalig</option>
+            <option value="pauschal">Pauschal</option>
+            <option value="monatlich">Monatlich</option>
+            <option value="jaehrlich">Jährlich</option>
+            <option value="stuendlich">Stündlich</option>
+            <option value="taeglich">Täglich</option>
+            <option value="nach-aufwand">Nach Aufwand</option>
+          </select>
+        </div>
         <div class="field"><label>Status</label>
           <select id="r-status">
             <option value="offen-rg">Offen</option>
@@ -3232,6 +3248,7 @@ function openRechnungModal(id) {
   document.getElementById('r-faellig').value=r?.faellig||addDays(today(),getZahlung());
   document.getElementById('r-betreff').value=r?.betreff||'';
   document.getElementById('r-status').value=r?.status||'offen-rg';
+  document.getElementById('r-abrechnungsart').value=r?.abrechnungsart||'einmalig';
   document.getElementById('r-notes').value=r?.notes||'';
   fillPositions('r',r?.positions||[]);
   if(!r) addPosition('r-positions','r');
@@ -3250,6 +3267,7 @@ function saveRechnung() {
     datum:document.getElementById('r-datum').value,
     faellig:document.getElementById('r-faellig').value,
     status:document.getElementById('r-status').value,
+    abrechnungsart:document.getElementById('r-abrechnungsart').value,
     notes:document.getElementById('r-notes').value,
     createdAt:editId?DB.rechnungen.find(x=>x.id===editId)?.createdAt:new Date().toISOString()
   };
@@ -5952,11 +5970,15 @@ function konfCalc() {
   const laufzeit = parseInt(document.getElementById('konf-laufzeit')?.value||3);
   const allItems = [...Object.values(KONF_LEISTUNGEN).flat(), ...konfCustom];
   const selected = allItems.filter(i => konfSelected[i.id]);
-  const einmalig  = selected.filter(i=>i.typ==='einmalig').reduce((s,i)=>s+i.preis,0);
+  // Einmalig = einmalig + pauschal + stuendlich + taeglich + nach-aufwand
+  const EINMALIG_TYPEN = ['einmalig','pauschal','stuendlich','taeglich','nach-aufwand'];
+  const einmalig  = selected.filter(i=>EINMALIG_TYPEN.includes(i.typ)).reduce((s,i)=>s+i.preis,0);
   const monatlich = selected.filter(i=>i.typ==='monatlich').reduce((s,i)=>s+i.preis,0);
+  const jaehrlich = selected.filter(i=>i.typ==='jaehrlich').reduce((s,i)=>s+i.preis,0);
   const einmaligR = einmalig*(1-rabatt);
   const monatlichR = monatlich*(1-rabatt);
-  const gesamt = einmaligR + monatlichR*laufzeit;
+  const jaehrlichR = jaehrlich*(1-rabatt);
+  const gesamt = einmaligR + monatlichR*laufzeit + jaehrlichR*Math.ceil(laufzeit/12);
   const summaryEl = document.getElementById('konf-summary-list');
   if(summaryEl) {
     if(!selected.length) {
@@ -5971,15 +5993,16 @@ function konfCalc() {
   }
   const totalsEl = document.getElementById('konf-totals');
   if(totalsEl) {
-    totalsEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Einmalig</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(einmalig)+'</span></div>'
-      + '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Monatlich</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(monatlich)+'</span></div>'
+    totalsEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Einmalig / Pauschal</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(einmalig)+'</span></div>'
+      + (monatlich>0?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Monatlich</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(monatlich)+'</span></div>':'')
+      + (jaehrlich>0?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted)"><span>Jährlich</span><span style="font-weight:600;color:var(--ink)">'+fmtEur(jaehrlich)+'</span></div>':'')
       + (rabatt>0?'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--green)"><span>Rabatt '+Math.round(rabatt*100)+'%</span><span style="font-weight:600">-'+fmtEur((einmalig+monatlich)*rabatt)+'</span></div>':'')
       + '<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-top:1.5px solid var(--border);margin-top:4px">'
       + '<span style="font-weight:700">Gesamt ('+laufzeit+' Mon.)</span>'
       + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--yellow2)">'+fmtEur(gesamt)+'</span></div>'
-      + '<div style="font-size:10px;color:var(--muted);text-align:center">'+fmtEur(einmaligR)+' einmalig + '+fmtEur(monatlichR)+'/Monat</div>';
+      + '<div style="font-size:10px;color:var(--muted);text-align:center">'+(einmaligR>0?fmtEur(einmaligR)+' einmalig':'')+( monatlichR>0?(einmaligR>0?' + ':'')+fmtEur(monatlichR)+'/Monat':'')+( jaehrlichR>0?' + '+fmtEur(jaehrlichR)+'/Jahr':'')+'</div>';
   }
-  window._konfLastData = { selected, einmalig, monatlich, einmaligR, monatlichR, gesamt, rabatt, laufzeit };
+  window._konfLastData = { selected, einmalig, monatlich, jaehrlich, einmaligR, monatlichR, jaehrlichR, gesamt, rabatt, laufzeit };
 }
 
 function konfInsAngebot() {
