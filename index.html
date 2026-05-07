@@ -319,9 +319,9 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
 
 /* ── POSITION LINES ── */
 .positions-wrap{border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:4px}
-.pos-header{display:grid;grid-template-columns:22px 1fr 70px 80px 80px 28px;gap:8px;padding:7px 10px;background:var(--bg);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.pos-header{display:grid;grid-template-columns:22px 1fr 100px 70px 80px 80px 28px;gap:8px;padding:7px 10px;background:var(--bg);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
 .pos-item{border-top:1px solid var(--border);background:#fff}
-.pos-row{display:grid;grid-template-columns:22px 1fr 70px 80px 80px 28px;gap:8px;padding:7px 10px;align-items:center}
+.pos-row{display:grid;grid-template-columns:22px 1fr 100px 70px 80px 80px 28px;gap:8px;padding:7px 10px;align-items:center}
 .pos-row input{border:1px solid var(--border);border-radius:3px;padding:4px 7px;font-family:'Sora',sans-serif;font-size:11px;background:#fff;outline:none;width:100%;transition:border-color .15s}
 .pos-row input:focus{border-color:var(--yellow)}
 .pos-toggle{background:transparent;border:1px solid var(--border);border-radius:3px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--muted);flex-shrink:0;transition:all .15s;padding:0}
@@ -2009,7 +2009,7 @@ tr[onclick] { transition:background .1s; }
         <div class="field form-full"><label>Betreff *</label><input id="a-betreff" placeholder="Webdesign & Performance Marketing Paket"></div>
         <div class="field form-full"><label>Positionen</label>
           <div class="positions-wrap">
-            <div class="pos-header"><span></span><span>Beschreibung</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
+            <div class="pos-header" style="grid-template-columns:22px 1fr 100px 70px 80px 80px 28px"><span></span><span>Beschreibung</span><span>Art</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
             <div id="a-positions"></div>
             <button class="btn-add-pos" onclick="addPosition('a-positions','a')">+ Position hinzufügen</button>
             <div class="pos-sum" id="a-sum">
@@ -2055,7 +2055,7 @@ tr[onclick] { transition:background .1s; }
         <div class="field form-full"><label>Betreff *</label><input id="r-betreff" placeholder="Webdesign & Performance Marketing"></div>
         <div class="field form-full"><label>Positionen</label>
           <div class="positions-wrap">
-            <div class="pos-header"><span></span><span>Beschreibung</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
+            <div class="pos-header" style="grid-template-columns:22px 1fr 100px 70px 80px 80px 28px"><span></span><span>Beschreibung</span><span>Art</span><span>Menge</span><span>Einzel (€)</span><span>Gesamt (€)</span><span></span></div>
             <div id="r-positions"></div>
             <button class="btn-add-pos" onclick="addPosition('r-positions','r')">+ Position hinzufügen</button>
             <div class="pos-sum" id="r-sum">
@@ -2898,6 +2898,15 @@ function addPosition(containerId, prefix) {
     <div class="pos-row">
       <button class="pos-toggle" title="Detail-Beschreibung ein-/ausblenden" onclick="togglePosDetail('${posid}')">+</button>
       <input type="text" placeholder="Positionstitel (z.B. Performance Marketing Paket)" class="pos-desc">
+      <select class="pos-typ" style="border:1px solid var(--border);border-radius:3px;padding:4px 5px;font-family:'Sora',sans-serif;font-size:10px;background:#fff;outline:none;color:var(--ink2);width:100%">
+        <option value="einmalig">Einmalig</option>
+        <option value="pauschal">Pauschal</option>
+        <option value="monatlich">Monatlich</option>
+        <option value="jaehrlich">Jährlich</option>
+        <option value="stuendlich">Stündlich</option>
+        <option value="taeglich">Täglich</option>
+        <option value="nach-aufwand">Aufwand</option>
+      </select>
       <input type="number" value="1" min="0.01" step="0.01" class="pos-qty" onchange="calcTotals('${prefix}')">
       <input type="number" value="" placeholder="0.00" class="pos-price" onchange="calcTotals('${prefix}')">
       <span class="pos-total">0,00 €</span>
@@ -2953,6 +2962,7 @@ function getPositions(prefix) {
     const detailTA = item.querySelector('.pos-detail textarea');
     return {
       desc: item.querySelector('.pos-desc').value,
+      typ: item.querySelector('.pos-typ')?.value||'einmalig',
       detail: detailTA ? detailTA.value : '',
       qty, price,
       total: qty * price
@@ -2973,6 +2983,15 @@ function fillPositions(prefix, positions) {
       <div class="pos-row">
         <button class="pos-toggle${hasDetail?' open':''}" title="Detail-Beschreibung ein-/ausblenden" onclick="togglePosDetail('${posid}')">${hasDetail?'−':'+'}</button>
         <input type="text" placeholder="Positionstitel" class="pos-desc" value="${(p.desc||'').replace(/"/g,'&quot;')}">
+        <select class="pos-typ" style="border:1px solid var(--border);border-radius:3px;padding:4px 5px;font-family:'Sora',sans-serif;font-size:10px;background:#fff;outline:none;color:var(--ink2);width:100%">
+          <option value="einmalig" ${(p.typ||'einmalig')==='einmalig'?'selected':''}>Einmalig</option>
+          <option value="pauschal" ${p.typ==='pauschal'?'selected':''}>Pauschal</option>
+          <option value="monatlich" ${p.typ==='monatlich'?'selected':''}>Monatlich</option>
+          <option value="jaehrlich" ${p.typ==='jaehrlich'?'selected':''}>Jährlich</option>
+          <option value="stuendlich" ${p.typ==='stuendlich'?'selected':''}>Stündlich</option>
+          <option value="taeglich" ${p.typ==='taeglich'?'selected':''}>Täglich</option>
+          <option value="nach-aufwand" ${p.typ==='nach-aufwand'?'selected':''}>Aufwand</option>
+        </select>
         <input type="number" value="${p.qty||1}" min="0.01" step="0.01" class="pos-qty" onchange="calcTotals('${prefix}')">
         <input type="number" value="${p.price||''}" placeholder="0.00" class="pos-price" onchange="calcTotals('${prefix}')">
         <span class="pos-total">${fmtEur(p.total)}</span>
