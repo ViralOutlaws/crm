@@ -548,16 +548,48 @@ tr[onclick] { transition:background .1s; }
       <div style="font-size:11px;color:rgba(255,255,255,.3);letter-spacing:2px;text-transform:uppercase;margin-top:4px">CRM · Performance Marketing</div>
     </div>
     <div class="login-field">
+      <label>E-Mail</label>
+      <input type="email" id="login-email" placeholder="info@viraloutlaws.de" autocomplete="email" onkeydown="if(event.key==='Enter'){typeof doLogin==='function'?doLogin():window._loginFallback()}">
+    </div>
+    <div class="login-field">
       <label>Passwort</label>
       <input type="password" id="login-pw" placeholder="••••••••"
-        onkeydown="if(event.key==='Enter')doLogin()"
+        onkeydown="if(event.key==='Enter'){typeof doLogin==='function'?doLogin():window._loginFallback()}"
         autocomplete="current-password">
     </div>
-    <button class="login-btn" onclick="doLogin()">EINLOGGEN</button>
+    <button class="login-btn" onclick="typeof doLogin==='function'?doLogin():window._loginFallback()">EINLOGGEN</button>
     <div class="login-error" id="login-error"></div>
     <div class="login-hint">crm.viraloutlaws.de · Nur für autorisierte Nutzung</div>
   </div>
 </div>
+<script>
+// Fallback inline login in case of load order issues
+window._loginFallback = function() {
+  const email = document.getElementById('login-email')?.value?.trim();
+  const pw = document.getElementById('login-pw')?.value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.querySelector('.login-btn');
+  if(!email || !pw) { if(errEl) errEl.textContent='Bitte E-Mail und Passwort eingeben.'; return; }
+  if(errEl) errEl.textContent='';
+  if(btn) { btn.textContent='Einloggen...'; btn.disabled=true; }
+  // Poll until supabaseSignIn is ready (max 5s)
+  let attempts = 0;
+  const tryLogin = function() {
+    attempts++;
+    if(typeof supabaseSignIn === 'function') {
+      supabaseSignIn(email, pw)
+        .then(()=>{ document.getElementById('login-screen').style.display='none'; if(typeof showPage==='function') showPage('dashboard'); })
+        .catch(e=>{ if(errEl) errEl.textContent=e.message||'Login fehlgeschlagen.'; if(btn){btn.textContent='EINLOGGEN';btn.disabled=false;} });
+    } else if(attempts < 50) {
+      setTimeout(tryLogin, 100);
+    } else {
+      if(errEl) errEl.textContent='Fehler: Seite konnte nicht vollständig geladen werden. Bitte neu laden (F5).';
+      if(btn){btn.textContent='EINLOGGEN';btn.disabled=false;}
+    }
+  };
+  tryLogin();
+};
+</script>
 
 <!-- SIDEBAR -->
 <div id="sidebar">
@@ -957,6 +989,7 @@ tr[onclick] { transition:background .1s; }
         <div class="field" style="margin:0">
           <label>Mail-Worker URL</label>
           <input id="s-mailworker" placeholder="https://vo-mail.NAME.workers.dev" style="font-family:'DM Mono',monospace;font-size:11px">
+          <div style="font-size:10px;color:var(--muted);margin-top:4px" id="mw-debug"></div>
         </div>
         <button class="btn-ghost" onclick="testMailWorker()" style="height:38px;white-space:nowrap">🔌 Testen</button>
       </div>
@@ -1885,6 +1918,15 @@ tr[onclick] { transition:background .1s; }
           <input id="ag-brutto" type="number" step="0.01" placeholder="0.00" oninput="ausgabeBruttoCalc()" style="font-size:13px;font-weight:700;color:var(--green);font-family:DM Mono,monospace">
         </div>
         <div class="field form-full"><label>Notiz</label><input id="ag-notiz" placeholder="z.B. Rechnung Nr. 2024-001" style="font-size:12px"></div>
+        <div class="field form-full"><label>Wiederholung</label>
+          <select id="ag-wiederholung" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
+            <option value="einmalig">Einmalig (keine Wiederholung)</option>
+            <option value="monatlich">Monatlich (wiederkehrend)</option>
+            <option value="vierteljaehrlich">Vierteljährlich (alle 3 Monate)</option>
+            <option value="halbjaehrlich">Halbjährlich (alle 6 Monate)</option>
+            <option value="jaehrlich">Jährlich (einmal pro Jahr)</option>
+          </select>
+        </div>
         <div class="field form-full">
           <label>Beleg (optional)</label>
           <input type="file" id="ag-beleg" accept="image/*,.pdf" style="font-size:11px;color:var(--muted)">
@@ -2090,6 +2132,80 @@ tr[onclick] { transition:background .1s; }
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('rechnung-modal')">Abbrechen</button>
       <button class="btn-yellow" onclick="saveRechnung()">Speichern & Vorschau</button>
+    </div>
+  </div>
+</div>
+
+<!-- ZAHLUNGSERINNERUNG MODAL -->
+<div class="overlay" id="zahlung-erinnerung-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h2>🔔 Zahlungserinnerung</h2>
+      <button class="modal-close" onclick="document.getElementById('zahlung-erinnerung-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)" id="ze-meta"></div>
+      <div class="field">
+        <label>Empfänger E-Mail</label>
+        <input id="ze-email" type="email" placeholder="kunde@beispiel.de">
+      </div>
+      <div class="field">
+        <label>Betreff</label>
+        <input id="ze-subject">
+      </div>
+      <div class="field">
+        <label>Nachricht</label>
+        <textarea id="ze-body" rows="10" style="font-size:12px;line-height:1.6"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="document.getElementById('zahlung-erinnerung-modal').classList.remove('open')">Abbrechen</button>
+      <button class="btn-ghost" onclick="printMahnung('erinnerung')" style="color:var(--blue);border-color:var(--blue)">🖨 Als PDF</button>
+      <button class="btn-yellow" onclick="sendZahlungserinnerung()">✉ Erinnerung senden</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAHNUNG MODAL -->
+<div class="overlay" id="mahnung-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h2>⚠ Mahnung erstellen</h2>
+      <button class="modal-close" onclick="document.getElementById('mahnung-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)" id="mah-meta"></div>
+      <div class="field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field">
+          <label>Mahnstufe</label>
+          <select id="mah-stufe" onchange="updateMahnungText()">
+            <option value="1">1. Mahnung (freundlich)</option>
+            <option value="2">2. Mahnung (bestimmt)</option>
+            <option value="3">3. Mahnung (letzte)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mahngebühr (€)</label>
+          <input id="mah-gebuehr" type="number" value="0" step="1" min="0" oninput="updateMahnungText()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Empfänger E-Mail</label>
+        <input id="mah-email" type="email" placeholder="kunde@beispiel.de">
+      </div>
+      <div class="field">
+        <label>Betreff</label>
+        <input id="mah-subject">
+      </div>
+      <div class="field">
+        <label>Mahnschreiben</label>
+        <textarea id="mah-body" rows="12" style="font-size:12px;line-height:1.6"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="document.getElementById('mahnung-modal').classList.remove('open')">Abbrechen</button>
+      <button class="btn-ghost" onclick="printMahnung('mahnung')" style="color:var(--blue);border-color:var(--blue)">🖨 Als PDF</button>
+      <button class="btn-yellow" style="background:var(--red);border-color:var(--red)" onclick="sendMahnung()">⚠ Mahnung senden</button>
     </div>
   </div>
 </div>
@@ -2504,6 +2620,21 @@ async function supabaseSignIn(email, password) {
   await loadAllFromSupabase();
   // Init realtime
   await initRealtime();
+  // After login, auto-fill settings fields
+  setTimeout(() => {
+    // Always update the mailworker field if it exists
+    const mwEl = document.getElementById('s-mailworker');
+    if(mwEl && DB.settings?.mailWorkerUrl) {
+      mwEl.value = DB.settings.mailWorkerUrl;
+      const dbg = document.getElementById('mw-debug');
+      if(dbg) dbg.textContent = '✓ Geladen aus Supabase';
+    } else if(mwEl) {
+      const dbg = document.getElementById('mw-debug');
+      if(dbg) dbg.textContent = '⚠ Keine Worker URL in Supabase gespeichert – bitte einmal speichern.';
+    }
+    const settingsPage = document.getElementById('page-settings');
+    if(settingsPage && settingsPage.classList.contains('active')) loadSettings();
+  }, 800);
   return data;
 }
 
@@ -3297,6 +3428,256 @@ function saveRechnung() {
   printDoc('rechnung',obj.id);
 }
 
+// ==================================================
+// ZAHLUNGSERINNERUNG & MAHNUNG
+// ==================================================
+let _currentZEId = null;
+let _currentMahId = null;
+
+function openZahlungserinnerung(id) {
+  _currentZEId = id;
+  const r = DB.rechnungen.find(x=>x.id===id);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const s = DB.settings || {};
+  const sum = sumPositions(r.positions);
+  const firma = s.name || 'Viral Outlaws';
+  const kundenfirma = c.firma || c.name || 'Kunde';
+  const kundeAnrede = c.anrede ? c.anrede + ' ' + (c.nachname||'') : kundenfirma;
+
+  document.getElementById('ze-meta').innerHTML =
+    `<strong>Rechnung ${r.nr}</strong> · ${kundenfirma} · ${fmtEur(sum.brutto)} · Fällig: ${fmtDate(r.faellig)}`;
+  document.getElementById('ze-email').value = c.email || '';
+  document.getElementById('ze-subject').value = `Zahlungserinnerung – Rechnung ${r.nr}`;
+  document.getElementById('ze-body').value =
+`Guten Tag ${kundeAnrede},
+
+wir hoffen, es geht Ihnen gut.
+
+hiermit möchten wir Sie freundlich daran erinnern, dass folgende Rechnung noch offen ist:
+
+  Rechnungsnummer: ${r.nr}
+  Rechnungsbetrag: ${fmtEur(sum.brutto)}
+  Fälligkeitsdatum: ${fmtDate(r.faellig)}
+  Betreff: ${r.betreff}
+
+Möglicherweise hat diese Nachricht Sie gekreuzt oder die Zahlung ist gerade unterwegs – in diesem Fall bitten wir Sie, dieses Schreiben als gegenstandslos zu betrachten.
+
+Falls Sie Fragen zu dieser Rechnung haben, stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+${firma}`;
+
+  document.getElementById('zahlung-erinnerung-modal').classList.add('open');
+}
+
+async function _sendMailDirect(to, subject, body) {
+  const workerUrl = DB.settings?.mailWorkerUrl || '';
+  if(!workerUrl) throw new Error('Bitte zuerst die Mail-Worker URL in den Einstellungen eintragen.');
+  const bccEmail = DB.settings?.email || 'info@viraloutlaws.de';
+  const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;max-width:600px">${body.replace(/\n/g,'<br>')}<br><br><hr style="border:none;border-top:1px solid #eee;margin:20px 0"><div style="font-size:11px;color:#888">Gesendet von <strong>Viral Outlaws CRM</strong></div></div>`;
+  const resp = await fetch(workerUrl, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ to, subject, html: htmlBody, text: body, bcc: bccEmail }),
+    signal: AbortSignal.timeout(20000)
+  });
+  const data = await resp.json();
+  if(!data.ok) throw new Error(data.error || 'Unbekannter Fehler');
+}
+
+async function sendZahlungserinnerung() {
+  const r = DB.rechnungen.find(x=>x.id===_currentZEId);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const email = document.getElementById('ze-email').value.trim();
+  const subject = document.getElementById('ze-subject').value.trim();
+  const body = document.getElementById('ze-body').value.trim();
+  if(!email) { alert('Bitte E-Mail-Adresse eingeben.'); return; }
+
+  const btn = document.querySelector('#zahlung-erinnerung-modal .btn-yellow');
+  btn.textContent = 'Wird gesendet…'; btn.disabled = true;
+  try {
+    await _sendMailDirect(email, subject, body);
+    r.letzteErinnerung = new Date().toISOString();
+    addActivity(`Zahlungserinnerung für Rechnung ${r.nr} gesendet an ${email}`, 'blue');
+    save(); renderRechnungen();
+    document.getElementById('zahlung-erinnerung-modal').classList.remove('open');
+    alert('✅ Zahlungserinnerung wurde erfolgreich gesendet!');
+  } catch(e) {
+    alert('Fehler beim Senden: ' + e.message);
+  } finally {
+    btn.textContent = '✉ Erinnerung senden'; btn.disabled = false;
+  }
+}
+
+function openMahnung(id) {
+  _currentMahId = id;
+  const r = DB.rechnungen.find(x=>x.id===id);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const sum = sumPositions(r.positions);
+  document.getElementById('mah-meta').innerHTML =
+    `<strong>Rechnung ${r.nr}</strong> · ${c.firma||'Kunde'} · ${fmtEur(sum.brutto)} · Fällig: ${fmtDate(r.faellig)}`;
+  document.getElementById('mah-email').value = c.email || '';
+  const stufe = r.mahnStufe ? Math.min(r.mahnStufe + 1, 3) : 1;
+  document.getElementById('mah-stufe').value = String(stufe);
+  document.getElementById('mah-gebuehr').value = stufe === 1 ? 0 : stufe === 2 ? 5 : 15;
+  updateMahnungText();
+  document.getElementById('mahnung-modal').classList.add('open');
+}
+
+function updateMahnungText() {
+  if(!_currentMahId) return;
+  const r = DB.rechnungen.find(x=>x.id===_currentMahId);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const s = DB.settings || {};
+  const sum = sumPositions(r.positions);
+  const stufe = parseInt(document.getElementById('mah-stufe').value) || 1;
+  const gebuehr = parseFloat(document.getElementById('mah-gebuehr').value) || 0;
+  const gesamtBetrag = sum.brutto + gebuehr;
+  const firma = s.name || 'Viral Outlaws';
+  const kundenfirma = c.firma || c.name || 'Kunde';
+  const kundeAnrede = c.anrede ? c.anrede + ' ' + (c.nachname||'') : kundenfirma;
+
+  const zahlungsziel = new Date();
+  zahlungsziel.setDate(zahlungsziel.getDate() + (stufe === 3 ? 7 : 10));
+  const fristDatum = zahlungsziel.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const stufeTexte = {
+    1: `wir haben festgestellt, dass obige Rechnung trotz Ablauf des Zahlungsziels noch nicht beglichen wurde. Vielleicht handelt es sich um ein Versehen – wir bitten Sie daher freundlich, den ausstehenden Betrag zu überweisen.`,
+    2: `leider haben wir bislang noch keinen Zahlungseingang verbuchen können. Trotz unserer Zahlungserinnerung ist der Betrag weiterhin offen. Wir fordern Sie hiermit auf, die Zahlung bis zum genannten Datum vorzunehmen.`,
+    3: `trotz unserer vorherigen Zahlungserinnerung und Mahnungen ist die Forderung bisher unbeglichen geblieben. Dies ist unsere letzte Aufforderung zur Zahlung. Bei weiterem Ausbleiben werden wir rechtliche Schritte einleiten und die Forderung einem Inkassounternehmen übergeben.`
+  };
+
+  const stufeBetreff = { 1: '1. Mahnung', 2: '2. Mahnung', 3: '3. und letzte Mahnung' };
+
+  document.getElementById('mah-subject').value =
+    `${stufeBetreff[stufe]} – Rechnung ${r.nr} – ${fmtEur(gesamtBetrag)}`;
+
+  document.getElementById('mah-body').value =
+`${stufeBetreff[stufe].toUpperCase()}
+${'─'.repeat(40)}
+
+Guten Tag ${kundeAnrede},
+
+${stufeTexte[stufe]}
+
+  Rechnungsnummer:   ${r.nr}
+  Rechnungsdatum:    ${fmtDate(r.datum)}
+  Ursprünglicher Betrag: ${fmtEur(sum.brutto)}${gebuehr > 0 ? `
+  Mahngebühr (${stufe}. Mahnung): ${fmtEur(gebuehr)}` : ''}
+  ─────────────────────────────
+  Zu zahlender Betrag: ${fmtEur(gesamtBetrag)}
+
+Bitte überweisen Sie den Betrag bis spätestens ${fristDatum} auf folgendes Konto:
+
+  ${s.iban ? 'IBAN: ' + s.iban : 'Bankverbindung gemäß Rechnung'}
+  Verwendungszweck: ${r.nr}
+
+${stufe === 3 ? 'Bei Nichtbeachtung werden wir ohne weitere Ankündigung rechtliche Schritte einleiten.\n\n' : ''}Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.
+
+Mit freundlichen Grüßen
+${firma}`;
+}
+
+async function sendMahnung() {
+  const r = DB.rechnungen.find(x=>x.id===_currentMahId);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const email = document.getElementById('mah-email').value.trim();
+  const subject = document.getElementById('mah-subject').value.trim();
+  const body = document.getElementById('mah-body').value.trim();
+  const stufe = parseInt(document.getElementById('mah-stufe').value) || 1;
+  if(!email) { alert('Bitte E-Mail-Adresse eingeben.'); return; }
+
+  const btn = document.querySelector('#mahnung-modal .btn-yellow');
+  btn.textContent = 'Wird gesendet…'; btn.disabled = true;
+  try {
+    await _sendMailDirect(email, subject, body);
+    r.status = 'ueberfaellig';
+    r.mahnStufe = stufe;
+    r.letzteMahnung = new Date().toISOString();
+    const gebuehr = parseFloat(document.getElementById('mah-gebuehr').value) || 0;
+    if(gebuehr > 0) r.mahngebuehr = (r.mahngebuehr || 0) + gebuehr;
+    sbSaveRechnung(r);
+    addActivity(`${stufe}. Mahnung für Rechnung ${r.nr} gesendet an ${c.firma||'Kunde'}`, 'red');
+    save(); renderRechnungen();
+    document.getElementById('mahnung-modal').classList.remove('open');
+    alert(`✅ ${stufe}. Mahnung wurde erfolgreich gesendet!`);
+  } catch(e) {
+    alert('Fehler beim Senden: ' + e.message);
+  } finally {
+    btn.textContent = '⚠ Mahnung senden'; btn.disabled = false;
+  }
+}
+
+function printMahnung(typ) {
+  const id = typ === 'erinnerung' ? _currentZEId : _currentMahId;
+  const r = DB.rechnungen.find(x=>x.id===id);
+  if(!r) return;
+  const c = DB.contacts.find(x=>x.id===r.kundeId) || {};
+  const s = DB.settings || {};
+  const sum = sumPositions(r.positions);
+  const stufe = typ === 'mahnung' ? (parseInt(document.getElementById('mah-stufe').value)||1) : 0;
+  const gebuehr = typ === 'mahnung' ? (parseFloat(document.getElementById('mah-gebuehr').value)||0) : 0;
+  const subject = typ === 'erinnerung'
+    ? document.getElementById('ze-subject').value
+    : document.getElementById('mah-subject').value;
+  const body = typ === 'erinnerung'
+    ? document.getElementById('ze-body').value
+    : document.getElementById('mah-body').value;
+  const logoHtml = s.logo ? `<img src="${s.logo}" style="height:44px;object-fit:contain;margin-bottom:6px;display:block">` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8">
+<title>${subject}</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:18mm 20mm;font-size:12px;line-height:1.6}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:2px solid #111}
+.doc-type{font-size:22px;font-weight:700;text-align:right;color:${typ==='mahnung'?'#c0392b':'#1a56db'}}
+.addr{margin-bottom:20px}
+.addr-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:4px}
+.meta{background:#f8f8f8;border-radius:4px;padding:10px 14px;margin-bottom:20px;display:flex;gap:28px;font-size:11px}
+.meta b{display:block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:2px}
+.body-text{white-space:pre-line;font-size:12px;line-height:1.7;color:#222}
+.alert-box{background:${typ==='mahnung'?'#fff5f5':'#eff6ff'};border-left:3px solid ${typ==='mahnung'?'#c0392b':'#1a56db'};padding:11px 14px;border-radius:0 4px 4px 0;margin:18px 0}
+.footer{margin-top:36px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#666;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.footer b{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;margin-bottom:3px}
+</style></head><body>
+<div class="header">
+  <div>${logoHtml}<div style="font-size:15px;font-weight:700">${s.name||'Viral Outlaws'}</div><div style="font-size:11px;color:#666">${s.strasse||''} · ${s.ort||''}</div></div>
+  <div class="doc-type">${typ==='erinnerung'?'Zahlungserinnerung':`${stufe}. Mahnung`}</div>
+</div>
+<div class="addr">
+  <div class="addr-label">An</div>
+  <div style="font-weight:600">${c.firma||''}</div>
+  <div>${c.strasse||''}</div>
+  <div>${c.plz||''} ${c.ort||''}</div>
+</div>
+<div class="meta">
+  <div><b>Rechnung</b>${r.nr}</div>
+  <div><b>Betrag</b>${fmtEur(sum.brutto)}${gebuehr>0?' + '+fmtEur(gebuehr)+' Geb.':''}</div>
+  <div><b>Fällig seit</b>${fmtDate(r.faellig)}</div>
+  <div><b>Datum</b>${new Date().toLocaleDateString('de-DE')}</div>
+</div>
+<div class="alert-box body-text">${body}</div>
+<div class="footer">
+  <div><b>Kontakt</b>${s.email||''}<br>${s.telefon||''}</div>
+  <div><b>Bankverbindung</b>${s.iban||'–'}<br>${s.bic?'BIC: '+s.bic:''}</div>
+  <div><b>Steuernummer</b>${s.steuernummer||'–'}<br>${s.ustid||''}</div>
+</div>
+</body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),600);
+}
+
+
 function deleteRechnung(id){
   if(!confirm('Rechnung löschen?'))return;
   DB.rechnungen=DB.rechnungen.filter(x=>x.id!==id);
@@ -3345,10 +3726,12 @@ function renderRechnungen(){
       <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td data-label="Status">${getBadge(r.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
-        <button class="btn-ghost btn-sm" onclick="printDoc('rechnung','${r.id}')">🖨 PDF</button>
-        <button class="btn-ghost btn-sm" onclick="openRechnungModal('${r.id}')">✏</button>
-        <button class="btn-danger" onclick="deleteRechnung('${r.id}')">✕</button>
+        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
+        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openZahlungserinnerung('${r.id}')" style="color:var(--blue);border-color:var(--blue)">🔔 Erinnerung</button>`:''}
+        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red);border-color:var(--red)">⚠ Mahnung</button>`:''}
+        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">🖨 PDF</button>
+        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();openRechnungModal('${r.id}')">✏</button>
+        <button class="btn-danger" onclick="event.stopPropagation();deleteRechnung('${r.id}')">✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -3578,9 +3961,9 @@ function loadSettings() {
   if(s.logo){ const lp=document.getElementById('s-logo-preview'); if(lp){lp.src=s.logo;lp.style.display='block';} }
   if(DB.leistungen) { Object.keys(DB.leistungen).forEach(k=>{ if(KONF_LEISTUNGEN[k]) KONF_LEISTUNGEN[k]=DB.leistungen[k]; }); }
   renderLeistungenEditor();
-  // Mail worker URL
+  // Mail worker URL – check both possible key names
   const mw = document.getElementById('s-mailworker');
-  if(mw) mw.value = s.mailWorkerUrl||'';
+  if(mw) mw.value = s.mailWorkerUrl || s.mailworkerurl || s.mail_worker_url || '';
   // Load saved email templates
   if(DB.emailTemplates) {
     Object.entries(DB.emailTemplates).forEach(([k,v]) => {
@@ -3606,23 +3989,15 @@ function saveSettings() {
   const mw = document.getElementById('s-mailworker');
   if(mw) DB.settings.mailWorkerUrl = mw.value.trim();
   save();
-
-  // Auto-sync to Google Drive if URL is set
-  if(getGsUrl()) {
-    const btn = document.querySelector('.btn-yellow[onclick="saveSettings()"]');
-    if(btn) { btn.textContent='💾 Wird gespeichert…'; btn.disabled=true; }
-    syncToSheets()
-      .then(()=>{
-        if(btn) { btn.textContent='✅ Gespeichert & gesichert!'; btn.disabled=false; }
-        setTimeout(()=>{ if(btn) btn.textContent='Einstellungen speichern'; }, 2500);
-      })
-      .catch(()=>{
-        if(btn) { btn.textContent='Einstellungen speichern'; btn.disabled=false; }
-        alert('✅ Lokal gespeichert.\n⚠ Cloud-Backup fehlgeschlagen – URL prüfen.');
-      });
-  } else {
-    alert('✅ Einstellungen gespeichert!\n\n💡 Tipp: Trage eine Google Apps Script URL ein um automatisch in der Cloud zu sichern.');
-  }
+  const _sBtn = document.querySelector('.btn-yellow[onclick="saveSettings()"]');
+  if(_sBtn) { _sBtn.textContent='💾 Wird gespeichert…'; _sBtn.disabled=true; }
+  sbSaveSettings(DB.settings).then(()=>{
+    if(_sBtn) { _sBtn.textContent='✅ In Cloud gespeichert!'; _sBtn.disabled=false; }
+    setTimeout(()=>{ if(_sBtn) _sBtn.textContent='Einstellungen speichern'; }, 2500);
+  }).catch(()=>{
+    if(_sBtn) { _sBtn.textContent='Einstellungen speichern'; _sBtn.disabled=false; }
+    alert('✅ Lokal gespeichert – Cloud-Sync fehlgeschlagen.');
+  });
 }
 
 function exportData() {
@@ -4264,6 +4639,30 @@ async function sbLoadAusgaben() {
 }
 
 // ── ROI ──
+async function sbSaveSettings(settings) {
+  if(!_useSupabase || !_currentUser) return;
+  try {
+    const sb = await getSupabase();
+    const payload = {
+      user_id: _currentUser.id,
+      data: JSON.stringify(settings),
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from('settings').upsert(payload, { onConflict: 'user_id' });
+    if(error) console.error('sbSaveSettings error:', error.message);
+  } catch(e) { console.warn('sbSaveSettings:', e.message); }
+}
+
+async function sbLoadSettings() {
+  if(!_useSupabase || !_currentUser) return null;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('settings').select('data').eq('user_id', _currentUser.id).single();
+    if(error || !data) return null;
+    return JSON.parse(data.data);
+  } catch(e) { return null; }
+}
+
 async function sbSaveROI(r) {
   if(!_useSupabase) return;
   try {
@@ -4312,6 +4711,19 @@ async function loadAllFromSupabase() {
       sbLoadRetainer(), sbLoadAusgaben(), sbLoadROI()
     ]);
 
+    // Load settings from Supabase
+    const sbSettings = await sbLoadSettings();
+    if(sbSettings) {
+      // Deep merge – overwrite all keys including mailWorkerUrl
+      DB.settings = Object.assign({}, DB.settings||{}, sbSettings);
+      console.log('[CRM] Settings loaded from Supabase, mailWorkerUrl:', DB.settings.mailWorkerUrl);
+      // Refresh settings fields if page is open
+      const settingsPage = document.getElementById('page-settings');
+      if(settingsPage && settingsPage.classList.contains('active')) {
+        loadSettings();
+      }
+    }
+
     if(contacts !== null) DB.contacts = contacts;
     if(angebote !== null) DB.angebote = angebote;
     if(rechnungen !== null) DB.rechnungen = rechnungen;
@@ -4326,6 +4738,8 @@ async function loadAllFromSupabase() {
     try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
 
     renderDashboard(); renderMiniCal(); renderDashCalEvents();
+    // Auto-refresh settings fields with loaded data
+    try { loadSettings(); } catch(e){}
 
   } catch(e) {
     console.error('loadAllFromSupabase:', e);
@@ -5488,24 +5902,21 @@ async function initLogin() {
 }
 
 async function doLogin() {
+  const email = document.getElementById('login-email')?.value?.trim();
   const pw = document.getElementById('login-pw').value;
   const errEl = document.getElementById('login-error');
-  const inp = document.getElementById('login-pw');
-  if(!pw) { errEl.textContent='Bitte Passwort eingeben.'; return; }
-
-  const hash = await sha256(pw);
-  const stored = DB.settings?.pwHash || DEFAULT_PW_HASH;
-
-  if(hash === stored) {
-    sessionStorage.setItem('vo_auth','ok');
-    sessionStorage.setItem('vo_auth_time', Date.now().toString());
-    unlockApp();
-  } else {
-    errEl.textContent='Falsches Passwort.';
-    inp.classList.add('shake');
-    inp.value='';
-    setTimeout(()=>inp.classList.remove('shake'), 400);
-    setTimeout(()=>inp.focus(), 50);
+  const btn = document.querySelector('.login-btn');
+  if(!email || !pw) { errEl.textContent='Bitte E-Mail und Passwort eingeben.'; return; }
+  btn.textContent = 'Einloggen...';
+  btn.disabled = true;
+  try {
+    await supabaseSignIn(email, pw);
+    document.getElementById('login-screen').style.display = 'none';
+    showPage('dashboard');
+  } catch(e) {
+    errEl.textContent = e.message || 'Login fehlgeschlagen.';
+    btn.textContent = 'EINLOGGEN';
+    btn.disabled = false;
   }
 }
 
@@ -6703,6 +7114,7 @@ function openAusgabeModal(id) {
   document.getElementById('ag-mwst-betrag').value = a?.mwstBetrag || '';
   document.getElementById('ag-brutto').value = a?.brutto || '';
   document.getElementById('ag-notiz').value = a?.notiz || '';
+  document.getElementById('ag-wiederholung').value = a?.wiederholung || 'einmalig';
   document.getElementById('ag-beleg-preview').style.display = 'none';
 
   // Setup beleg upload
@@ -6744,6 +7156,7 @@ function saveAusgabe() {
     mwstBetrag: parseFloat(document.getElementById('ag-mwst-betrag').value)||0,
     brutto: parseFloat(document.getElementById('ag-brutto').value)||0,
     notiz: document.getElementById('ag-notiz').value,
+    wiederholung: document.getElementById('ag-wiederholung').value || 'einmalig',
     beleg: belegInput._data || existingBeleg || null,
     belegName: belegInput._name || (editId ? DB.ausgaben.find(x=>x.id===editId)?.belegName : null),
     belegType: belegInput._type || (editId ? DB.ausgaben.find(x=>x.id===editId)?.belegType : null),
@@ -6764,12 +7177,46 @@ function deleteAusgabe(id) {
   save(); renderAusgaben();
 }
 
+function expandWiederkehrend(jahr) {
+  // For each recurring Ausgabe, generate virtual entries for each occurrence in the given year
+  const expanded = [];
+  (DB.ausgaben||[]).forEach(a => {
+    if(!a.wiederholung || a.wiederholung === 'einmalig') {
+      expanded.push(a); return;
+    }
+    const startDate = new Date(a.datum);
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const intervals = { monatlich:1, vierteljaehrlich:3, halbjaehrlich:6, jaehrlich:12 };
+    const step = intervals[a.wiederholung] || 1;
+    // Generate all occurrences that fall in the target year
+    let d = new Date(startDate);
+    let safetyLimit = 0;
+    while(safetyLimit++ < 200) {
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      if(y > jahr) break;
+      if(y === jahr) {
+        const dateStr = d.toISOString().slice(0,10);
+        expanded.push(Object.assign({}, a, {
+          id: a.id + '_' + dateStr,
+          datum: dateStr,
+          _virtual: true,
+          _parentId: a.id
+        }));
+      }
+      d = new Date(d.getFullYear(), d.getMonth() + step, d.getDate());
+    }
+  });
+  return expanded;
+}
+
 function renderAusgaben() {
   if(!DB.ausgaben) DB.ausgaben = [];
   const jahr = parseInt(document.getElementById('ausgaben-jahr')?.value || new Date().getFullYear());
   const filterKat = document.getElementById('ausgaben-filter')?.value || '';
 
-  let list = DB.ausgaben.filter(a => a.datum?.startsWith(String(jahr)));
+  let list = expandWiederkehrend(jahr).filter(a => a.datum?.startsWith(String(jahr)));
   if(filterKat) list = list.filter(a => a.kat === filterKat);
   list = list.sort((a,b) => b.datum.localeCompare(a.datum));
 
@@ -6804,7 +7251,7 @@ function renderAusgaben() {
   if(chartEl) {
     const monthlyData = Array.from({length:12}, (_,m) => {
       const monthStr = String(jahr) + '-' + String(m+1).padStart(2,'0');
-      const monthAusg = DB.ausgaben.filter(a => a.typ!=='einnahme' && a.datum?.startsWith(monthStr)).reduce((s,a)=>s+a.brutto,0);
+      const monthAusg = expandWiederkehrend(jahr).filter(a => a.typ!=='einnahme' && a.datum?.startsWith(monthStr)).reduce((s,a)=>s+a.brutto,0);
       const monthEinn = DB.ausgaben.filter(a => a.typ==='einnahme' && a.datum?.startsWith(monthStr)).reduce((s,a)=>s+a.brutto,0)
         + DB.rechnungen.filter(r => r.status==='bezahlt' && r.datum?.startsWith(monthStr)).reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
       return {ausg: monthAusg, einn: monthEinn};
@@ -6824,17 +7271,19 @@ function renderAusgaben() {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="emo">💶</div><p>Noch keine Ausgaben fuer ${jahr}.<br>Klicke auf "+ Ausgabe".</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(a => `<tr>
-    <td style="color:var(--muted)">${fmtDate(a.datum)}</td>
-    <td class="bold">${a.desc}</td>
+  const WIEDERHOLUNG_LABELS = {monatlich:'🔄 Monatlich',vierteljaehrlich:'🔄 Quartalsweise',halbjaehrlich:'🔄 Halbjährlich',jaehrlich:'🔄 Jährlich'};
+  tbody.innerHTML = list.map(a => `<tr style="${a._virtual?'opacity:.8':''}">
+    <td style="color:var(--muted)">${fmtDate(a.datum)}${a._virtual?'<br><span style="font-size:9px;color:var(--blue)">'+( WIEDERHOLUNG_LABELS[a.wiederholung]||'')+'</span>':''}</td>
+    <td class="bold">${a.desc}${a.wiederholung&&a.wiederholung!=='einmalig'&&!a._virtual?'<br><span style="font-size:9px;color:var(--blue)">'+( WIEDERHOLUNG_LABELS[a.wiederholung]||'')+'</span>':''}</td>
     <td><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg);color:var(--muted);font-weight:600">${AG_KAT_ICONS[a.kat]||''} ${AG_KAT_LABELS[a.kat]||a.kat||'–'}</span></td>
     <td class="mono">${a.typ==='einnahme'?'–':fmtEur(a.netto)}</td>
     <td class="mono" style="color:var(--muted)">${a.mwstPct>0?a.mwstPct+'%':'–'}</td>
     <td class="mono" style="font-weight:700;color:${a.typ==='einnahme'?'var(--green)':'var(--red)'}">${a.typ==='einnahme'?'+':'-'}${fmtEur(a.brutto)}</td>
     <td>${a.beleg ? `<a href="${a.beleg}" download="${a.belegName||'beleg'}" style="font-size:11px;color:var(--blue);text-decoration:none" onclick="event.stopPropagation()">📎 ${a.belegName||'Beleg'}</a>` : '<span style="color:var(--border)">–</span>'}</td>
     <td class="actions">
-      <button class="btn-ghost btn-sm" onclick="openAusgabeModal('${a.id}')">✏</button>
-      <button class="btn-danger" onclick="deleteAusgabe('${a.id}')">✕</button>
+      ${a._virtual
+        ? `<button class="btn-ghost btn-sm" onclick="openAusgabeModal('${a._parentId}')" title="Stamm-Eintrag bearbeiten">✏</button>`
+        : `<button class="btn-ghost btn-sm" onclick="openAusgabeModal('${a.id}')">✏</button><button class="btn-danger" onclick="deleteAusgabe('${a.id}')">✕</button>`}
     </td>
   </tr>`).join('');
 }
