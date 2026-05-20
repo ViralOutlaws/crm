@@ -830,6 +830,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-cf="angebot" onclick="setContactFilter('angebot',this)">📋 Angebot</button>
     <button class="filter-chip" data-cf="kunde" onclick="setContactFilter('kunde',this)">✅ Kunde</button>
     <button class="filter-chip" data-cf="absage" onclick="setContactFilter('absage',this)">✗ Absage</button>
+    <button class="filter-chip" data-cf="archiv" onclick="setContactFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="contact-search" placeholder="Suchen…" oninput="renderContacts()"></div>
   </div>
   <div class="table-wrap">
@@ -3209,6 +3210,17 @@ function saveContact() {
   save(); closeModal('contact-modal'); renderContacts(); renderDashboard();
 }
 
+function toggleArchivContact(id) {
+  const c = DB.contacts.find(x=>x.id===id);
+  if(!c) return;
+  c.archiviert = !c.archiviert;
+  c.updatedAt = new Date().toISOString();
+  const action = c.archiviert ? 'archiviert' : 'aus Archiv geholt';
+  addActivity(`Kontakt "${c.firma}" ${action}`, 'gray');
+  sbSaveContact(c);
+  save(); renderContacts(); renderDashboard();
+}
+
 function deleteContact(id) {
   if(!confirm('Kontakt wirklich löschen?')) return;
   DB.contacts = DB.contacts.filter(x=>x.id!==id);
@@ -3226,7 +3238,7 @@ function setContactFilter(f, btn) {
 function renderContacts() {
   const q = (document.getElementById('contact-search')?.value||'').toLowerCase();
   let list = DB.contacts.filter(c => {
-    const matchF = contactFilter==='alle'||c.status===contactFilter;
+    const matchF = contactFilter==='archiv' ? c.archiviert===true : (contactFilter==='alle' ? !c.archiviert : (c.status===contactFilter && !c.archiviert));
     const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q);
     return matchF && matchQ;
   });
@@ -3256,6 +3268,7 @@ function renderContacts() {
         <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Angebot</button>
         <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal('${c.id}')" title="Erinnerung">🔔</button>
         <button class="btn-ghost btn-sm" onclick="openContactModal('${c.id}')">✏</button>
+        <button class="btn-ghost btn-sm" onclick="toggleArchivContact('${c.id}')" title="${c.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${c.archiviert?'📤':'📦'}</button>
         <button class="btn-danger" onclick="deleteContact('${c.id}')">✕</button>
       </td>
     </tr>`;
