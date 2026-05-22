@@ -3044,6 +3044,10 @@ function addPosition(containerId, prefix) {
       <span class="pos-total">0,00 €</span>
       <button class="pos-remove" onclick="this.closest('.pos-item').remove();calcTotals('${prefix}')">✕</button>
     </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:3px 10px 5px;background:rgba(255,193,7,.04);border-left:2px solid transparent" class="pos-optional-row">
+      <input type="checkbox" class="pos-optional" id="opt-${posid}" onchange="calcTotals('${prefix}');this.closest('.pos-optional-row').style.borderLeftColor=this.checked?'var(--yellow)':'transparent'">
+      <label for="opt-${posid}" style="font-size:10px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600;letter-spacing:.5px">OPTIONAL (wird nicht in Gesamtsumme gerechnet)</label>
+    </div>
     <div class="pos-detail" id="detail-${posid}">
       <div class="pos-detail-hint">📝 Detail-Beschreibung (erscheint auf dem Dokument unter dem Titel)</div>
       <textarea placeholder="z.B.: • Google Business Optimierung&#10;• Meta Ads Verwaltung (bis 300 €/Monat Budget)&#10;• Monatliches Reporting&#10;• 1x Strategiegespräch pro Monat"></textarea>
@@ -3067,8 +3071,12 @@ function calcTotals(prefix) {
     const qty = parseFloat(item.querySelector('.pos-qty').value)||0;
     const price = parseFloat(item.querySelector('.pos-price').value)||0;
     const total = qty * price;
-    item.querySelector('.pos-total').textContent = fmtEur(total);
-    netto += total;
+    const isOptional = item.querySelector('.pos-optional')?.checked || false;
+    const totalEl = item.querySelector('.pos-total');
+    totalEl.textContent = fmtEur(total);
+    totalEl.style.color = isOptional ? 'var(--muted)' : '';
+    totalEl.title = isOptional ? 'Optional – nicht in Summe' : '';
+    if(!isOptional) netto += total;
   });
   const isKU = !!DB.settings.kleinunternehmer;
   const mwstRate = isKU ? 0 : getMwst();
@@ -3096,6 +3104,7 @@ function getPositions(prefix) {
       desc: item.querySelector('.pos-desc').value,
       typ: item.querySelector('.pos-typ')?.value||'einmalig',
       detail: detailTA ? detailTA.value : '',
+      optional: item.querySelector('.pos-optional')?.checked || false,
       qty, price,
       total: qty * price
     };
@@ -3129,6 +3138,10 @@ function fillPositions(prefix, positions) {
         <span class="pos-total">${fmtEur(p.total)}</span>
         <button class="pos-remove" onclick="this.closest('.pos-item').remove();calcTotals('${prefix}')">✕</button>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 10px 5px;background:rgba(255,193,7,.04);border-left:2px solid ${p.optional?'var(--yellow)':'transparent'}" class="pos-optional-row">
+        <input type="checkbox" class="pos-optional" id="opt-${posid}" ${p.optional?'checked':''} onchange="calcTotals('${prefix}');this.closest('.pos-optional-row').style.borderLeftColor=this.checked?'var(--yellow)':'transparent'">
+        <label for="opt-${posid}" style="font-size:10px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600;letter-spacing:.5px">OPTIONAL (wird nicht in Gesamtsumme gerechnet)</label>
+      </div>
       <div class="pos-detail${hasDetail?' open':''}" id="detail-${posid}">
         <div class="pos-detail-hint">📝 Detail-Beschreibung (erscheint auf dem Dokument unter dem Titel)</div>
         <textarea placeholder="z.B.: • Google Business Optimierung&#10;• Meta Ads Verwaltung&#10;• Monatliches Reporting">${p.detail||''}</textarea>
@@ -3139,7 +3152,7 @@ function fillPositions(prefix, positions) {
 }
 
 function sumPositions(positions) {
-  const netto = (positions||[]).reduce((s,p) => s+p.total, 0);
+  const netto = (positions||[]).reduce((s,p) => s+(p.optional?0:p.total), 0);
   const isKU = !!DB.settings.kleinunternehmer;
   const mwst = isKU ? 0 : netto * getMwst();
   return { netto, mwst, brutto: netto+mwst };
@@ -3849,7 +3862,7 @@ function printDoc(type, id) {
     <tbody>
       ${(doc.positions||[]).map((p,i)=>`<tr>
         <td>${i+1}</td>
-        <td><div style="font-weight:600">${p.desc||'–'}</div>${p.detail?`<div style="font-size:10.5px;color:#666;margin-top:3px;white-space:pre-line;line-height:1.5">${p.detail}</div>`:''}</td>
+        <td><div style="font-weight:600">${p.desc||'–'}${p.optional?' <span style="font-size:9px;font-weight:700;color:#f59e0b;background:#fef3c7;padding:1px 6px;border-radius:3px;letter-spacing:.5px">OPTIONAL</span>':''}</div>${p.detail?`<div style="font-size:10.5px;color:#666;margin-top:3px;white-space:pre-line;line-height:1.5">${p.detail}</div>`:''}</td>
         <td class="right">${p.qty}</td>
         <td class="right">${fmtEur(p.price)}</td>
         <td class="right">${fmtEur(p.total)}</td>
