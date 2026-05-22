@@ -3862,10 +3862,14 @@ function printDoc(type, id) {
     <tbody>
       ${(doc.positions||[]).map((p,i)=>`<tr>
         <td>${i+1}</td>
-        <td><div style="font-weight:600">${p.desc||'–'}${p.optional?' <span style="font-size:9px;font-weight:700;color:#f59e0b;background:#fef3c7;padding:1px 6px;border-radius:3px;letter-spacing:.5px">OPTIONAL</span>':''}</div>${p.detail?`<div style="font-size:10.5px;color:#666;margin-top:3px;white-space:pre-line;line-height:1.5">${p.detail}</div>`:''}</td>
+        <td>
+          <div style="font-weight:600">${p.desc||'–'}${p.optional?' <span style="font-size:9px;font-weight:700;color:#f59e0b;background:#fef3c7;padding:1px 6px;border-radius:3px;letter-spacing:.5px">OPTIONAL</span>':''}</div>
+          ${(p.typ&&p.typ!=='einmalig')?`<div style="font-size:9px;font-weight:700;color:#4a5568;background:#edf2f7;display:inline-block;padding:1px 7px;border-radius:3px;margin-top:3px;letter-spacing:.5px">${{einmalig:'Einmalig',pauschal:'Pauschal',monatlich:'Monatlich',jaehrlich:'Jährlich',stuendlich:'Stündlich',taeglich:'Täglich','nach-aufwand':'Nach Aufwand'}[p.typ]||p.typ}</div>`:''}
+          ${p.detail?`<div style="font-size:10.5px;color:#666;margin-top:3px;white-space:pre-line;line-height:1.5">${p.detail}</div>`:''}
+        </td>
         <td class="right">${p.qty}</td>
-        <td class="right">${fmtEur(p.price)}</td>
-        <td class="right">${fmtEur(p.total)}</td>
+        <td class="right">${fmtEur(p.price)}${p.typ&&p.typ!=='einmalig'?`<div style="font-size:8px;color:#888">/`+{monatlich:'Monat',jaehrlich:'Jahr',stuendlich:'Std.',taeglich:'Tag',pauschal:'pauschal','nach-aufwand':'Aufwand'}[p.typ]+`</div>`:''}</td>
+        <td class="right">${p.optional?`<span style="color:#999;font-size:10px">–</span>`:fmtEur(p.total)}</td>
       </tr>`).join('')}
     </tbody>
   </table>
