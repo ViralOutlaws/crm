@@ -3895,7 +3895,7 @@ function printDoc(type, id) {
   <div class="footer">
     <div><b>Kontakt</b>${s.name||'Viral Outlaws'}<br>${s.inhaber||''}<br>${s.str||''}<br>${s.plz||''}<br>${s.tel||''}<br>${s.email||''}</div>
     <div><b>Bankverbindung</b>${s.iban||'–'}<br>${s.bic?'BIC: '+s.bic+'<br>':''}<br>${s.bank||''}</div>
-    <div><b>Steuer</b>${s.steuer?'St.-Nr.: '+s.steuer+'<br>':''}${s.ust?'USt-Id: '+s.ust+'<br>':''}<br>${s.footer||''}</div>
+    <div><b>Steuer</b>${s.steuer?'St.-Nr.: '+s.steuer+'<br>':''}${s.ust?'USt-Id: '+s.ust+'<br>':''}${s.kleinunternehmer?'Gem&auml;&szlig; &sect; 19 UStG wird keine Umsatzsteuer berechnet.<br>':''}<br>${s.footer||''}</div>
   </div>
 
   <script>window.onload=()=>{window.print();}<\/script>
