@@ -4374,7 +4374,9 @@ async function sbSaveContact(contact) {
       person: contact.person||null,
       email: contact.email||null,
       tel: contact.tel||null,
+      str: contact.str||null,
       plz: contact.plz||null,
+      ort: contact.ort||null,
       web: contact.web||null,
       instagram: contact.instagram||null,
       facebook: contact.facebook||null,
@@ -4382,10 +4384,12 @@ async function sbSaveContact(contact) {
       branche: contact.branche||null,
       status: contact.status||'offen',
       notes: contact.notes||null,
+      ana: contact.ana||null,
       photo: contact.photo||null,
       notizen: contact.notizen||[],
       dokumente: contact.dokumente||[],
       checks: contact.checks||[],
+      archiviert: contact.archiviert||false,
       updated_at: new Date().toISOString()
     };
     console.log('Saving contact:', row.firma, 'ws:', wsId);
@@ -4411,11 +4415,13 @@ async function sbLoadContacts() {
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
       id: r.id, firma: r.firma, person: r.person||'',
-      email: r.email||'', tel: r.tel||'', plz: r.plz||'',
+      email: r.email||'', tel: r.tel||'',
+      str: r.str||'', plz: r.plz||'', ort: r.ort||'',
       web: r.web||'', instagram: r.instagram||'', facebook: r.facebook||'',
       gbusiness: r.gbusiness||'', branche: r.branche||'', status: r.status||'offen',
-      notes: r.notes||'', photo: r.photo||'', notizen: r.notizen||[],
-      dokumente: r.dokumente||[], checks: r.checks||[],
+      notes: r.notes||'', ana: r.ana||'', photo: r.photo||'',
+      notizen: r.notizen||[], dokumente: r.dokumente||[], checks: r.checks||[],
+      archiviert: r.archiviert||false,
       updatedAt: r.updated_at, createdAt: r.created_at
     }));
   } catch(e) { console.warn('sbLoadContacts:', e.message); return null; }
