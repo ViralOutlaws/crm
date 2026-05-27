@@ -3842,7 +3842,7 @@ function printDoc(type, id) {
       <strong>${c.firma||'–'}</strong><br>
       ${c.person?c.person+'<br>':''}
       ${c.str?c.str+'<br>':''}
-      ${c.plz||''}
+      ${[c.plz, c.ort].filter(Boolean).join(' ')||''}
     </div>
   </div>
 
