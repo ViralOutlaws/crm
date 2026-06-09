@@ -4530,9 +4530,12 @@ async function sbLoadAufgaben() {
       .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID)
       .order('created_at', { ascending: false });
     return (data||[]).map(r => ({
-      id: r.id, kontaktId: r.kontakt_id, titel: r.titel,
-      beschreibung: r.beschreibung||'', status: r.status||'offen',
-      prioritaet: r.prioritaet||'mittel', faellig: r.faellig||null,
+      id: r.id, kontaktId: r.kontakt_id,
+      text: r.titel,      // DB.kanban uses 'text' not 'titel'
+      notiz: r.beschreibung||'',
+      col: r.status||'todo',
+      prio: r.prioritaet||'mittel',
+      datum: r.faellig||null,
       createdAt: r.created_at
     }));
   } catch(e) { console.warn(e); return null; }
