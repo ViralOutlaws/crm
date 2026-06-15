@@ -2517,6 +2517,7 @@ window._loginFallback = function() {
         <button class="filter-chip" onclick="setEmailTab('nachfassen',this)">🔔 Nachfassen</button>
         <button class="filter-chip" onclick="setEmailTab('willkommen',this)">🎉 Neuer Kunde</button>
         <button class="filter-chip" onclick="setEmailTab('rechnung',this)">🧾 Rechnung</button>
+        <button class="filter-chip" onclick="setEmailTab('terminbestaetigung',this)">📅 Terminbestätigung</button>
       </div>
       <div class="field" style="margin-bottom:12px">
         <label>An (Kontakt)</label>
@@ -5015,6 +5016,28 @@ ${s.inhaber||'Kim'}
 ${s.name||'Viral Outlaws'}
 ${s.tel||''}`
   },
+  terminbestaetigung: {
+    label: '📅 Terminbestätigung',
+    subject: (c,s,extra) => `Terminbestätigung – ${extra?.titel||'Ihr Termin'} am ${extra?.datum||''}`,
+    body: (c,s,extra) => `Guten Tag${c?.person?' '+c.person:''},
+
+vielen Dank für Ihr Interesse! Ich bestätige hiermit Ihren Termin:
+
+  📅 Datum:    ${extra?.datum||'–'}
+  🕐 Uhrzeit:  ${extra?.zeit||'–'}${extra?.bis?' – '+extra.bis:''}
+  📋 Thema:    ${extra?.titel||'–'}
+  ${extra?.notiz?'📝 Hinweis:  '+extra.notiz+'
+':''}
+Bei Fragen oder falls Sie den Termin verschieben möchten, melden Sie sich gerne jederzeit.
+
+Ich freue mich auf unser Gespräch!
+
+Mit freundlichen Grüßen
+${s.inhaber||'Kim'}
+${s.name||'Viral Outlaws'}
+${s.tel||''}
+${s.web||'viraloutlaws.de'}`
+  },
   rechnung: {
     subject: (c,s) => `Rechnung von Viral Outlaws – ${c?.firma||''}`,
     body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
@@ -5378,6 +5401,49 @@ function openKalEventModal(id, prefillDate) {
   document.getElementById('kal-event-modal').classList.add('open');
 }
 
+async function _sendTerminNotification(ev) {
+  try {
+    const s = DB.settings || {};
+    const notifyEmail = s.email || 'info@viraloutlaws.de';
+    const workerUrl = s.mailWorkerUrl || '';
+    if(!workerUrl) return; // silently skip if no worker configured
+    const c = ev.kontaktId ? DB.contacts.find(x=>x.id===ev.kontaktId) : null;
+    const datumFormatted = ev.datum ? new Date(ev.datum).toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}) : ev.datum;
+    const subject = `📅 Neuer Termin: ${ev.titel} am ${datumFormatted}`;
+    const body = `Neuer Termin im CRM eingetragen:
+
+  Titel:    ${ev.titel}
+  Datum:    ${datumFormatted}
+  Uhrzeit:  ${ev.zeit||'–'}${ev.bis?' – '+ev.bis:''}
+  Typ:      ${ev.typ||'Termin'}
+  Kontakt:  ${c ? c.firma + (c.person?' ('+c.person+')':'') : '–'}
+  Notiz:    ${ev.notiz||'–'}
+
+Eingetragen über: Viral Outlaws CRM`;
+    const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;max-width:520px">
+      <div style="background:#fdad00;padding:12px 18px;border-radius:6px 6px 0 0">
+        <strong style="font-size:16px;color:#111">📅 Neuer Termin eingetragen</strong>
+      </div>
+      <div style="background:#f8f8f8;padding:16px 18px;border-radius:0 0 6px 6px;border:1px solid #e0e0e0;border-top:none">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:5px 0;color:#666;width:90px">Titel</td><td style="padding:5px 0;font-weight:600">${ev.titel}</td></tr>
+          <tr><td style="padding:5px 0;color:#666">Datum</td><td style="padding:5px 0">${datumFormatted}</td></tr>
+          <tr><td style="padding:5px 0;color:#666">Uhrzeit</td><td style="padding:5px 0">${ev.zeit||'–'}${ev.bis?' – '+ev.bis:''}</td></tr>
+          <tr><td style="padding:5px 0;color:#666">Typ</td><td style="padding:5px 0">${ev.typ||'Termin'}</td></tr>
+          ${c?`<tr><td style="padding:5px 0;color:#666">Kontakt</td><td style="padding:5px 0">${c.firma}${c.person?' ('+c.person+')':''}</td></tr>`:''}
+          ${ev.notiz?`<tr><td style="padding:5px 0;color:#666;vertical-align:top">Notiz</td><td style="padding:5px 0">${ev.notiz}</td></tr>`:''}
+        </table>
+        <div style="margin-top:12px;font-size:11px;color:#aaa">Viral Outlaws CRM · ${new Date().toLocaleString('de-DE')}</div>
+      </div>
+    </div>`;
+    await fetch(workerUrl, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ to: notifyEmail, subject, html, text: body }),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch(e) { console.warn('Termin-Notification:', e.message); }
+}
+
 function saveKalEvent() {
   const titel = document.getElementById('ke-titel').value.trim();
   const datum = document.getElementById('ke-datum').value;
@@ -5411,6 +5477,8 @@ function saveKalEvent() {
     addActivity(`Termin "${titel}" am ${fmtDate(datum)} angelegt${c?' für '+c.firma:''}`, 'blue');
   }
   sbSaveKalEvent(obj); save(); closeModal('kal-event-modal'); renderKalender();
+  // Send notification email to self
+  _sendTerminNotification(obj);
   // Jump to the month of the saved event
   const ed = new Date(datum);
   kalYear = ed.getFullYear(); kalMonth = ed.getMonth();
