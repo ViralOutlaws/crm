@@ -4855,19 +4855,19 @@ function saveWiedervorlage() {
   };
   if(editId) { const i=DB.wiedervorlagen.findIndex(x=>x.id===editId); if(i>-1) DB.wiedervorlagen[i]=obj; }
   else { DB.wiedervorlagen.push(obj); }
-  save(); closeModal('wv-modal'); renderDashboard();
+  sbSaveWv(obj); save(); closeModal('wv-modal'); renderDashboard();
   addActivity(`Erinnerung gesetzt: "${text}" am ${fmtDate(datum)}`, 'yellow');
 }
 
 function doneWiedervorlage(id) {
   const wv = DB.wiedervorlagen.find(x=>x.id===id);
-  if(wv) { wv.done=true; wv.doneAt=new Date().toISOString(); }
+  if(wv) { wv.done=true; wv.doneAt=new Date().toISOString(); sbSaveWv(wv); }
   save(); renderDashboard();
 }
 
 function deleteWiedervorlage(id) {
   DB.wiedervorlagen = DB.wiedervorlagen.filter(x=>x.id!==id);
-  save(); renderDashboard();
+  sbDeleteWv(id); save(); renderDashboard();
 }
 
 const typIcon = { anruf:'📞', email:'✉', termin:'📅', angebot:'📋', sonstiges:'📌' };
@@ -5398,17 +5398,19 @@ function saveKalEvent() {
     if(obj.reminder && obj.datum > today()) {
       const reminderDate = addDays(obj.datum, -1);
       if(!DB.wiedervorlagen) DB.wiedervorlagen=[];
-      DB.wiedervorlagen.push({
+      const wvObj = {
         id:uid(), kontaktId:obj.kontaktId||null,
         text:'Erinnerung: '+obj.titel,
         datum:reminderDate, typ:'termin', done:false,
         createdAt:new Date().toISOString()
-      });
+      };
+      DB.wiedervorlagen.push(wvObj);
+      sbSaveWv(wvObj);
     }
     const c = obj.kontaktId ? DB.contacts.find(x=>x.id===obj.kontaktId) : null;
     addActivity(`Termin "${titel}" am ${fmtDate(datum)} angelegt${c?' für '+c.firma:''}`, 'blue');
   }
-  save(); closeModal('kal-event-modal'); renderKalender();
+  sbSaveKalEvent(obj); save(); closeModal('kal-event-modal'); renderKalender();
   // Jump to the month of the saved event
   const ed = new Date(datum);
   kalYear = ed.getFullYear(); kalMonth = ed.getMonth();
@@ -5418,7 +5420,7 @@ function saveKalEvent() {
 function deleteKalEvent(id) {
   if(!id||!confirm('Termin wirklich löschen?')) return;
   DB.kalEvents = DB.kalEvents.filter(x=>x.id!==id);
-  save(); closeModal('kal-event-modal'); renderKalender();
+  sbDeleteKalEvent(id); save(); closeModal('kal-event-modal'); renderKalender();
 }
 
 // ==================================================
