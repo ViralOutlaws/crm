@@ -10160,8 +10160,10 @@ WICHTIG: Antworte AUSSCHLIESSLICH mit dem rohen JSON-Array. Starte direkt mit [ 
     addActivity(`${newPosts.length} Content-Posts generiert`, 'yellow');
 
   } catch(err) {
-    resultEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--red)">
-      Fehler: ${err.message}
+    console.error('CONTENT GEN ERROR:', err, err.stack);
+    resultEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:12px 16px;font-size:11px;color:var(--red)">
+      Fehler: ${err.message}<br>
+      <span style="font-size:9px;opacity:.7;font-family:monospace;white-space:pre-wrap">${(err.stack||'').split('\n').slice(0,3).join('\n')}</span>
     </div>`;
   }
 
