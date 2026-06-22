@@ -10112,6 +10112,7 @@ Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
     // Save posts
     const newPosts = posts.map(p => ({
       ...p,
+      script: p.script || '',
       id: uid(),
       status: 'idee',
       publishDate: '',
