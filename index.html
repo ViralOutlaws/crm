@@ -10215,8 +10215,17 @@ async function sbLoadContentPosts() {
     const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
     const { data } = await sb.from('social_posts').select('*').eq('workspace_id', wsId).order('created_at', {ascending:false});
     if(data?.length) {
-      DB.socialPosts = data;
-      // Re-sync calendar entries
+      DB.socialPosts = data.map(p => ({
+        ...p,
+        script: p.script || '',
+        caption: p.caption || '',
+        hook: p.hook || '',
+        format: p.format || 'Post',
+        day: p.day || '',
+        pillar: p.pillar || '',
+        status: p.status || 'idee',
+        publishDate: p.publish_date || p.publishDate || ''
+      }));
       DB.socialPosts.filter(p=>p.status==='eingeplant'&&p.publishDate).forEach(p=>syncPostToCalendar(p));
       save();
     }
