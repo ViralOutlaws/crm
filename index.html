@@ -10132,7 +10132,7 @@ WICHTIG: Antworte AUSSCHLIESSLICH mit dem rohen JSON-Array. Starte direkt mit [ 
     const res = await fetch('https://vo-claude-proxy.schmidt-kim-lukas.workers.dev', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, messages:[{role:'user',content:prompt}] })
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:16000, messages:[{role:'user',content:prompt}] })
     });
     if(!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(`API ${res.status}: ${e?.error?.message||res.statusText}`); }
     const data = await res.json();
@@ -10155,6 +10155,11 @@ WICHTIG: Antworte AUSSCHLIESSLICH mit dem rohen JSON-Array. Starte direkt mit [ 
       } else {
         throw new Error('JSON Parse fehlgeschlagen: ' + parseErr.message);
       }
+    }
+
+    // Validierung: leeres Array = Fehler
+    if(!Array.isArray(posts) || posts.length === 0) {
+      throw new Error('Keine Posts erhalten. KI-Antwort: ' + raw.slice(0, 200));
     }
 
     // Save posts
