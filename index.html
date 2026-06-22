@@ -10090,9 +10090,9 @@ Formate: ${formats.join(', ')}. Verteile sie abwechslungsreich.
 
 ${memory}
 
-Jeder Post als JSON mit: format, day (Mo-So, optimal verteilt), pillar (Bildung/Beweis/Persönlich/Angebot/Unterhaltung), hook (max 8 Wörter, knallt), caption (komplett mit Emojis, Hashtags, CTA, Wir-Perspektive), script (Reel/Story: vollständige Szenen; Carousel: alle Slides; Post: leer).
+Jeder Post als JSON mit: format, day (Mo-So, optimal verteilt), pillar (Bildung/Beweis/Persönlich/Angebot/Unterhaltung), hook (max 8 Wörter, knallt), caption (komplett mit Emojis, Hashtags, CTA, Wir-Perspektive), script (Reel/Story: vollständige Szenen; Carousel: alle Slides; Post: leer string).
 
-Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
+WICHTIG: Antworte AUSSCHLIESSLICH mit dem rohen JSON-Array. Starte direkt mit [ und ende mit ]. Kein Text davor, kein Text danach, keine Backticks, kein Markdown.`;
 
   try {
     const res = await fetch('https://vo-claude-proxy.schmidt-kim-lukas.workers.dev', {
@@ -10103,10 +10103,25 @@ Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
     if(!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(`API ${res.status}: ${e?.error?.message||res.statusText}`); }
     const data = await res.json();
     const raw = (data.content||[]).map(b=>b.text||'').join('').trim();
-    const cleaned = raw.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'').trim();
+
+    // Robuster Parser: entferne alles vor [ und nach ]
     let posts;
-    try { posts = JSON.parse(cleaned); }
-    catch { const m=cleaned.match(/\[[\s\S]*\]/); if(m) posts=JSON.parse(m[0]); else throw new Error('JSON Parse fehlgeschlagen'); }
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'').trim();
+      const start = cleaned.indexOf('[');
+      const end = cleaned.lastIndexOf(']');
+      if(start === -1 || end === -1) throw new Error('Kein JSON-Array gefunden');
+      const jsonStr = cleaned.slice(start, end + 1);
+      posts = JSON.parse(jsonStr);
+    } catch(parseErr) {
+      // Letzter Versuch: einzelne Objekte extrahieren
+      const matches = raw.match(/\{[^{}]*"hook"[^{}]*\}/g);
+      if(matches && matches.length) {
+        posts = matches.map(m => { try { return JSON.parse(m); } catch { return null; } }).filter(Boolean);
+      } else {
+        throw new Error('JSON Parse fehlgeschlagen: ' + parseErr.message);
+      }
+    }
 
     // Save posts
     const newPosts = posts.map(p => ({
