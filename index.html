@@ -1819,10 +1819,10 @@ window._loginFallback = function() {
       <div style="margin-bottom:12px">
         <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:7px">Formate</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="content-fmt-btn active" data-fmt="Reel" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Reel</button>
-          <button class="content-fmt-btn active" data-fmt="Carousel" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Carousel</button>
-          <button class="content-fmt-btn active" data-fmt="Story" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Story</button>
-          <button class="content-fmt-btn active" data-fmt="Post" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Single Post</button>
+          <button class="content-fmt-btn active" data-fmt="Reel" onclick="toggleContentFmt(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Reel</button>
+          <button class="content-fmt-btn active" data-fmt="Carousel" onclick="toggleContentFmt(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Carousel</button>
+          <button class="content-fmt-btn active" data-fmt="Story" onclick="toggleContentFmt(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Story</button>
+          <button class="content-fmt-btn active" data-fmt="Post" onclick="toggleContentFmt(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Single Post</button>
         </div>
       </div>
 
@@ -10064,7 +10064,6 @@ async function generateContentPlan() {
   const focus = document.getElementById('content-focus').value;
   const count = document.getElementById('content-count').value;
   const note = document.getElementById('content-note').value.trim();
-  const apiKey = document.getElementById('content-apikey').value.trim();
   const formats = Array.from(document.querySelectorAll('.content-fmt-btn.active')).map(b=>b.dataset.fmt);
 
   if(!formats.length) { alert('Bitte mindestens ein Format auswählen.'); return; }
@@ -10140,12 +10139,25 @@ Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
   btn.textContent = '✦ Wochenplan generieren';
 }
 
+function toggleContentFmt(btn) {
+  const isActive = btn.classList.contains('active');
+  const activeCount = document.querySelectorAll('.content-fmt-btn.active').length;
+  if(isActive && activeCount <= 1) return; // mind. 1 aktiv
+  if(isActive) {
+    btn.classList.remove('active');
+    btn.style.background = 'transparent';
+    btn.style.color = 'var(--ink2)';
+    btn.style.borderColor = 'var(--border)';
+  } else {
+    btn.classList.add('active');
+    btn.style.background = 'var(--ink)';
+    btn.style.color = '#fff';
+    btn.style.borderColor = 'var(--ink)';
+  }
+}
+
 function initContentFormatBtns() {
-  document.querySelectorAll('.content-fmt-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.classList.toggle('active');
-    });
-  });
+  // Buttons haben jetzt onclick direkt — nichts zu tun
 }
 
 // Supabase stubs for content posts
