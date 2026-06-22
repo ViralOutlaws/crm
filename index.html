@@ -1795,23 +1795,26 @@ window._loginFallback = function() {
     <div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:20px;box-shadow:var(--shadow);position:sticky;top:80px">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--ink);margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px">✦ WOCHENPLAN GENERIEREN</div>
 
-      <div class="field" style="margin-bottom:12px">
-        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Themen-Schwerpunkt</label>
-        <select id="content-focus" style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
-          <option value="mix">Mix aus allem</option>
-          <option value="webdesign">Webdesign</option>
-          <option value="performance">Performance Marketing</option>
-          <option value="ki">KI & Automatisierung</option>
-          <option value="local">Lokale Präsenz / Allgäu</option>
-          <option value="bts">Behind the Scenes</option>
-        </select>
+      <div style="margin-bottom:12px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:7px">Themen-Schwerpunkt</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="content-focus-btn active" data-focus="webdesign" onclick="toggleContentFocus(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Webdesign</button>
+          <button class="content-focus-btn active" data-focus="performance" onclick="toggleContentFocus(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Performance</button>
+          <button class="content-focus-btn active" data-focus="ki" onclick="toggleContentFocus(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">KI & Automatisierung</button>
+          <button class="content-focus-btn active" data-focus="local" onclick="toggleContentFocus(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Lokal / Allgäu</button>
+          <button class="content-focus-btn active" data-focus="bts" onclick="toggleContentFocus(this)" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--ink);border-radius:16px;background:var(--ink);color:#fff;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Behind the Scenes</button>
+        </div>
       </div>
 
       <div class="field" style="margin-bottom:12px">
         <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Anzahl Posts</label>
         <select id="content-count" style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
+          <option value="1">1 Post</option>
+          <option value="2">2 Posts</option>
           <option value="3">3 Posts</option>
+          <option value="4">4 Posts</option>
           <option value="5" selected>5 Posts</option>
+          <option value="6">6 Posts</option>
           <option value="7">7 Posts</option>
         </select>
       </div>
@@ -10087,19 +10090,19 @@ function deleteContentPost(id) {
 async function generateContentPlan() {
   const btn = document.getElementById('content-gen-btn');
   const resultEl = document.getElementById('content-gen-result');
-  const focus = document.getElementById('content-focus').value;
+  const focusList = Array.from(document.querySelectorAll('.content-focus-btn.active')).map(b=>b.dataset.focus);
   const count = document.getElementById('content-count').value;
   const note = document.getElementById('content-note').value.trim();
   const formats = Array.from(document.querySelectorAll('.content-fmt-btn.active')).map(b=>b.dataset.fmt);
 
   if(!formats.length) { alert('Bitte mindestens ein Format auswählen.'); return; }
+  if(!focusList.length) { alert('Bitte mindestens einen Themen-Schwerpunkt auswählen.'); return; }
 
   btn.disabled = true;
   btn.textContent = '⏳ Generiere...';
   resultEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted)"><div style="font-size:24px;margin-bottom:10px">⏳</div><div>KI erstellt deinen Wochenplan...</div></div>`;
 
   const focusMap = {
-    mix:'eine ausgewogene Mischung aus Webdesign, Performance Marketing (Meta/Google Ads), KI-Lösungen, lokalem Allgäu-Bezug und Behind-the-Scenes',
     webdesign:'Webdesign, moderne Websites, UX/UI, Conversion-Optimierung, Next.js',
     performance:'Performance Marketing, Meta Ads, Google Ads, ROAS, Lead-Generierung für lokale Unternehmen',
     ki:'KI-Lösungen, Automatisierung, AI-Tools für kleine Unternehmen, Zeitersparnis',
@@ -10107,12 +10110,16 @@ async function generateContentPlan() {
     bts:'Behind the Scenes der Agenturarbeit, Einblicke in Projekte, persönliche Stories von Viral Outlaws'
   };
 
+  const focusText = focusList.length === Object.keys(focusMap).length
+    ? 'eine ausgewogene Mischung aus allen Themen: ' + Object.values(focusMap).join('; ')
+    : focusList.map(f=>focusMap[f]).join('; ');
+
   const memory = getContentMemorySummary();
   const noteText = note ? `\nZusätzliche Notiz: ${note}` : '';
 
   const prompt = `Du bist Content-Stratege für "Viral Outlaws", Webdesign- und Performance Marketing Agentur aus Woringen bei Memmingen im Allgäu. Brand Voice: edgy, modern, persönlich, Wir-Perspektive (Agentur). Zielgruppe: KMUs, Handwerker, Gastronomen im Allgäu.
 
-Erstelle ${count} Instagram Posts. Schwerpunkt: ${focusMap[focus]}.${noteText}
+Erstelle ${count} Instagram Posts. Schwerpunkt-Themen: ${focusText}.${noteText}
 Formate: ${formats.join(', ')}. Verteile sie abwechslungsreich.
 
 ${memory}
@@ -10185,6 +10192,23 @@ WICHTIG: Antworte AUSSCHLIESSLICH mit dem rohen JSON-Array. Starte direkt mit [ 
 
   btn.disabled = false;
   btn.textContent = '✦ Wochenplan generieren';
+}
+
+function toggleContentFocus(btn) {
+  const isActive = btn.classList.contains('active');
+  const activeCount = document.querySelectorAll('.content-focus-btn.active').length;
+  if(isActive && activeCount <= 1) return; // mind. 1 aktiv
+  if(isActive) {
+    btn.classList.remove('active');
+    btn.style.background = 'transparent';
+    btn.style.color = 'var(--ink2)';
+    btn.style.borderColor = 'var(--border)';
+  } else {
+    btn.classList.add('active');
+    btn.style.background = 'var(--ink)';
+    btn.style.color = '#fff';
+    btn.style.borderColor = 'var(--ink)';
+  }
 }
 
 function toggleContentFmt(btn) {
