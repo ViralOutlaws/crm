@@ -9965,7 +9965,8 @@ function renderContentPage() {
   listEl.innerHTML = filtered.map(p => {
     const st = CONTENT_STATUS[p.status] || CONTENT_STATUS.idee;
     const fc = CONTENT_FORMAT_COLORS[p.format] || '#666';
-    const hasScript = p.script && p.script.trim().length > 0;
+    const scriptStr = (p.script == null) ? '' : String(p.script);
+    const hasScript = scriptStr.trim().length > 0;
     return `<div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;box-shadow:var(--shadow)">
       <div style="padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-wrap:wrap">
         <span style="font-size:10px;font-weight:700;padding:2px 10px;border-radius:12px;background:${fc}22;color:${fc};border:1px solid ${fc}44">${p.format}</span>
@@ -9980,7 +9981,7 @@ function renderContentPage() {
         <button onclick="toggleContentCap('${p.id}',this)" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;margin-top:4px;text-decoration:underline;font-family:'Sora',sans-serif">Mehr anzeigen</button>
         ${hasScript ? `<div style="margin-top:10px;background:var(--bg);border-radius:6px;padding:8px 12px;border-left:3px solid ${fc}">
           <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${p.format==='Carousel'?'Slide-Texte':p.format==='Story'?'Story-Ablauf':'Script'}</div>
-          <div style="font-size:11px;color:var(--ink2);white-space:pre-wrap;font-family:'DM Mono',monospace;line-height:1.6">${p.script}</div>
+          <div style="font-size:11px;color:var(--ink2);white-space:pre-wrap;font-family:'DM Mono',monospace;line-height:1.6">${scriptStr}</div>
         </div>` : ''}
       </div>
       <div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -10054,7 +10055,8 @@ function copyContentPost(id) {
   const p = DB.socialPosts.find(x=>x.id===id);
   if(!p) return;
   let t = `${p.format} — ${p.day} | ${p.pillar}\nHook: ${p.hook}\n\nCaption:\n${p.caption}`;
-  if(p.script && p.script.trim()) t += `\n\nScript:\n${p.script}`;
+  const scriptStr = (p.script == null) ? '' : String(p.script);
+  if(scriptStr.trim()) t += `\n\nScript:\n${scriptStr}`;
   navigator.clipboard.writeText(t).then(() => {
     addActivity(`Content "${p.hook}" kopiert`, 'yellow');
   }).catch(()=>{});
