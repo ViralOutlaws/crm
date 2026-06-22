@@ -1837,7 +1837,7 @@ window._loginFallback = function() {
 
       <!-- Memory reset -->
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-        <button onclick="if(confirm('Gedächtnis wirklich löschen?')){DB.contentMemory=[];save();renderContentPage();}" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:'Sora',sans-serif;text-decoration:underline">🧠 Gedächtnis zurücksetzen</button>
+        <button onclick="resetContentMemory()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:'Sora',sans-serif;text-decoration:underline">🧠 Gedächtnis & Ideen zurücksetzen</button>
       </div>
     </div>
 
@@ -10049,6 +10049,20 @@ function syncPostToCalendar(post) {
 function removePostFromCalendar(postId) {
   if(!DB.kalEvents) return;
   DB.kalEvents = DB.kalEvents.filter(e => e._socialPostId !== postId && e.id !== 'sp_' + postId);
+}
+
+function resetContentMemory() {
+  const ideaCount = (DB.socialPosts||[]).filter(p=>p.status==='idee').length;
+  if(!confirm(`Gedächtnis löschen und ${ideaCount} Ideen-Posts entfernen?\n\nEingeplante, in Arbeit und veröffentlichte Posts bleiben erhalten.`)) return;
+  // Delete idea posts (also from Supabase + calendar)
+  const ideaPosts = (DB.socialPosts||[]).filter(p=>p.status==='idee');
+  ideaPosts.forEach(p => { removePostFromCalendar(p.id); sbDeleteContentPost(p.id); });
+  DB.socialPosts = (DB.socialPosts||[]).filter(p=>p.status!=='idee');
+  DB.contentMemory = [];
+  save();
+  renderContentPage();
+  renderMiniCal();
+  addActivity('Content-Gedächtnis und Ideen zurückgesetzt', 'red');
 }
 
 function copyContentPost(id) {
