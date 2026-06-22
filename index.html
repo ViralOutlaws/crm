@@ -9909,9 +9909,8 @@ function getContentMemorySummary() {
 function saveToContentMemory(posts) {
   if(!DB.contentMemory) DB.contentMemory = [];
   posts.forEach(p => {
-    DB.contentMemory.push({ hook: p.hook, format: p.format, pillar: p.pillar, ts: new Date().toISOString() });
+    DB.contentMemory.push({ hook: (p.hook||'').slice(0,80), format: p.format||'', pillar: p.pillar||'', ts: new Date().toISOString() });
   });
-  // Keep last 60
   if(DB.contentMemory.length > 60) DB.contentMemory = DB.contentMemory.slice(-60);
   save();
 }
@@ -10111,9 +10110,13 @@ Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
 
     // Save posts
     const newPosts = posts.map(p => ({
-      ...p,
-      script: p.script || '',
       id: uid(),
+      format: p.format || 'Post',
+      day: p.day || 'Montag',
+      pillar: p.pillar || 'Bildung',
+      hook: p.hook || '',
+      caption: p.caption || '',
+      script: p.script || '',
       status: 'idee',
       publishDate: '',
       createdAt: new Date().toISOString()
