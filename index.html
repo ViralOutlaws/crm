@@ -35,6 +35,7 @@ body.dark-mode {
 }
 body.dark-mode .topbar { background:#000; }
 body.dark-mode .doc-paper { background:#fff; color:#111; }
+.content-fmt-btn.active { background:var(--ink)!important; color:#fff!important; border-color:var(--ink)!important; }
 
 /* ── GLOBAL SEARCH ── */
 #global-search-overlay {
@@ -662,6 +663,10 @@ window._loginFallback = function() {
     </div>
 
     <!-- Bottom items INSIDE nav so they scroll together -->
+    <div class="nav-item" onclick="showPage('content')" data-page="content">
+      <span class="nav-item-icon">📱</span>
+      <span class="nav-item-label">Content Planer</span>
+    </div>
     <div class="nav-section" style="margin-top:8px">Aktionen</div>
     <div class="nav-item" onclick="openEmailCompose(null)">
       <span class="nav-item-icon">✉</span>
@@ -1772,7 +1777,98 @@ window._loginFallback = function() {
 </div>
 
 <!-- NUTZERVERWALTUNG -->
-<div class="page" id="page-users">
+<div class="page" id="page-content">
+  <div class="sec-header">
+    <div class="sec-title">📱 Content Planer</div>
+  </div>
+
+  <!-- KPIs -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" id="content-kpis"></div>
+
+  <!-- Memory info -->
+  <div style="font-size:11px;color:var(--muted);background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:16px" id="content-memory-info"></div>
+
+  <!-- Two column layout -->
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+
+    <!-- LEFT: Generator -->
+    <div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:20px;box-shadow:var(--shadow);position:sticky;top:80px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--ink);margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px">✦ WOCHENPLAN GENERIEREN</div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Anthropic API-Key</label>
+        <input type="password" id="content-apikey" placeholder="sk-ant-..." style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--bg);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">console.anthropic.com → API Keys</div>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Themen-Schwerpunkt</label>
+        <select id="content-focus" style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
+          <option value="mix">Mix aus allem</option>
+          <option value="webdesign">Webdesign</option>
+          <option value="performance">Performance Marketing</option>
+          <option value="ki">KI & Automatisierung</option>
+          <option value="local">Lokale Präsenz / Allgäu</option>
+          <option value="bts">Behind the Scenes</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Anzahl Posts</label>
+        <select id="content-count" style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
+          <option value="3">3 Posts</option>
+          <option value="5" selected>5 Posts</option>
+          <option value="7">7 Posts</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:7px">Formate</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="content-fmt-btn active" data-fmt="Reel" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Reel</button>
+          <button class="content-fmt-btn active" data-fmt="Carousel" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Carousel</button>
+          <button class="content-fmt-btn active" data-fmt="Story" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Story</button>
+          <button class="content-fmt-btn active" data-fmt="Post" style="padding:4px 12px;font-size:11px;border:1.5px solid var(--border);border-radius:16px;background:transparent;color:var(--ink2);cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s">Single Post</button>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:16px">
+        <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Notiz (optional)</label>
+        <input type="text" id="content-note" placeholder="z.B. Neues Projekt erwähnen..." style="width:100%;font-size:12px;padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none">
+      </div>
+
+      <button id="content-gen-btn" onclick="generateContentPlan()" style="width:100%;padding:11px;background:var(--ink);color:#fff;border:none;border-radius:6px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1.5px;cursor:pointer;transition:background .15s">✦ WOCHENPLAN GENERIEREN</button>
+
+      <div id="content-gen-result" style="margin-top:12px"></div>
+
+      <!-- Memory reset -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <button onclick="if(confirm('Gedächtnis wirklich löschen?')){DB.contentMemory=[];save();renderContentPage();}" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:'Sora',sans-serif;text-decoration:underline">🧠 Gedächtnis zurücksetzen</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Posts list -->
+    <div>
+      <!-- Filter bar -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)">Status:</span>
+        <select id="content-filter-status" onchange="renderContentPage()" style="font-size:11px;padding:5px 10px;border:1.5px solid var(--border);border-radius:16px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;outline:none;cursor:pointer">
+          <option value="alle">Alle</option>
+          <option value="idee">Idee</option>
+          <option value="inarbeit">In Arbeit</option>
+          <option value="eingeplant">Eingeplant</option>
+          <option value="veroeffentlicht">Veröffentlicht</option>
+        </select>
+        <span style="font-size:10px;color:var(--muted);margin-left:auto">Datum setzen + Status "Eingeplant" → erscheint im Kalender</span>
+      </div>
+
+      <!-- Posts -->
+      <div id="content-posts-list"></div>
+    </div>
+  </div>
+</div>
+
+
   <div class="sec-header">
     <div class="sec-title">👥 Nutzerverwaltung</div>
     <button class="btn-primary" onclick="openInviteUserModal()" id="invite-btn">+ Nutzer einladen</button>
@@ -2921,7 +3017,7 @@ const PAGE_TITLES = {
   rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
   wettbewerb:'Wettbewerbs-Analyse', ausgaben:'Ausgaben & EÜR',
   kundenradar:'Kundenradar', roi:'ROI-Tracker', reporting:'Kampagnen-Report',
-  users:'Nutzerverwaltung'
+  users:'Nutzerverwaltung', content:'Content Planer'
 };
 
 function showPage(id) {
@@ -2960,6 +3056,7 @@ function showPage(id) {
   if(id==='roi') initROI();
   if(id==='reporting') initReporting();
   if(id==='users') initUsersPage();
+  if(id==='content') { initContentFormatBtns(); renderContentPage(); }
   // contact-detail is handled by openContactDetail()
 }
 
@@ -4780,6 +4877,8 @@ async function loadAllFromSupabase() {
     renderDashboard(); renderMiniCal(); renderDashCalEvents();
     // Auto-refresh settings fields with loaded data
     try { loadSettings(); } catch(e){}
+    // Load content posts
+    try { await sbLoadContentPosts(); } catch(e){ console.warn('content posts load:', e); }
 
   } catch(e) {
     console.error('loadAllFromSupabase:', e);
@@ -9204,7 +9303,7 @@ async function loadFromDrive() {
 const DEFAULT_FEATURES = {
   kontakte:true, angebote:true, rechnungen:true, kalender:true,
   aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true,
-  kundenradar:true, konfigurator:true, wettbewerb:true, email:true
+  kundenradar:true, konfigurator:true, wettbewerb:true, email:true, content:true
 };
 
 function getFeatures() {
@@ -9785,6 +9884,333 @@ function useScannedEmail(email) {
     alert('E-Mail "' + email + '" in Zwischenablage kopiert!\nBeim nächsten Kontakt einfügen.');
   });
 }
+
+// ==================================================
+// CONTENT PLANER
+// ==================================================
+
+if(!DB.socialPosts) DB.socialPosts = [];
+if(!DB.contentMemory) DB.contentMemory = [];
+
+const CONTENT_STATUS = {
+  idee:       { label:'Idee',          color:'#8a8a8a', bg:'rgba(138,138,138,.1)' },
+  inarbeit:   { label:'In Arbeit',     color:'#d97706', bg:'rgba(217,119,6,.1)'   },
+  eingeplant: { label:'Eingeplant',    color:'#2563b8', bg:'rgba(37,99,184,.1)'   },
+  veroeffentlicht: { label:'Veröffentlicht', color:'#1f9e5a', bg:'rgba(31,158,90,.1)' }
+};
+
+const CONTENT_FORMAT_COLORS = {
+  Reel:    '#8040b0',
+  Carousel:'#2563b8',
+  Story:   '#d63030',
+  Post:    '#1f9e5a'
+};
+
+function getContentMemorySummary() {
+  const mem = (DB.contentMemory||[]).slice(-30);
+  if(!mem.length) return '';
+  return 'BEREITS VERWENDET (nicht wiederholen):\n' + mem.map(m=>`- ${m.hook} (${m.format}, ${m.pillar})`).join('\n');
+}
+
+function saveToContentMemory(posts) {
+  if(!DB.contentMemory) DB.contentMemory = [];
+  posts.forEach(p => {
+    DB.contentMemory.push({ hook: p.hook, format: p.format, pillar: p.pillar, ts: new Date().toISOString() });
+  });
+  // Keep last 60
+  if(DB.contentMemory.length > 60) DB.contentMemory = DB.contentMemory.slice(-60);
+  save();
+}
+
+function renderContentPage() {
+  const posts = (DB.socialPosts||[]).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  const filterStatus = document.getElementById('content-filter-status')?.value || 'alle';
+  const filtered = filterStatus === 'alle' ? posts : posts.filter(p => p.status === filterStatus);
+
+  // KPIs
+  const kpiEl = document.getElementById('content-kpis');
+  if(kpiEl) {
+    const counts = {};
+    Object.keys(CONTENT_STATUS).forEach(k => counts[k] = posts.filter(p=>p.status===k).length);
+    kpiEl.innerHTML = Object.entries(CONTENT_STATUS).map(([k,s]) =>
+      `<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${s.color};box-shadow:var(--shadow)">
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${s.label}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:1px;color:${s.color}">${counts[k]||0}</div>
+      </div>`
+    ).join('');
+  }
+
+  // Memory info
+  const memEl = document.getElementById('content-memory-info');
+  if(memEl) {
+    const cnt = (DB.contentMemory||[]).length;
+    memEl.textContent = cnt ? `🧠 Gedächtnis: ${cnt} Themen gespeichert — werden beim Generieren ausgeschlossen` : '🧠 Noch kein Gedächtnis — wird beim ersten Generieren aufgebaut';
+  }
+
+  // Posts list
+  const listEl = document.getElementById('content-posts-list');
+  if(!listEl) return;
+  if(!filtered.length) {
+    listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
+      <div style="font-size:32px;margin-bottom:12px">📱</div>
+      <div style="font-size:14px">${posts.length ? 'Keine Posts mit diesem Status.' : 'Noch keine Posts. Generiere deinen ersten Wochenplan!'}</div>
+    </div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(p => {
+    const st = CONTENT_STATUS[p.status] || CONTENT_STATUS.idee;
+    const fc = CONTENT_FORMAT_COLORS[p.format] || '#666';
+    const hasScript = p.script && p.script.trim().length > 0;
+    return `<div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;box-shadow:var(--shadow)">
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <span style="font-size:10px;font-weight:700;padding:2px 10px;border-radius:12px;background:${fc}22;color:${fc};border:1px solid ${fc}44">${p.format}</span>
+        <span style="font-size:11px;color:var(--muted)">${p.day}</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:12px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${p.pillar}</span>
+        <span style="font-size:10px;font-weight:700;padding:2px 10px;border-radius:12px;background:${st.bg};color:${st.color};margin-left:auto">${st.label}</span>
+        ${p.publishDate ? `<span style="font-size:10px;color:var(--muted)">📅 ${fmtDate(p.publishDate)}</span>` : ''}
+      </div>
+      <div style="padding:12px 16px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.5px;color:var(--ink);margin-bottom:6px">${p.hook}</div>
+        <div style="font-size:12px;color:var(--ink2);line-height:1.6;max-height:54px;overflow:hidden;white-space:pre-wrap" id="cap-${p.id}">${p.caption}</div>
+        <button onclick="toggleContentCap('${p.id}',this)" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;margin-top:4px;text-decoration:underline;font-family:'Sora',sans-serif">Mehr anzeigen</button>
+        ${hasScript ? `<div style="margin-top:10px;background:var(--bg);border-radius:6px;padding:8px 12px;border-left:3px solid ${fc}">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${p.format==='Carousel'?'Slide-Texte':p.format==='Story'?'Story-Ablauf':'Script'}</div>
+          <div style="font-size:11px;color:var(--ink2);white-space:pre-wrap;font-family:'DM Mono',monospace;line-height:1.6">${p.script}</div>
+        </div>` : ''}
+      </div>
+      <div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select onchange="updateContentStatus('${p.id}',this.value)" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif;cursor:pointer">
+          ${Object.entries(CONTENT_STATUS).map(([k,s])=>`<option value="${k}" ${p.status===k?'selected':''}>${s.label}</option>`).join('')}
+        </select>
+        <input type="date" value="${p.publishDate||''}" onchange="updateContentDate('${p.id}',this.value)"
+          style="font-size:11px;padding:4px 8px;border:1.5px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink);font-family:'Sora',sans-serif"
+          title="Veröffentlichungsdatum">
+        <button onclick="copyContentPost('${p.id}')" class="btn-ghost btn-sm">📋 Kopieren</button>
+        <button onclick="deleteContentPost('${p.id}')" class="btn-danger" style="margin-left:auto">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleContentCap(id, btn) {
+  const el = document.getElementById('cap-' + id);
+  if(!el) return;
+  const isOpen = el.style.maxHeight === 'none';
+  el.style.maxHeight = isOpen ? '54px' : 'none';
+  btn.textContent = isOpen ? 'Mehr anzeigen' : 'Weniger';
+}
+
+function updateContentStatus(id, status) {
+  const p = DB.socialPosts.find(x=>x.id===id);
+  if(!p) return;
+  p.status = status;
+  // Sync to calendar if eingeplant
+  if(status === 'eingeplant' && p.publishDate) syncPostToCalendar(p);
+  else if(status !== 'eingeplant') removePostFromCalendar(id);
+  sbSaveContentPost(p);
+  save(); renderContentPage(); renderMiniCal(); renderDashCalEvents();
+  addActivity(`Content "${p.hook}" → ${CONTENT_STATUS[status]?.label||status}`, 'blue');
+}
+
+function updateContentDate(id, date) {
+  const p = DB.socialPosts.find(x=>x.id===id);
+  if(!p) return;
+  p.publishDate = date;
+  if(p.status === 'eingeplant' && date) syncPostToCalendar(p);
+  else removePostFromCalendar(id);
+  sbSaveContentPost(p);
+  save(); renderMiniCal(); renderDashCalEvents();
+}
+
+function syncPostToCalendar(post) {
+  if(!post.publishDate) return;
+  removePostFromCalendar(post.id);
+  const ev = {
+    id: 'sp_' + post.id,
+    datum: post.publishDate,
+    titel: `📱 ${post.format}: ${post.hook}`,
+    zeit: '',
+    bis: '',
+    typ: 'social',
+    notiz: post.caption,
+    kontaktId: null,
+    _socialPostId: post.id
+  };
+  if(!DB.kalEvents) DB.kalEvents = [];
+  DB.kalEvents.push(ev);
+}
+
+function removePostFromCalendar(postId) {
+  if(!DB.kalEvents) return;
+  DB.kalEvents = DB.kalEvents.filter(e => e._socialPostId !== postId && e.id !== 'sp_' + postId);
+}
+
+function copyContentPost(id) {
+  const p = DB.socialPosts.find(x=>x.id===id);
+  if(!p) return;
+  let t = `${p.format} — ${p.day} | ${p.pillar}\nHook: ${p.hook}\n\nCaption:\n${p.caption}`;
+  if(p.script && p.script.trim()) t += `\n\nScript:\n${p.script}`;
+  navigator.clipboard.writeText(t).then(() => {
+    addActivity(`Content "${p.hook}" kopiert`, 'yellow');
+  }).catch(()=>{});
+}
+
+function deleteContentPost(id) {
+  if(!confirm('Post wirklich löschen?')) return;
+  removePostFromCalendar(id);
+  DB.socialPosts = DB.socialPosts.filter(x=>x.id!==id);
+  sbDeleteContentPost(id);
+  save(); renderContentPage(); renderMiniCal();
+}
+
+async function generateContentPlan() {
+  const btn = document.getElementById('content-gen-btn');
+  const resultEl = document.getElementById('content-gen-result');
+  const focus = document.getElementById('content-focus').value;
+  const count = document.getElementById('content-count').value;
+  const note = document.getElementById('content-note').value.trim();
+  const apiKey = document.getElementById('content-apikey').value.trim();
+  const formats = Array.from(document.querySelectorAll('.content-fmt-btn.active')).map(b=>b.dataset.fmt);
+
+  if(!apiKey || !apiKey.startsWith('sk-ant-')) {
+    resultEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--red)">
+      ⚠ Bitte einen gültigen Anthropic API-Key eingeben (beginnt mit sk-ant-).
+      <br><span style="font-size:10px;opacity:.8">Erhältlich unter console.anthropic.com → API Keys</span>
+    </div>`;
+    return;
+  }
+  if(!formats.length) { alert('Bitte mindestens ein Format auswählen.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Generiere...';
+  resultEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted)"><div style="font-size:24px;margin-bottom:10px">⏳</div><div>KI erstellt deinen Wochenplan...</div></div>`;
+
+  const focusMap = {
+    mix:'eine ausgewogene Mischung aus Webdesign, Performance Marketing (Meta/Google Ads), KI-Lösungen, lokalem Allgäu-Bezug und Behind-the-Scenes',
+    webdesign:'Webdesign, moderne Websites, UX/UI, Conversion-Optimierung, Next.js',
+    performance:'Performance Marketing, Meta Ads, Google Ads, ROAS, Lead-Generierung für lokale Unternehmen',
+    ki:'KI-Lösungen, Automatisierung, AI-Tools für kleine Unternehmen, Zeitersparnis',
+    local:'Lokale Präsenz im Allgäu, Nähe zu Memmingen und Unterallgäu, regionaler Vorteil gegenüber Großagenturen',
+    bts:'Behind the Scenes der Agenturarbeit, Einblicke in Projekte, persönliche Stories von Viral Outlaws'
+  };
+
+  const memory = getContentMemorySummary();
+  const noteText = note ? `\nZusätzliche Notiz: ${note}` : '';
+
+  const prompt = `Du bist Content-Stratege für "Viral Outlaws", Webdesign- und Performance Marketing Agentur aus Woringen bei Memmingen im Allgäu. Brand Voice: edgy, modern, persönlich, Wir-Perspektive (Agentur). Zielgruppe: KMUs, Handwerker, Gastronomen im Allgäu.
+
+Erstelle ${count} Instagram Posts. Schwerpunkt: ${focusMap[focus]}.${noteText}
+Formate: ${formats.join(', ')}. Verteile sie abwechslungsreich.
+
+${memory}
+
+Jeder Post als JSON mit: format, day (Mo-So, optimal verteilt), pillar (Bildung/Beweis/Persönlich/Angebot/Unterhaltung), hook (max 8 Wörter, knallt), caption (komplett mit Emojis, Hashtags, CTA, Wir-Perspektive), script (Reel/Story: vollständige Szenen; Carousel: alle Slides; Post: leer).
+
+Antworte NUR mit JSON-Array, kein Text, keine Backticks.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
+      body: JSON.stringify({ model:'claude-opus-4-6', max_tokens:8000, messages:[{role:'user',content:prompt}] })
+    });
+    if(!res.ok) { const e=await res.json().catch(()=>{}); throw new Error(`API ${res.status}: ${e?.error?.message||res.statusText}`); }
+    const data = await res.json();
+    const raw = (data.content||[]).map(b=>b.text||'').join('').trim();
+    const cleaned = raw.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'').trim();
+    let posts;
+    try { posts = JSON.parse(cleaned); }
+    catch { const m=cleaned.match(/\[[\s\S]*\]/); if(m) posts=JSON.parse(m[0]); else throw new Error('JSON Parse fehlgeschlagen'); }
+
+    // Save posts
+    const newPosts = posts.map(p => ({
+      ...p,
+      id: uid(),
+      status: 'idee',
+      publishDate: '',
+      createdAt: new Date().toISOString()
+    }));
+    if(!DB.socialPosts) DB.socialPosts = [];
+    DB.socialPosts.unshift(...newPosts);
+    saveToContentMemory(newPosts);
+    // Supabase
+    newPosts.forEach(p => sbSaveContentPost(p));
+    save(); renderContentPage();
+
+    resultEl.innerHTML = `<div style="background:var(--green-bg);border:1px solid var(--green);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--green);font-weight:600">
+      ✅ ${newPosts.length} Posts generiert und gespeichert! Status ist "Idee" — setze Datum + Status um sie einzuplanen.
+    </div>`;
+    addActivity(`${newPosts.length} Content-Posts generiert`, 'yellow');
+
+  } catch(err) {
+    resultEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--red)">
+      Fehler: ${err.message}
+    </div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✦ Wochenplan generieren';
+}
+
+function initContentFormatBtns() {
+  document.querySelectorAll('.content-fmt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+    });
+  });
+}
+
+// Supabase stubs for content posts
+async function sbSaveContentPost(p) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
+    await sb.from('social_posts').upsert({ ...p, workspace_id: wsId });
+  } catch(e) { console.warn('sbSaveContentPost:', e.message); }
+}
+
+async function sbDeleteContentPost(id) {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    await sb.from('social_posts').delete().eq('id', id);
+  } catch(e) { console.warn('sbDeleteContentPost:', e.message); }
+}
+
+async function sbLoadContentPosts() {
+  if(!_useSupabase) return;
+  try {
+    const sb = await getSupabase();
+    const wsId = _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID;
+    const { data } = await sb.from('social_posts').select('*').eq('workspace_id', wsId).order('created_at', {ascending:false});
+    if(data?.length) {
+      DB.socialPosts = data;
+      // Re-sync calendar entries
+      DB.socialPosts.filter(p=>p.status==='eingeplant'&&p.publishDate).forEach(p=>syncPostToCalendar(p));
+      save();
+    }
+  } catch(e) { console.warn('sbLoadContentPosts:', e.message); }
+}
+
+// Extend getAllKalEvents to include social posts
+const _origGetAllKalEvents = getAllKalEvents;
+getAllKalEvents = function() {
+  const events = _origGetAllKalEvents();
+  (DB.socialPosts||[]).filter(p=>p.status==='eingeplant'&&p.publishDate).forEach(p => {
+    const fc = CONTENT_FORMAT_COLORS[p.format]||'#8040b0';
+    // avoid duplicates from DB.kalEvents
+    if(events.find(e=>e.id==='sp_'+p.id)) return;
+    events.push({
+      id:'sp_'+p.id, datum:p.publishDate,
+      titel:`📱 ${p.format}: ${p.hook}`,
+      zeit:'', bis:'', typ:'social', notiz:p.caption,
+      kontaktId:null, color:fc, source:'social'
+    });
+  });
+  return events;
+};
 
 // Inject logo
 const _logoEl1 = document.getElementById('login-logo-img');
