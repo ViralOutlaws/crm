@@ -9916,6 +9916,17 @@ function saveToContentMemory(posts) {
 }
 
 function renderContentPage() {
+  // Sanitize alle posts beim Laden — fix für alte Datensätze mit null-Feldern
+  (DB.socialPosts||[]).forEach(p => {
+    p.script = p.script || '';
+    p.caption = p.caption || '';
+    p.hook = p.hook || '';
+    p.format = p.format || 'Post';
+    p.day = p.day || '';
+    p.pillar = p.pillar || '';
+    p.status = p.status || 'idee';
+    p.publishDate = p.publishDate || '';
+  });
   const posts = (DB.socialPosts||[]).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
   const filterStatus = document.getElementById('content-filter-status')?.value || 'alle';
   const filtered = filterStatus === 'alle' ? posts : posts.filter(p => p.status === filterStatus);
