@@ -34,8 +34,12 @@ body.dark-mode {
   --shadow-lg:0 8px 40px rgba(0,0,0,.5);
 }
 body.dark-mode .topbar { background:#000; }
-body.dark-mode .doc-paper { background:#fff; color:#111; }
-.content-fmt-btn.active { background:var(--ink)!important; color:#fff!important; border-color:var(--ink)!important; }
+@media(max-width:600px){
+  #page-kalender .sec-header { gap:6px; }
+  #kal-grid { font-size:10px; }
+  #kal-bottom .dash-card { margin-top:0; }
+  .content-fmt-btn { font-size:10px; padding:3px 8px; }
+}
 
 /* ── GLOBAL SEARCH ── */
 #global-search-overlay {
@@ -1107,15 +1111,15 @@ window._loginFallback = function() {
      KALENDER
 ════════════════════════════════════════ -->
 <div class="page" id="page-kalender">
-  <div class="sec-header">
+  <div class="sec-header" style="flex-wrap:wrap;gap:8px">
     <div class="sec-title">Kalender</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-left:0">
+    <div style="display:flex;align-items:center;gap:6px">
       <button class="btn-ghost" onclick="kalenderPrevMonth()">◀</button>
-      <span id="kal-month-label" style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;min-width:180px;text-align:center"></span>
+      <span id="kal-month-label" style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;min-width:120px;text-align:center"></span>
       <button class="btn-ghost" onclick="kalenderNextMonth()">▶</button>
       <button class="btn-ghost btn-sm" onclick="kalenderGoToday()">Heute</button>
     </div>
-    <div style="display:flex;gap:8px;margin-left:auto">
+    <div style="display:flex;gap:6px;margin-left:auto">
       <button class="filter-chip active" id="kal-view-month" onclick="setKalView('month',this)">Monat</button>
       <button class="filter-chip" id="kal-view-week" onclick="setKalView('week',this)">Woche</button>
     </div>
@@ -1123,18 +1127,17 @@ window._loginFallback = function() {
   </div>
 
   <!-- Legend -->
-  <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
-    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#2563b8;display:inline-block"></span>Termin</span>
-    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#d97706;display:inline-block"></span>Erinnerung</span>
-    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#d63030;display:inline-block"></span>Fällige Rechnung</span>
-    <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#1f9e5a;display:inline-block"></span>Retainer-Abrechnung</span>
+  <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#2563b8;display:inline-block"></span>Termin</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d97706;display:inline-block"></span>Erinnerung</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d63030;display:inline-block"></span>Fällige Rechnung</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#1f9e5a;display:inline-block"></span>Retainer-Abrechnung</span>
   </div>
 
-  <div id="kal-grid" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:var(--shadow)"></div>
+  <div id="kal-grid" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:var(--shadow);overflow-x:auto"></div>
 
   <!-- Side: upcoming events -->
-  <div style="display:grid;grid-template-columns:1fr 280px;gap:14px;margin-top:14px;align-items:start" id="kal-bottom">
-    <div></div>
+  <div style="margin-top:14px" id="kal-bottom">
     <div class="dash-card">
       <h3 style="margin-bottom:12px">📋 Nächste Termine</h3>
       <div id="kal-upcoming-list"></div>
@@ -5338,16 +5341,17 @@ function renderKalMonth() {
 
   const grid = document.getElementById('kal-grid');
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr)">`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:280px">`;
 
   // Day headers
   KAL_DAYS.forEach((d,i) => {
-    html += `<div style="background:var(--ink);color:${i>=5?'var(--yellow)':'rgba(255,255,255,.7)'};text-align:center;padding:9px 4px;font-size:10px;font-weight:700;letter-spacing:1.5px">${d}</div>`;
+    const shortDay = d.slice(0,2);
+    html += `<div style="background:var(--ink);color:${i>=5?'var(--yellow)':'rgba(255,255,255,.7)'};text-align:center;padding:6px 2px;font-size:9px;font-weight:700;letter-spacing:1px">${shortDay}</div>`;
   });
 
   // Empty cells before month start
   for(let i=0;i<startDow;i++) {
-    html += `<div style="min-height:100px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px"></div>`;
+    html += `<div style="min-height:60px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px"></div>`;
   }
 
   // Day cells
@@ -5359,14 +5363,14 @@ function renderKalMonth() {
     const dayEvents = allEvents.filter(e=>e.datum===ds);
     const bgColor = isToday?'#fffbea':isWeekend?'#faf9f6':'#fff';
 
-    html += `<div onclick="kalDayClick('${ds}')" style="min-height:100px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;cursor:pointer;background:${bgColor}">
-      <div style="font-size:13px;font-weight:${isToday?'700':'500'};color:${isToday?'#fff':'var(--ink)'};background:${isToday?'var(--yellow)':'transparent'};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:4px">${d}</div>
-      ${dayEvents.slice(0,3).map(e=>`
+    html += `<div onclick="kalDayClick('${ds}')" style="min-height:60px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px;cursor:pointer;background:${bgColor};overflow:hidden">
+      <div style="font-size:11px;font-weight:${isToday?'700':'500'};color:${isToday?'#fff':'var(--ink)'};background:${isToday?'var(--yellow)':'transparent'};width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:2px">${d}</div>
+      ${dayEvents.slice(0,2).map(e=>`
         <div onclick="event.stopPropagation();kalEventClick('${e.id}','${e.source}')"
-          style="font-size:10px;font-weight:600;color:#fff;background:${e.color};border-radius:3px;padding:2px 5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${e.titel.replace(/"/g,'&quot;')}">
-          ${e.zeit?e.zeit+' ':''}${e.titel}
+          style="font-size:8px;font-weight:600;color:#fff;background:${e.color};border-radius:2px;padding:1px 3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${e.titel.replace(/"/g,'&quot;')}">
+          ${e.titel}
         </div>`).join('')}
-      ${dayEvents.length>3?`<div style="font-size:9px;color:var(--muted);margin-top:1px">+${dayEvents.length-3} weitere</div>`:''}
+      ${dayEvents.length>2?`<div style="font-size:8px;color:var(--muted)">+${dayEvents.length-2}</div>`:''}
     </div>`;
   }
 
@@ -5375,7 +5379,7 @@ function renderKalMonth() {
   const remainder = totalCells % 7;
   if(remainder>0) {
     for(let i=remainder;i<7;i++) {
-      html += `<div style="min-height:100px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px"></div>`;
+      html += `<div style="min-height:60px;background:#faf9f6;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px"></div>`;
     }
   }
 
@@ -5400,7 +5404,7 @@ function renderKalWeek() {
   }
 
   const grid = document.getElementById('kal-grid');
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr)">`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:280px">`;
 
   days.forEach((d,i)=>{
     const ds = dateStr(d);
