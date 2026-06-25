@@ -2328,6 +2328,7 @@ window._loginFallback = function() {
             <option value="termin">📅 Termin</option>
             <option value="anruf">📞 Anruf</option>
             <option value="aufgabe">📋 Aufgabe</option>
+            <option value="erinnerung">🔔 Erinnerung</option>
             <option value="sonstiges">📌 Sonstiges</option>
           </select>
         </div>
@@ -5251,6 +5252,16 @@ function kalenderGoToday() {
 let kalWeekOffset = 0;
 
 // Collect all events from DB (custom + wiedervorlagen + rechnungen fällig + retainer)
+function getKalEventColor(typ) {
+  return {
+    termin:    '#d63030',
+    anruf:     '#1f9e5a',
+    aufgabe:   '#2563b8',
+    erinnerung:'#d97706',
+    sonstiges: '#8040b0'
+  }[typ||'termin'] || '#d63030';
+}
+
 function getAllKalEvents() {
   const events = [];
   _kalEventMap = {};
@@ -5262,7 +5273,7 @@ function getAllKalEvents() {
       zeit: e.zeit||'', bis: e.bis||'',
       typ: e.typ||'termin', notiz: e.notiz||'',
       kontaktId: e.kontaktId||null,
-      color: {termin:'#d63030',anruf:'#1f9e5a',aufgabe:'#2563b8',sonstiges:'#8040b0',erinnerung:'#d97706'}[e.typ||'termin']||'#d63030',
+      color: getKalEventColor(e.typ),
       source: 'custom'
     };
     events.push(ev); _kalEventMap[ev.id] = ev;
@@ -5495,7 +5506,13 @@ function openKalEventModal(id, prefillDate) {
   document.getElementById('ke-datum').value = e?.datum||prefillDate||today();
   document.getElementById('ke-zeit').value = e?.zeit||'';
   document.getElementById('ke-bis').value = e?.bis||'';
-  document.getElementById('ke-typ').value = e?.typ||'termin';
+  // Explicitly reset typ to default first, then set correct value
+  const typSelect = document.getElementById('ke-typ');
+  typSelect.value = 'termin'; // reset
+  const typVal = e?.typ||'termin';
+  // Check if option exists, otherwise fallback to termin
+  const optExists = Array.from(typSelect.options).some(o=>o.value===typVal);
+  typSelect.value = optExists ? typVal : 'termin';
   document.getElementById('ke-kontakt').value = e?.kontaktId||'';
   document.getElementById('ke-notiz').value = e?.notiz||'';
   document.getElementById('ke-reminder').checked = e?.reminder||false;
