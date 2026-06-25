@@ -1128,7 +1128,10 @@ window._loginFallback = function() {
 
   <!-- Legend -->
   <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#2563b8;display:inline-block"></span>Termin</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d63030;display:inline-block"></span>Termin</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#1f9e5a;display:inline-block"></span>Anruf</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#2563b8;display:inline-block"></span>Aufgabe</span>
+    <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#8040b0;display:inline-block"></span>Sonstiges</span>
     <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d97706;display:inline-block"></span>Erinnerung</span>
     <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d63030;display:inline-block"></span>Fällige Rechnung</span>
     <span style="font-size:10px;display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#1f9e5a;display:inline-block"></span>Retainer-Abrechnung</span>
@@ -5206,7 +5209,7 @@ document.querySelectorAll('.overlay').forEach(o=>{
   let mousedownOnOverlay = false;
   o.addEventListener('mousedown', e=>{ mousedownOnOverlay = (e.target === o); });
   o.addEventListener('mouseup', e=>{
-    if(mousedownOnOverlay && e.target === o) o.classList.remove('open');
+    if(mousedownOnOverlay && e.target === o) { o.classList.remove('open'); editId=null; }
     mousedownOnOverlay = false;
   });
 });
@@ -5259,7 +5262,7 @@ function getAllKalEvents() {
       zeit: e.zeit||'', bis: e.bis||'',
       typ: e.typ||'termin', notiz: e.notiz||'',
       kontaktId: e.kontaktId||null,
-      color: {termin:'#2563b8',anruf:'#2563b8',aufgabe:'#8040b0',sonstiges:'#666'}[e.typ||'termin']||'#2563b8',
+      color: {termin:'#d63030',anruf:'#1f9e5a',aufgabe:'#2563b8',sonstiges:'#8040b0',erinnerung:'#d97706'}[e.typ||'termin']||'#d63030',
       source: 'custom'
     };
     events.push(ev); _kalEventMap[ev.id] = ev;
