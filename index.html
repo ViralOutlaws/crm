@@ -2324,7 +2324,7 @@ window._loginFallback = function() {
         <div class="field"><label>Uhrzeit</label><input id="ke-zeit" type="time" placeholder="09:00"></div>
         <div class="field"><label>Bis (optional)</label><input id="ke-bis" type="time" placeholder="10:00"></div>
         <div class="field"><label>Typ</label>
-          <select id="ke-typ">
+          <select id="kal-typ">
             <option value="termin">📅 Termin</option>
             <option value="anruf">📞 Anruf</option>
             <option value="aufgabe">📋 Aufgabe</option>
@@ -5507,10 +5507,9 @@ function openKalEventModal(id, prefillDate) {
   document.getElementById('ke-zeit').value = e?.zeit||'';
   document.getElementById('ke-bis').value = e?.bis||'';
   // Explicitly reset typ to default first, then set correct value
-  const typSelect = document.getElementById('ke-typ');
+  const typSelect = document.getElementById('kal-typ');
   typSelect.value = 'termin'; // reset
   const typVal = e?.typ||'termin';
-  // Check if option exists, otherwise fallback to termin
   const optExists = Array.from(typSelect.options).some(o=>o.value===typVal);
   typSelect.value = optExists ? typVal : 'termin';
   document.getElementById('ke-kontakt').value = e?.kontaktId||'';
@@ -5571,7 +5570,7 @@ function saveKalEvent() {
     id: editId||uid(), titel, datum,
     zeit: document.getElementById('ke-zeit').value,
     bis: document.getElementById('ke-bis').value,
-    typ: document.getElementById('ke-typ').value,
+    typ: document.getElementById('kal-typ').value,
     kontaktId: document.getElementById('ke-kontakt').value||null,
     notiz: document.getElementById('ke-notiz').value,
     reminder: document.getElementById('ke-reminder').checked
