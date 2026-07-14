@@ -4141,14 +4141,14 @@ function renderDashboard() {
   renderTodoSection();
   const offeneAngebote = DB.angebote.filter(a=>a.status==='gesendet'||a.status==='entwurf');
   const pipelineWert = offeneAngebote.reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
-  const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt'&&!r.archiviert);
+  const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt');
   const umsatz = bezahlteRg.reduce((s,r)=>{
     const brutto = sumPositions(r.positions).brutto;
     const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
     return s + Math.max(0, brutto - abzug);
   },0);
   const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
-  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt'&&!r.archiviert);
+  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt');
   const offenWert = offeneRg.reduce((s,r)=>{
     const brutto = sumPositions(r.positions).brutto;
     const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
