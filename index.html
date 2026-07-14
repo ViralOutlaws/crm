@@ -4141,11 +4141,19 @@ function renderDashboard() {
   renderTodoSection();
   const offeneAngebote = DB.angebote.filter(a=>a.status==='gesendet'||a.status==='entwurf');
   const pipelineWert = offeneAngebote.reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
-  const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt');
-  const umsatz = bezahlteRg.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+  const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt'&&!r.archiviert);
+  const umsatz = bezahlteRg.reduce((s,r)=>{
+    const brutto = sumPositions(r.positions).brutto;
+    const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
+    return s + Math.max(0, brutto - abzug);
+  },0);
   const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
-  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt');
-  const offenWert = offeneRg.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
+  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt'&&!r.archiviert);
+  const offenWert = offeneRg.reduce((s,r)=>{
+    const brutto = sumPositions(r.positions).brutto;
+    const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
+    return s + Math.max(0, brutto - abzug);
+  },0);
 
   document.getElementById('kpi-pipeline').textContent = fmtEur(pipelineWert);
   document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote offen';
