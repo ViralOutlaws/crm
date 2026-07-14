@@ -4073,6 +4073,12 @@ function printDoc(type, id) {
   <div class="totals">
     ${isKU ? `
       <div class="total-row big"><span class="lbl">${doc.rTyp==='anzahlung'?'Anzahlungsbetrag':'Gesamtbetrag'}</span><span class="val">${fmtEur(sum.netto)}</span></div>
+      ${doc.rTyp==='schluss'&&doc.anzahl>0?`
+      <div class="total-row" style="color:#888"><span class="lbl">${doc.anztext||'Abzüglich geleisteter Anzahlung'}</span><span class="val">- ${fmtEur(doc.anzahl)}</span></div>
+      <hr class="divider">
+      <div class="total-row big" style="color:#c0392b"><span class="lbl">Noch zu zahlen</span><span class="val">${fmtEur(Math.max(0,sum.netto-doc.anzahl))}</span></div>
+      `:''}
+      ${doc.rTyp==='anzahlung'?`<div style="font-size:10.5px;color:#888;margin-top:8px;font-style:italic">Diese Rechnung ist eine Anzahlungsrechnung. Der Restbetrag wird mit der Schlussrechnung in Rechnung gestellt.</div>`:''}
       <div class="ku-note">Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</div>
     ` : `
       <div class="total-row"><span class="lbl">Nettobetrag</span><span class="val">${fmtEur(sum.netto)}</span></div>
@@ -4089,7 +4095,7 @@ function printDoc(type, id) {
   </div>
 
   ${!isAngebot && s.iban ? `<div class="pay-box"><b>Zahlungsinformationen</b>
-    Bitte überweisen Sie <strong>${fmtEur(doc.rTyp==='schluss'&&doc.anzahl>0?Math.max(0,(isKU?sum.netto:sum.brutto)-doc.anzahl):(isKU?sum.netto:sum.brutto))}</strong> bis zum <strong>${fmtDate(doc.faellig)}</strong>:<br>
+    Bitte überweisen Sie <strong>${fmtEur(doc.rTyp==='schluss'&&doc.anzahl>0?Math.max(0,(isKU?sum.netto:sum.brutto)-doc.anzahl):doc.rTyp==='anzahlung'?doc.anzahl:(isKU?sum.netto:sum.brutto))}</strong> bis zum <strong>${fmtDate(doc.faellig)}</strong>:<br>
     IBAN: ${s.iban}${s.bic?' · BIC: '+s.bic:''}${s.bank?' · '+s.bank:''}<br>
     Verwendungszweck: <strong>${doc.nr}</strong>
   </div>` : ''}
