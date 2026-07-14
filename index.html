@@ -5002,6 +5002,22 @@ async function loadAllFromSupabase() {
     // Save to localStorage as cache
     try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
 
+    // Sync counters from Supabase data so they never reset
+    if(DB.rechnungen && DB.rechnungen.length > 0) {
+      const maxRg = Math.max(...DB.rechnungen.map(r => {
+        const n = parseInt((r.nr||'').replace(/[^0-9]/g,''));
+        return isNaN(n) ? 0 : n;
+      }));
+      if(maxRg >= DB.nextRechnungNr) DB.nextRechnungNr = maxRg + 1;
+    }
+    if(DB.angebote && DB.angebote.length > 0) {
+      const maxAg = Math.max(...DB.angebote.map(a => {
+        const n = parseInt((a.nr||'').replace(/[^0-9]/g,''));
+        return isNaN(n) ? 0 : n;
+      }));
+      if(maxAg >= DB.nextAngebotNr) DB.nextAngebotNr = maxAg + 1;
+    }
+
     renderDashboard(); renderMiniCal(); renderDashCalEvents();
     // Auto-refresh settings fields with loaded data
     try { loadSettings(); } catch(e){}
