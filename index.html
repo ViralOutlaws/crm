@@ -3891,11 +3891,15 @@ body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:18mm 20mm;
 }
 
 
-function toggleArchivRechnung(id) {
+async function toggleArchivRechnung(id) {
   const r = DB.rechnungen.find(x=>x.id===id);
   if(!r) return;
   r.archiviert = !r.archiviert;
-  sbSaveRechnung(r);
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('rechnungen').update({ archiviert: r.archiviert }).eq('id', r.id);
+    if(error) { console.error('Archiv-Fehler:', error.message, error); alert('Fehler: ' + error.message); r.archiviert = !r.archiviert; return; }
+  } catch(e) { console.error('Archiv-Exception:', e); alert('Fehler: ' + e.message); r.archiviert = !r.archiviert; return; }
   save(); renderRechnungen();
 }
 
