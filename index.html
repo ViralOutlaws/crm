@@ -2227,6 +2227,29 @@ window._loginFallback = function() {
             <option value="ueberfaellig">Überfällig</option>
           </select>
         </div>
+        <div class="field"><label>Rechnungstyp</label>
+          <select id="r-typ" onchange="toggleAnzahlungFields()">
+            <option value="normal">Standard-Rechnung</option>
+            <option value="anzahlung">Anzahlungsrechnung</option>
+            <option value="schluss">Schlussrechnung</option>
+          </select>
+        </div>
+        <div id="r-anzahlung-wrap" style="display:none" class="field form-full">
+          <div style="background:var(--bg);border:1.5px solid var(--yellow);border-radius:6px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--yellow);margin-bottom:10px">Anzahlung / Bereits gezahlt</div>
+            <div class="form-grid">
+              <div class="field" id="r-anztext-wrap">
+                <label>Bezeichnung Anzahlung</label>
+                <input id="r-anztext" placeholder="z.B. Anzahlung gemäß Angebot vom 01.05.2026">
+              </div>
+              <div class="field">
+                <label id="r-anzlabel">Anzahlungsbetrag (€)</label>
+                <input id="r-anzahl" type="number" placeholder="0.00" step="0.01" min="0" oninput="updateAnzahlungPreview()">
+              </div>
+            </div>
+            <div id="r-anz-preview" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3528,6 +3551,10 @@ function openRechnungModal(id) {
   document.getElementById('r-status').value=r?.status||'offen-rg';
   document.getElementById('r-abrechnungsart').value=r?.abrechnungsart||'einmalig';
   document.getElementById('r-notes').value=r?.notes||'';
+  document.getElementById('r-typ').value=r?.rTyp||'normal';
+  document.getElementById('r-anzahl').value=r?.anzahl||'';
+  document.getElementById('r-anztext').value=r?.anztext||'';
+  toggleAnzahlungFields();
   fillPositions('r',r?.positions||[]);
   if(!r) addPosition('r-positions','r');
   document.getElementById('rechnung-modal').classList.add('open');
@@ -3538,6 +3565,9 @@ function saveRechnung() {
   const betreff=document.getElementById('r-betreff').value.trim();
   if(!kundeId||!betreff){alert('Bitte Kunde und Betreff ausfüllen.');return;}
   const positions=getPositions('r');
+  const rTyp = document.getElementById('r-typ').value;
+  const anzahl = parseFloat(document.getElementById('r-anzahl').value)||0;
+  const anztext = document.getElementById('r-anztext').value.trim();
   const obj={
     id:editId||uid(),
     nr:editId?DB.rechnungen.find(x=>x.id===editId)?.nr:'R'+String(DB.nextRechnungNr).padStart(4,'0'),
@@ -3547,6 +3577,9 @@ function saveRechnung() {
     status:document.getElementById('r-status').value,
     abrechnungsart:document.getElementById('r-abrechnungsart').value,
     notes:document.getElementById('r-notes').value,
+    rTyp: rTyp,
+    anzahl: anzahl,
+    anztext: anztext,
     createdAt:editId?DB.rechnungen.find(x=>x.id===editId)?.createdAt:new Date().toISOString()
   };
   if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
@@ -3554,6 +3587,47 @@ function saveRechnung() {
   sbSaveRechnung(obj);
   save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
   printDoc('rechnung',obj.id);
+}
+
+// ==================================================
+// ANZAHLUNG / SCHLUSSRECHNUNG
+// ==================================================
+function toggleAnzahlungFields() {
+  const typ = document.getElementById('r-typ').value;
+  const wrap = document.getElementById('r-anzahlung-wrap');
+  const label = document.getElementById('r-anzlabel');
+  const textWrap = document.getElementById('r-anztext-wrap');
+  if(typ === 'anzahlung') {
+    wrap.style.display = 'block';
+    label.textContent = 'Anzahlungsbetrag (€)';
+    textWrap.style.display = 'none';
+  } else if(typ === 'schluss') {
+    wrap.style.display = 'block';
+    label.textContent = 'Bereits gezahlt (Anzahlung €)';
+    textWrap.style.display = '';
+    if(!document.getElementById('r-anztext').value)
+      document.getElementById('r-anztext').value = 'Abzüglich geleisteter Anzahlung';
+  } else {
+    wrap.style.display = 'none';
+  }
+  updateAnzahlungPreview();
+}
+
+function updateAnzahlungPreview() {
+  const typ = document.getElementById('r-typ').value;
+  const preview = document.getElementById('r-anz-preview');
+  if(!preview) return;
+  const anzahl = parseFloat(document.getElementById('r-anzahl').value)||0;
+  if(typ === 'anzahlung' && anzahl > 0) {
+    preview.innerHTML = `<span style="color:var(--yellow)">→ Diese Rechnung ist eine Anzahlungsrechnung über <strong>${anzahl.toFixed(2).replace('.',',')} €</strong>. Der Restbetrag wird mit der Schlussrechnung fällig.</span>`;
+  } else if(typ === 'schluss' && anzahl > 0) {
+    const bruttoEl = document.getElementById('r-brutto');
+    const brutto = bruttoEl ? (parseFloat(bruttoEl.textContent.replace(/[^0-9,]/g,'').replace(',','.'))||0) : 0;
+    const rest = brutto - anzahl;
+    preview.innerHTML = `<span style="color:var(--yellow)">→ Gesamtbetrag abzüglich <strong>${anzahl.toFixed(2).replace('.',',')} €</strong> Anzahlung = <strong>${rest.toFixed(2).replace('.',',')} €</strong> Restbetrag.</span>`;
+  } else {
+    preview.innerHTML = '';
+  }
 }
 
 // ==================================================
@@ -3926,7 +4000,7 @@ function printDoc(type, id) {
 <body>
   <div class="header">
     <div>${logoHtml}<div class="logo-txt">VIRAL <span>OUTLAWS</span></div><div style="font-size:11px;color:#666;margin-top:2px">${s.name||'Viral Outlaws'}${s.inhaber?' · '+s.inhaber:''}</div></div>
-    <div><div class="doc-type">${isAngebot?'ANGEBOT':'RECHNUNG'}</div><div class="doc-num">${doc.nr||''}</div></div>
+    <div><div class="doc-type">${isAngebot?'ANGEBOT':doc.rTyp==='anzahlung'?'ANZAHLUNGSRECHNUNG':doc.rTyp==='schluss'?'SCHLUSSRECHNUNG':'RECHNUNG'}</div><div class="doc-num">${doc.nr||''}</div></div>
   </div>
 
   <div class="addresses">
@@ -3978,18 +4052,24 @@ function printDoc(type, id) {
 
   <div class="totals">
     ${isKU ? `
-      <div class="total-row big"><span class="lbl">Gesamtbetrag</span><span class="val">${fmtEur(sum.netto)}</span></div>
+      <div class="total-row big"><span class="lbl">${doc.rTyp==='anzahlung'?'Anzahlungsbetrag':'Gesamtbetrag'}</span><span class="val">${fmtEur(sum.netto)}</span></div>
       <div class="ku-note">Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</div>
     ` : `
       <div class="total-row"><span class="lbl">Nettobetrag</span><span class="val">${fmtEur(sum.netto)}</span></div>
       <div class="total-row"><span class="lbl">MwSt. ${Math.round(getMwst()*100)}%</span><span class="val">${fmtEur(sum.mwst)}</span></div>
       <hr class="divider">
-      <div class="total-row big"><span class="lbl">Gesamtbetrag (brutto)</span><span class="val">${fmtEur(sum.brutto)}</span></div>
+      <div class="total-row big"><span class="lbl">${doc.rTyp==='anzahlung'?'Anzahlungsbetrag':'Gesamtbetrag (brutto)'}</span><span class="val">${fmtEur(sum.brutto)}</span></div>
+      ${doc.rTyp==='schluss'&&doc.anzahl>0?`
+      <div class="total-row" style="color:#888"><span class="lbl">${doc.anztext||'Abzüglich geleisteter Anzahlung'}</span><span class="val">- ${fmtEur(doc.anzahl)}</span></div>
+      <hr class="divider">
+      <div class="total-row big" style="color:#c0392b"><span class="lbl">Noch zu zahlen</span><span class="val">${fmtEur(Math.max(0,sum.brutto-doc.anzahl))}</span></div>
+      `:''}
+      ${doc.rTyp==='anzahlung'?`<div style="font-size:10.5px;color:#888;margin-top:8px;font-style:italic">Diese Rechnung ist eine Anzahlungsrechnung. Der Restbetrag wird mit der Schlussrechnung in Rechnung gestellt.</div>`:''}
     `}
   </div>
 
   ${!isAngebot && s.iban ? `<div class="pay-box"><b>Zahlungsinformationen</b>
-    Bitte überweisen Sie <strong>${fmtEur(isKU?sum.netto:sum.brutto)}</strong> bis zum <strong>${fmtDate(doc.faellig)}</strong>:<br>
+    Bitte überweisen Sie <strong>${fmtEur(doc.rTyp==='schluss'&&doc.anzahl>0?Math.max(0,(isKU?sum.netto:sum.brutto)-doc.anzahl):(isKU?sum.netto:sum.brutto))}</strong> bis zum <strong>${fmtDate(doc.faellig)}</strong>:<br>
     IBAN: ${s.iban}${s.bic?' · BIC: '+s.bic:''}${s.bank?' · '+s.bank:''}<br>
     Verwendungszweck: <strong>${doc.nr}</strong>
   </div>` : ''}
@@ -4577,6 +4657,7 @@ async function sbSaveRechnung(r) {
       betreff: r.betreff||null, datum: r.datum||null,
       faellig: r.faellig||null, status: r.status||'offen-rg',
       positions: r.positions||[], notes: r.notes||null,
+      r_typ: r.rTyp||'normal', anzahl: r.anzahl||0, anztext: r.anztext||null,
       updated_at: new Date().toISOString()
     });
   } catch(e) { console.warn('sbSaveRechnung:', e.message); }
@@ -4598,7 +4679,9 @@ async function sbLoadRechnungen() {
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
       datum: r.datum, faellig: r.faellig, status: r.status,
-      positions: r.positions||[], notes: r.notes, createdAt: r.created_at
+      positions: r.positions||[], notes: r.notes,
+      rTyp: r.r_typ||'normal', anzahl: r.anzahl||0, anztext: r.anztext||'',
+      createdAt: r.created_at
     }));
   } catch(e) { console.warn(e); return null; }
 }
