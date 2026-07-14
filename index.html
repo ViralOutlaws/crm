@@ -869,6 +869,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-af="gesendet" onclick="setAngebotFilter('gesendet',this)">Gesendet</button>
     <button class="filter-chip" data-af="akzeptiert" onclick="setAngebotFilter('akzeptiert',this)">Akzeptiert</button>
     <button class="filter-chip" data-af="abgelehnt" onclick="setAngebotFilter('abgelehnt',this)">Abgelehnt</button>
+    <button class="filter-chip" data-af="archiv" onclick="setAngebotFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="angebot-search" placeholder="Suchen…" oninput="renderAngebote()"></div>
   </div>
   <div class="table-wrap">
@@ -897,6 +898,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-rf="offen-rg" onclick="setRechnungFilter('offen-rg',this)">Offen</button>
     <button class="filter-chip" data-rf="bezahlt" onclick="setRechnungFilter('bezahlt',this)">Bezahlt</button>
     <button class="filter-chip" data-rf="ueberfaellig" onclick="setRechnungFilter('ueberfaellig',this)">Überfällig</button>
+    <button class="filter-chip" data-rf="archiv" onclick="setRechnungFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="rechnung-search" placeholder="Suchen…" oninput="renderRechnungen()"></div>
   </div>
   <div class="table-wrap">
@@ -3477,6 +3479,14 @@ function saveAngebot(forceStatus) {
   if(!forceStatus) printDoc('angebot', obj.id);
 }
 
+function toggleArchivAngebot(id) {
+  const a = DB.angebote.find(x=>x.id===id);
+  if(!a) return;
+  a.archiviert = !a.archiviert;
+  sbSaveAngebot(a);
+  save(); renderAngebote();
+}
+
 function deleteAngebot(id) {
   if(!confirm('Angebot löschen?')) return;
   DB.angebote = DB.angebote.filter(x=>x.id!==id);
@@ -3493,7 +3503,7 @@ function setAngebotFilter(f,btn) {
 function renderAngebote() {
   const q=(document.getElementById('angebot-search')?.value||'').toLowerCase();
   let list=DB.angebote.filter(a=>{
-    const matchF=angebotFilter==='alle'||a.status===angebotFilter;
+    const matchF=angebotFilter==='archiv'?a.archiviert===true:(angebotFilter==='alle'?!a.archiviert:(!a.archiviert&&a.status===angebotFilter));
     const c=DB.contacts.find(x=>x.id===a.kundeId);
     const matchQ=!q||a.nr?.toLowerCase().includes(q)||a.betreff.toLowerCase().includes(q)||(c?.firma||'').toLowerCase().includes(q);
     return matchF&&matchQ;
@@ -3515,6 +3525,7 @@ function renderAngebote() {
         <button class="btn-ghost btn-sm" onclick="angebotToRechnung('${a.id}')">→ Rechnung</button>
         <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨 PDF</button>
         <button class="btn-ghost btn-sm" onclick="openAngebotModal('${a.id}')">✏</button>
+        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();toggleArchivAngebot('${a.id}')" title="${a.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${a.archiviert?'📤':'📦'}</button>
         <button class="btn-danger" onclick="deleteAngebot('${a.id}')">✕</button>
       </td>
     </tr>`;
@@ -3880,6 +3891,14 @@ body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:18mm 20mm;
 }
 
 
+function toggleArchivRechnung(id) {
+  const r = DB.rechnungen.find(x=>x.id===id);
+  if(!r) return;
+  r.archiviert = !r.archiviert;
+  sbSaveRechnung(r);
+  save(); renderRechnungen();
+}
+
 function deleteRechnung(id){
   if(!confirm('Rechnung löschen?'))return;
   DB.rechnungen=DB.rechnungen.filter(x=>x.id!==id);
@@ -3906,7 +3925,7 @@ function setRechnungFilter(f,btn){
 function renderRechnungen(){
   const q=(document.getElementById('rechnung-search')?.value||'').toLowerCase();
   let list=DB.rechnungen.filter(r=>{
-    const matchF=rechnungFilter==='alle'||r.status===rechnungFilter;
+    const matchF=rechnungFilter==='archiv'?r.archiviert===true:(rechnungFilter==='alle'?!r.archiviert:(!r.archiviert&&r.status===rechnungFilter));
     const c=DB.contacts.find(x=>x.id===r.kundeId);
     const matchQ=!q||r.nr?.toLowerCase().includes(q)||r.betreff.toLowerCase().includes(q)||(c?.firma||'').toLowerCase().includes(q);
     return matchF&&matchQ;
@@ -3933,6 +3952,7 @@ function renderRechnungen(){
         ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red);border-color:var(--red)">⚠ Mahnung</button>`:''}
         <button class="btn-ghost btn-sm" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">🖨 PDF</button>
         <button class="btn-ghost btn-sm" onclick="event.stopPropagation();openRechnungModal('${r.id}')">✏</button>
+        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${r.archiviert?'📤':'📦'}</button>
         <button class="btn-danger" onclick="event.stopPropagation();deleteRechnung('${r.id}')">✕</button>
       </td>
     </tr>`;
@@ -4620,6 +4640,7 @@ async function sbSaveAngebot(a) {
       betreff: a.betreff||null, datum: a.datum||null,
       valid_bis: a.validBis||null, status: a.status||'entwurf',
       positions: a.positions||[], notes: a.notes||null,
+      archiviert: a.archiviert||false,
       updated_at: new Date().toISOString()
     });
   } catch(e) { console.warn('sbSaveAngebot:', e.message); }
@@ -4641,7 +4662,8 @@ async function sbLoadAngebote() {
     return (data||[]).map(r => ({
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
       datum: r.datum, validBis: r.valid_bis, status: r.status,
-      positions: r.positions||[], notes: r.notes, createdAt: r.created_at
+      positions: r.positions||[], notes: r.notes,
+      archiviert: r.archiviert||false, createdAt: r.created_at
     }));
   } catch(e) { console.warn(e); return null; }
 }
@@ -4658,6 +4680,7 @@ async function sbSaveRechnung(r) {
       faellig: r.faellig||null, status: r.status||'offen-rg',
       positions: r.positions||[], notes: r.notes||null,
       r_typ: r.rTyp||'normal', anzahl: r.anzahl||0, anztext: r.anztext||null,
+      archiviert: r.archiviert||false,
       updated_at: new Date().toISOString()
     });
   } catch(e) { console.warn('sbSaveRechnung:', e.message); }
@@ -4681,7 +4704,7 @@ async function sbLoadRechnungen() {
       datum: r.datum, faellig: r.faellig, status: r.status,
       positions: r.positions||[], notes: r.notes,
       rTyp: r.r_typ||'normal', anzahl: r.anzahl||0, anztext: r.anztext||'',
-      createdAt: r.created_at
+      archiviert: r.archiviert||false, createdAt: r.created_at
     }));
   } catch(e) { console.warn(e); return null; }
 }
