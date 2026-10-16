@@ -121,11 +121,11 @@ Deno.serve(async (req) => {
       tel: phone,
       web,
       branche,
-      status: "offen",
+      status: "lead",
       notes: message,
       notizen: [notiz],
-      quelle: source,
-      meta: Object.keys(meta).length ? meta : null,
+      quelle: source === "website-ki-check" ? "ki-check" : "website",
+      meta: { ...meta, source_raw: source },
       archiviert: false,
     })
     .select("id")

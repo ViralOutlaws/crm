@@ -620,6 +620,10 @@ window._loginFallback = function() {
       <span class="nav-item-icon">👥</span>
       <span class="nav-item-label">Kontakte</span>
     </div>
+    <div class="nav-item" onclick="showPage('pipeline')" data-page="pipeline">
+      <span class="nav-item-icon">🧲</span>
+      <span class="nav-item-label">Pipeline</span>
+    </div>
     <div class="nav-item" onclick="showPage('angebote')" data-page="angebote">
       <span class="nav-item-icon">📋</span>
       <span class="nav-item-label">Angebote</span>
@@ -777,6 +781,17 @@ window._loginFallback = function() {
     </div>
   </div>
 
+  <div class="dash-row" style="grid-template-columns:2fr 1fr" id="dash-row-followup">
+    <div class="dash-card">
+      <h3>⏰ Heute fällig / überfällig</h3>
+      <div id="dash-followups"></div>
+    </div>
+    <div class="dash-card">
+      <h3>📈 Lead-Quellen</h3>
+      <div id="dash-quellen"></div>
+    </div>
+  </div>
+
   <!-- MINI CALENDAR ROW -->
   <div class="dash-row" style="grid-template-columns:260px 1fr">
     <div class="dash-card" style="padding:16px">
@@ -819,6 +834,17 @@ window._loginFallback = function() {
 <!-- ════════════════════════════════════════
      KONTAKTE
 ════════════════════════════════════════ -->
+<div class="page" id="page-pipeline">
+  <div class="sec-header">
+    <div class="sec-title">Pipeline</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span id="pl-total" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn-yellow" onclick="openContactModal()">+ Neuer Lead</button>
+    </div>
+  </div>
+  <div id="pl-board" class="pl-board"></div>
+</div>
+
 <div class="page" id="page-contacts">
   <div class="sec-header">
     <div class="sec-title">Kontakte</div>
@@ -827,12 +853,12 @@ window._loginFallback = function() {
   </div>
   <div class="filters-bar">
     <button class="filter-chip active" data-cf="alle" onclick="setContactFilter('alle',this)">Alle</button>
-    <button class="filter-chip" data-cf="offen" onclick="setContactFilter('offen',this)">◌ Offen</button>
-    <button class="filter-chip" data-cf="kontakt" onclick="setContactFilter('kontakt',this)">📞 Kontaktiert</button>
-    <button class="filter-chip" data-cf="termin" onclick="setContactFilter('termin',this)">📅 Termin</button>
+    <button class="filter-chip" data-cf="lead" onclick="setContactFilter('lead',this)">◌ Lead</button>
+    <button class="filter-chip" data-cf="erstgespraech" onclick="setContactFilter('erstgespraech',this)">💬 Erstgespräch</button>
     <button class="filter-chip" data-cf="angebot" onclick="setContactFilter('angebot',this)">📋 Angebot</button>
-    <button class="filter-chip" data-cf="kunde" onclick="setContactFilter('kunde',this)">✅ Kunde</button>
-    <button class="filter-chip" data-cf="absage" onclick="setContactFilter('absage',this)">✗ Absage</button>
+    <button class="filter-chip" data-cf="gewonnen" onclick="setContactFilter('gewonnen',this)">✅ Gewonnen</button>
+    <button class="filter-chip" data-cf="verloren" onclick="setContactFilter('verloren',this)">✗ Verloren</button>
+    <button class="filter-chip" data-cf="faellig" onclick="setContactFilter('faellig',this)">⏰ Fällig</button>
     <button class="filter-chip" data-cf="archiv" onclick="setContactFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="contact-search" placeholder="Suchen…" oninput="renderContacts()"></div>
   </div>
@@ -910,6 +936,13 @@ window._loginFallback = function() {
 ════════════════════════════════════════ -->
 <div class="page" id="page-settings">
   <div class="sec-header"><div class="sec-title">Einstellungen</div></div>
+  <div class="dash-card" style="max-width:800px;margin-bottom:20px">
+    <h3 style="margin-bottom:10px">🧩 Zusatzmodule</h3>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="s-extra-modules" onchange="setExtraModules(this.checked)" style="width:16px;height:16px;margin-top:2px;accent-color:var(--yellow)">
+      <span>ROI-Tracker, Kampagnen-Report, Ziele &amp; MRR und Ausgaben &amp; EÜR im Menü anzeigen<br><span style="font-size:11px;color:var(--muted)">Standardmäßig ausgeblendet. Deine Daten bleiben erhalten.</span></span>
+    </label>
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px">
     <div class="dash-card">
       <h3 style="margin-bottom:16px">Meine Agentur</h3>
@@ -1717,7 +1750,7 @@ window._loginFallback = function() {
   </div>
 </div>
 
-
+<div class="page" id="page-users">
   <div class="sec-header">
     <div class="sec-title">👥 Nutzerverwaltung</div>
     <button class="btn-primary" onclick="openInviteUserModal()" id="invite-btn">+ Nutzer einladen</button>
@@ -1742,6 +1775,7 @@ window._loginFallback = function() {
     </div>
   </div>
 </div>
+</div><!-- /main-content -->
 
 <!-- INVITE USER MODAL -->
 <div class="overlay" id="invite-user-modal">
@@ -1951,14 +1985,28 @@ window._loginFallback = function() {
         <div class="field"><label>Google Business URL</label><input id="c-gbusiness" placeholder="g.page/firma"></div>
         <div class="field"><label>Status</label>
           <select id="c-status">
-            <option value="offen">◌ Offen</option>
-            <option value="kontakt">📞 Kontaktiert</option>
-            <option value="termin">📅 Termin vereinbart</option>
-            <option value="angebot">📋 Angebot erstellt</option>
-            <option value="kunde">✅ Kunde</option>
-            <option value="absage">✗ Absage</option>
+            <option value="lead">◌ Lead</option>
+            <option value="erstgespraech">💬 Erstgespräch</option>
+            <option value="angebot">📋 Angebot</option>
+            <option value="gewonnen">✅ Gewonnen</option>
+            <option value="verloren">✗ Verloren</option>
           </select>
         </div>
+        <div class="field"><label>Lead-Quelle</label>
+          <select id="c-quelle">
+            <option value="">– bitte wählen –</option>
+            <option value="website">Website</option>
+            <option value="ki-check">KI-Check</option>
+            <option value="empfehlung">Empfehlung</option>
+            <option value="instagram">Instagram</option>
+            <option value="google">Google</option>
+            <option value="kaltakquise">Kaltakquise</option>
+            <option value="sonstiges">Sonstiges</option>
+          </select>
+        </div>
+        <div class="field"><label>Deal-Wert (€ netto)</label><input id="c-dealwert" type="number" min="0" step="50" placeholder="z.B. 2500"></div>
+        <div class="field"><label>Nächster Schritt am</label><input id="c-ns-datum" type="date"></div>
+        <div class="field"><label>Nächster Schritt</label><input id="c-ns-text" placeholder="z.B. Angebot nachfassen"></div>
         <div class="field"><label>Analyse / Notiz</label><textarea id="c-ana" placeholder="Keine Website, veralteter Auftritt…"></textarea></div>
         <div class="field form-full"><label>Interne Notizen</label><textarea id="c-notes" placeholder="Gesprächsverlauf, nächste Schritte…"></textarea></div>
       </div>
@@ -2533,6 +2581,9 @@ window._loginFallback = function() {
 // ══════════════════════════════════════════
 // HTML-Escape für alle Nutzer-/Kontaktdaten in innerHTML/Templates
 function esc(v){ if(v===null||v===undefined) return ''; return String(v).replace(/[&<>"'`]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[ch])); }
+const STATUS_MAP_ALT = {offen:'angebot', kontakt:'lead', termin:'erstgespraech', angebot:'angebot', kunde:'gewonnen', absage:'verloren'};
+function normStatus(s){ return ['lead','erstgespraech','angebot','gewonnen','verloren'].includes(s) ? s : (STATUS_MAP_ALT[s]||'lead'); }
+function isDealOpen(c){ return c && !c.archiviert && ['lead','erstgespraech','angebot'].includes(c.status); }
 const SUPABASE_URL = 'https://jjfmxiqippkgqkwihgek.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_gw9k2OPbyyacc_s6BoOM8Q_z1SwC7wB';
 
@@ -2877,7 +2928,7 @@ load();
 const PAGE_TITLES = {
   dashboard:'Dashboard', contacts:'Kontakte', kalender:'Kalender',
   angebote:'Angebote', rechnungen:'Rechnungen', kanban:'Aufgaben',
-  ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
+  pipeline:'Pipeline', ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
   rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
   ausgaben:'Ausgaben & EÜR',
   roi:'ROI-Tracker', reporting:'Kampagnen-Report',
@@ -2906,6 +2957,7 @@ function showPage(id) {
 
   if(id==='dashboard') { renderDashboard(); renderMiniCal(); renderDashCalEvents(); }
   if(id==='contacts') renderContacts();
+  if(id==='pipeline') renderPipeline();
   if(id==='angebote') { populateKundenSelect('a-kunde'); renderAngebote(); renderAngeboteSummary(); }
   if(id==='rechnungen') { populateKundenSelect('r-kunde'); renderRechnungen(); renderRechnungenSummary(); }
   if(id==='settings') { loadSettings(); setupLogoUpload(); }
@@ -2962,6 +3014,7 @@ function initials(s) { if(!s) return '?'; const w=s.trim().split(' '); return w.
 
 function getBadge(status) {
   const map = {
+    lead:'badge-offen ◌ Lead', erstgespraech:'badge-termin 💬 Erstgespräch', gewonnen:'badge-kunde ✅ Gewonnen', verloren:'badge-absage ✗ Verloren',
     offen:'badge-offen ◌ Offen', kontakt:'badge-kontakt 📞 Kontaktiert', termin:'badge-termin 📅 Termin',
     angebot:'badge-angebot 📋 Angebot', kunde:'badge-kunde ✅ Kunde', absage:'badge-absage ✗ Absage',
     entwurf:'badge-entwurf ✏ Entwurf', gesendet:'badge-gesendet 📤 Gesendet',
@@ -3137,7 +3190,11 @@ function openContactModal(id) {
   const ig=document.getElementById('c-instagram'); if(ig) ig.value=c?.instagram||'';
   const fb=document.getElementById('c-facebook'); if(fb) fb.value=c?.facebook||'';
   const gb=document.getElementById('c-gbusiness'); if(gb) gb.value=c?.gbusiness||'';
-  document.getElementById('c-status').value = c?.status||'offen';
+  document.getElementById('c-status').value = normStatus(c?.status||'lead');
+  document.getElementById('c-quelle').value = c?.quelle||'';
+  document.getElementById('c-dealwert').value = c?.dealWert ?? '';
+  document.getElementById('c-ns-datum').value = c?.naechsterSchritt||'';
+  document.getElementById('c-ns-text').value = c?.naechsterSchrittText||'';
   document.getElementById('c-ana').value = c?.ana||'';
   document.getElementById('c-notes').value = c?.notes||'';
   // Photo
@@ -3155,8 +3212,14 @@ function saveContact() {
   const photoData = document.getElementById('c-photo-data')?.value||'';
   const existingContact = editId ? DB.contacts.find(x=>x.id===editId) : null;
   const existingPhoto = existingContact?.photo||'';
+  const _dw = document.getElementById('c-dealwert').value;
   const obj = {
+    ...(existingContact||{}),
     id: editId||uid(), firma,
+    quelle: document.getElementById('c-quelle').value||'',
+    dealWert: _dw===''?null:Number(_dw),
+    naechsterSchritt: document.getElementById('c-ns-datum').value||null,
+    naechsterSchrittText: document.getElementById('c-ns-text').value.trim(),
     person: document.getElementById('c-person').value,
     branche: document.getElementById('c-branche').value,
     str: document.getElementById('c-str').value,
@@ -3181,6 +3244,7 @@ function saveContact() {
   else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue'); }
   sbSaveContact(obj);
   save(); closeModal('contact-modal'); renderContacts(); renderDashboard();
+  if(typeof nudgeNextStep==='function') nudgeNextStep(obj);
 }
 
 function toggleArchivContact(id) {
@@ -3211,7 +3275,7 @@ function setContactFilter(f, btn) {
 function renderContacts() {
   const q = (document.getElementById('contact-search')?.value||'').toLowerCase();
   let list = DB.contacts.filter(c => {
-    const matchF = contactFilter==='archiv' ? c.archiviert===true : (contactFilter==='alle' ? !c.archiviert : (c.status===contactFilter && !c.archiviert));
+    const matchF = contactFilter==='archiv' ? c.archiviert===true : (contactFilter==='alle' ? !c.archiviert : (contactFilter==='faellig' ? (!c.archiviert && isDealOpen(c) && c.naechsterSchritt && c.naechsterSchritt<=today()) : (c.status===contactFilter && !c.archiviert)));
     const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q);
     return matchF && matchQ;
   });
@@ -3229,7 +3293,7 @@ function renderContacts() {
           ? `<img src="${esc(c.photo)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
           : `<div style="width:30px;height:30px;border-radius:4px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--yellow);flex-shrink:0">${esc(initials(c.firma))}</div>`
         }
-        <div><div>${esc(c.firma)}${String(c.quelle||'').startsWith('website')?` <span title="Anfrage über viraloutlaws.de" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle">🌐 WEBSITE</span>`:''}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${esc(c.person)}</div>`:''}</div>
+        <div><div>${esc(c.firma)}${['website','ki-check'].includes(c.quelle)?` <span title="Anfrage über viraloutlaws.de" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle">🌐 WEBSITE</span>`:''}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${esc(c.person)}</div>`:''}</div>
       </div></td>
       <td data-label="Branche"><span class="badge ${esc(brancheClass(c.branche))}" style="font-size:9px;padding:2px 7px">${esc(brancheLabel(c.branche))}</span></td>
       <td data-label="PLZ / Ort">${esc([c.plz, c.ort].filter(Boolean).join(' '))||'–'}</td>
@@ -3980,7 +4044,7 @@ function renderDashboard() {
     const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
     return s + Math.max(0, brutto - abzug);
   },0);
-  const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
+  const kunden = DB.contacts.filter(c=>c.status==='gewonnen').length;
   const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt');
   const offenWert = offeneRg.reduce((s,r)=>{
     const brutto = sumPositions(r.positions).brutto;
@@ -3998,9 +4062,9 @@ function renderDashboard() {
   document.getElementById('kpi-offen-sub').textContent = offeneRg.length+' Rechnungen ausstehend';
 
   // Pipeline bars
-  const statuses = ['offen','kontakt','termin','angebot','kunde'];
-  const labels = {offen:'Offen',kontakt:'Kontaktiert',termin:'Termin',angebot:'Angebot',kunde:'Kunde'};
-  const colors = {offen:'#ccc',kontakt:'#f5c400',termin:'#2563b8',angebot:'#d97706',kunde:'#1f9e5a'};
+  const statuses = ['lead','erstgespraech','angebot','gewonnen','verloren'];
+  const labels = {lead:'Lead',erstgespraech:'Erstgespräch',angebot:'Angebot',gewonnen:'Gewonnen',verloren:'Verloren'};
+  const colors = {lead:'#ccc',erstgespraech:'#2563b8',angebot:'#d97706',gewonnen:'#1f9e5a',verloren:'#d63030'};
   const max = Math.max(...statuses.map(s=>DB.contacts.filter(c=>c.status===s).length),1);
   document.getElementById('dash-pipeline').innerHTML = statuses.map(s=>{
     const count = DB.contacts.filter(c=>c.status===s).length;
@@ -4435,7 +4499,12 @@ async function sbSaveContact(contact) {
       facebook: contact.facebook||null,
       gbusiness: contact.gbusiness||null,
       branche: contact.branche||null,
-      status: contact.status||'offen',
+      status: normStatus(contact.status||'lead'),
+      quelle: contact.quelle||null,
+      meta: contact.meta||null,
+      deal_wert: (contact.dealWert===''||contact.dealWert==null||isNaN(contact.dealWert)) ? null : Number(contact.dealWert),
+      naechster_schritt: contact.naechsterSchritt||null,
+      naechster_schritt_text: contact.naechsterSchrittText||null,
       notes: contact.notes||null,
       ana: contact.ana||null,
       photo: contact.photo||null,
@@ -4471,7 +4540,9 @@ async function sbLoadContacts() {
       email: r.email||'', tel: r.tel||'',
       str: r.str||'', plz: r.plz||'', ort: r.ort||'',
       web: r.web||'', instagram: r.instagram||'', facebook: r.facebook||'',
-      gbusiness: r.gbusiness||'', branche: r.branche||'', status: r.status||'offen',
+      gbusiness: r.gbusiness||'', branche: r.branche||'', status: normStatus(r.status||'lead'),
+      meta: r.meta||null, dealWert: r.deal_wert==null?null:Number(r.deal_wert),
+      naechsterSchritt: r.naechster_schritt||null, naechsterSchrittText: r.naechster_schritt_text||'',
       notes: r.notes||'', ana: r.ana||'', photo: r.photo||'',
       notizen: r.notizen||[], dokumente: r.dokumente||[], checks: r.checks||[],
       archiviert: r.archiviert||false, quelle: r.quelle||'',
@@ -5688,7 +5759,7 @@ function renderZiele() {
   if(el('z-mrr-bar')) el('z-mrr-bar').style.width = mrrPct+'%';
   if(el('z-mrr-pct')) el('z-mrr-pct').textContent = mrrPct+'%';
   if(el('z-mrr-missing')) el('z-mrr-missing').textContent = mrr>=mrrZiel?'🎉 Ziel erreicht!':'fehlen: '+fmtEur(mrrZiel-mrr);
-  const kunden = DB.contacts.filter(c=>c.status==='kunde').length;
+  const kunden = DB.contacts.filter(c=>c.status==='gewonnen').length;
   const kundenZiel = DB.ziele.kundenZiel||15;
   const kundenPct = Math.min(100,Math.round(kunden/kundenZiel*100));
   if(el('z-kunden-bar')) el('z-kunden-bar').style.width = kundenPct+'%';
@@ -8082,11 +8153,7 @@ async function sendEmail() {
           id:uid(), typ:'email', datum:today(), text:'E-Mail gesendet: "'+subject+'"',
           createdAt:new Date().toISOString()
         });
-        // Auto-set status to "kontaktiert" if still "offen"
-        if(_emCurrentContact.status === 'offen') {
-          _emCurrentContact.status = 'kontakt';
-          addActivity(`Status von "${_emCurrentContact.firma}" auf "Kontaktiert" gesetzt`, 'blue');
-        }
+
         sbSaveContact(_emCurrentContact);
         save();
       }
@@ -10112,6 +10179,246 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     finally { btn.disabled = false; btn.textContent = o; }
   };
   try { if(typeof PAGE_TITLES === 'object') PAGE_TITLES.social = 'Social Media'; } catch(e){}
+})();
+</script>
+
+<!-- PIPELINE · FOLLOW-UPS · LEAD-QUELLEN · DSGVO · ZUSATZMODULE -->
+<style>
+.pl-board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+.pl-col{background:var(--bg);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;min-height:300px}
+.pl-col.drag-over{outline:2px dashed var(--yellow);outline-offset:-4px}
+.pl-col-head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;gap:6px;border-top:3px solid var(--c);border-radius:8px 8px 0 0}
+.pl-col-title{font-weight:700;font-size:13px}
+.pl-col-sum{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-align:right}
+.pl-cards{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1}
+.pl-card{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:grab;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.pl-card.dragging{opacity:.4}
+.pl-card-firma{font-weight:700;font-size:13px;cursor:pointer}
+.pl-card-meta{color:var(--muted);font-size:11px;margin-top:3px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.pl-ns{margin-top:6px;font-size:11px;padding:4px 6px;border-radius:4px;background:var(--bg)}
+.pl-ns.over{background:var(--red-bg);color:var(--red);font-weight:600}
+.pl-ns.due{background:var(--yellow-bg);color:#7a6200;font-weight:600}
+.pl-ns.missing{color:var(--muted);font-style:italic;cursor:pointer}
+.pl-move{display:none;margin-top:6px;width:100%;font-size:11px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--paper);color:var(--ink)}
+.fu-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.fu-row:last-child{border-bottom:none}
+.fu-date{font-family:'DM Mono',monospace;font-size:11px;min-width:74px}
+.fu-date.over{color:var(--red);font-weight:700}
+.qs-row{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0}
+.qs-label{width:92px;flex-shrink:0}
+.qs-track{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.qs-fill{height:100%;background:var(--yellow)}
+.qs-count{font-family:'DM Mono',monospace;font-size:11px;min-width:44px;text-align:right;color:var(--muted)}
+#vo-toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;z-index:10000;box-shadow:0 6px 24px rgba(0,0,0,.25);display:none;align-items:center;gap:10px;max-width:92vw}
+#vo-toast button{background:var(--yellow);color:#111;border:none;border-radius:4px;padding:5px 9px;font-weight:700;cursor:pointer;font-size:12px}
+@media(max-width:768px){
+  .pl-board{grid-template-columns:1fr;overflow:visible}
+  .pl-col{min-height:0}
+  .pl-move{display:block}
+  .pl-card{cursor:default}
+  #dash-row-followup{grid-template-columns:1fr !important}
+  .fu-row{flex-wrap:wrap;gap:4px 10px}
+  .fu-row .badge{display:none}
+  .fu-row > span:nth-child(2){flex:1 1 60%}
+}
+</style>
+<script>
+(function(){
+const STAGES=[
+  {k:'lead',l:'Lead',c:'#9aa0a6'},
+  {k:'erstgespraech',l:'Erstgespräch',c:'#2563b8'},
+  {k:'angebot',l:'Angebot',c:'#d97706'},
+  {k:'gewonnen',l:'Gewonnen',c:'#1f9e5a'},
+  {k:'verloren',l:'Verloren',c:'#d63030'}];
+const QUELLEN={website:'Website','ki-check':'KI-Check',empfehlung:'Empfehlung',instagram:'Instagram',google:'Google',kaltakquise:'Kaltakquise',sonstiges:'Sonstiges'};
+window.QUELLEN_LABELS=QUELLEN;
+const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const eur0=n=>Number(n||0).toLocaleString('de-DE',{maximumFractionDigits:0})+' €';
+const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):'';
+
+// Lokal gespeicherte Altdaten auf neue Phasen bringen
+(DB.contacts||[]).forEach(c=>{ c.status=normStatus(c.status); });
+
+function nsInfo(c){
+  if(!isDealOpen(c)) return '';
+  const t=localToday();
+  if(!c.naechsterSchritt) return `<div class="pl-ns missing" onclick="event.stopPropagation();openContactModal('${esc(c.id)}')">＋ Nächsten Schritt festlegen</div>`;
+  const cls=c.naechsterSchritt<t?'over':(c.naechsterSchritt===t?'due':'');
+  return `<div class="pl-ns ${cls}">⏰ ${esc(fmtD(c.naechsterSchritt))}${c.naechsterSchrittText?' · '+esc(c.naechsterSchrittText):''}</div>`;
+}
+
+window.renderPipeline=function(){
+  const board=document.getElementById('pl-board'); if(!board) return;
+  const list=(DB.contacts||[]).filter(c=>!c.archiviert);
+  let open=0;
+  board.innerHTML=STAGES.map(st=>{
+    const cs=list.filter(c=>c.status===st.k).sort((a,b)=>(a.naechsterSchritt||'9999').localeCompare(b.naechsterSchritt||'9999'));
+    const sum=cs.reduce((s,c)=>s+(Number(c.dealWert)||0),0);
+    if(['lead','erstgespraech','angebot'].includes(st.k)) open+=sum;
+    return `<div class="pl-col" data-stage="${st.k}" style="--c:${st.c}" ondragover="plDragOver(event)" ondragleave="this.classList.remove('drag-over')" ondrop="plDrop(event,'${st.k}')">
+      <div class="pl-col-head"><span class="pl-col-title">${st.l} <span style="color:var(--muted);font-weight:400">(${cs.length})</span></span><span class="pl-col-sum">${eur0(sum)}</span></div>
+      <div class="pl-cards">${cs.map(c=>`<div class="pl-card" draggable="true" data-id="${esc(c.id)}" ondragstart="plDragStart(event,'${esc(c.id)}')" ondragend="this.classList.remove('dragging')">
+          <div class="pl-card-firma" onclick="openContactDetail('${esc(c.id)}')">${esc(c.firma)}</div>
+          <div class="pl-card-meta"><span>${esc(c.person||'')}</span><span>${c.dealWert?eur0(c.dealWert):''}</span></div>
+          ${c.quelle?`<div class="pl-card-meta"><span>📍 ${esc(QUELLEN[c.quelle]||c.quelle)}</span></div>`:''}
+          ${nsInfo(c)}
+          <select class="pl-move" onchange="plMove('${esc(c.id)}',this.value)">${STAGES.map(s2=>`<option value="${s2.k}" ${s2.k===st.k?'selected':''}>→ ${s2.l}</option>`).join('')}</select>
+        </div>`).join('')||'<div style="color:var(--muted);font-size:11px;text-align:center;padding:14px 0">–</div>'}</div>
+    </div>`;}).join('');
+  const tot=document.getElementById('pl-total'); if(tot) tot.textContent='Offene Pipeline: '+eur0(open);
+};
+window.plDragStart=(e,id)=>{e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';e.target.classList.add('dragging');};
+window.plDragOver=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over');};
+window.plDrop=(e,stage)=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');plMove(e.dataTransfer.getData('text/plain'),stage);};
+window.plMove=function(id,stage){
+  const c=DB.contacts.find(x=>x.id===id); if(!c||c.status===stage) return;
+  const alt=c.status; c.status=stage; c.updatedAt=new Date().toISOString();
+  const lbl=STAGES.find(s=>s.k===stage)?.l||stage;
+  addActivity(`"${c.firma}" → ${lbl}`, stage==='gewonnen'?'green':(stage==='verloren'?'red':'blue'));
+  sbSaveContact(c); save(); renderPipeline();
+  if(typeof renderDashboard==='function' && document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
+  nudgeNextStep(c);
+};
+
+// Sanfter Hinweis, wenn bei offenem Deal kein nächster Schritt gesetzt ist
+let _toastT;
+window.nudgeNextStep=function(c){
+  if(!isDealOpen(c) || c.naechsterSchritt) return;
+  let t=document.getElementById('vo-toast');
+  if(!t){t=document.createElement('div');t.id='vo-toast';document.body.appendChild(t);}
+  t.innerHTML=`<span>💡 Für „${esc(c.firma)}“ ist noch kein nächster Schritt geplant.</span><button onclick="document.getElementById('vo-toast').style.display='none';openContactModal('${esc(c.id)}')">Festlegen</button>`;
+  t.style.display='flex'; clearTimeout(_toastT); _toastT=setTimeout(()=>{t.style.display='none';},7000);
+};
+
+function renderFollowups(){
+  const el=document.getElementById('dash-followups'); if(!el) return;
+  const t=localToday();
+  const open=(DB.contacts||[]).filter(isDealOpen);
+  const due=open.filter(c=>c.naechsterSchritt&&c.naechsterSchritt<=t).sort((a,b)=>a.naechsterSchritt.localeCompare(b.naechsterSchritt));
+  const missing=open.filter(c=>!c.naechsterSchritt).length;
+  el.innerHTML=(due.length?due.slice(0,8).map(c=>`<div class="fu-row">
+      <span class="fu-date ${c.naechsterSchritt<t?'over':''}">${c.naechsterSchritt<t?'überfällig ':''}${esc(fmtD(c.naechsterSchritt))}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="#" onclick="event.preventDefault();openContactDetail('${esc(c.id)}')" style="color:var(--ink);font-weight:600">${esc(c.firma)}</a>${c.naechsterSchrittText?' · '+esc(c.naechsterSchrittText):''}</span>
+      ${getBadge(c.status)}
+      <button class="btn-ghost btn-sm" onclick="openContactModal('${esc(c.id)}')">Verschieben</button></div>`).join('')+(due.length>8?`<div style="font-size:11px;color:var(--muted);padding-top:6px">+${due.length-8} weitere</div>`:'')
+    :'<div style="font-size:12px;color:var(--muted);padding:6px 0">✅ Heute nichts fällig.</div>')
+    +(missing?`<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 ${missing} offene Deals ohne nächsten Schritt · <a href="#" onclick="event.preventDefault();showPage('pipeline')" style="color:var(--blue)">in der Pipeline ansehen</a></div>`:'');
+}
+function renderQuellen(){
+  const el=document.getElementById('dash-quellen'); if(!el) return;
+  const cs=(DB.contacts||[]).filter(c=>!c.archiviert);
+  const rows=Object.entries(QUELLEN).map(([k,l])=>{const all=cs.filter(c=>c.quelle===k);return {l,n:all.length,w:all.filter(c=>c.status==='gewonnen').length};});
+  const none=cs.filter(c=>!c.quelle||!QUELLEN[c.quelle]).length;
+  const max=Math.max(1,...rows.map(r=>r.n));
+  el.innerHTML=rows.filter(r=>r.n).map(r=>`<div class="qs-row"><span class="qs-label">${r.l}</span><div class="qs-track"><div class="qs-fill" style="width:${Math.round(r.n/max*100)}%"></div></div><span class="qs-count" title="Kontakte / davon gewonnen">${r.n}${r.w?' · ✅'+r.w:''}</span></div>`).join('')
+    +(none?`<div style="font-size:11px;color:var(--muted);margin-top:8px">${none} Kontakte ohne Quelle</div>`:'')
+    +(!rows.some(r=>r.n)&&!none?'<div style="font-size:12px;color:var(--muted)">Noch keine Daten.</div>':'');
+}
+const _origDash=window.renderDashboard;
+window.renderDashboard=function(){ _origDash.apply(this,arguments); try{renderFollowups();renderQuellen();}catch(e){console.warn(e);} };
+
+// DSGVO: Export & vollständiges Löschen
+function contactBundle(c){
+  return {
+    exportiert_am:new Date().toISOString(),
+    kontakt:c,
+    angebote:(DB.angebote||[]).filter(a=>a.kundeId===c.id),
+    rechnungen:(DB.rechnungen||[]).filter(r=>r.kundeId===c.id),
+    aufgaben:(DB.kanban||[]).filter(t=>t.kontaktId===c.id),
+    termine:(DB.kalEvents||[]).filter(e=>e.kontaktId===c.id),
+    wiedervorlagen:(DB.wiedervorlagen||[]).filter(w=>w.kontaktId===c.id),
+    retainer:(DB.retainer||[]).filter(r=>r.kundeId===c.id)
+  };
+}
+function dl(name,content,type){const b=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+const slug=s=>String(s||'kontakt').toLowerCase().replace(/[^a-z0-9äöüß]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+window.dsgvoExport=function(id,fmt){
+  const c=DB.contacts.find(x=>x.id===id); if(!c) return;
+  const b=contactBundle(c); const base='dsgvo-'+slug(c.firma)+'-'+localToday();
+  if(fmt==='json'){ dl(base+'.json',JSON.stringify(b,null,2),'application/json'); }
+  else {
+    const q=v=>{const s=v==null?'':(typeof v==='object'?JSON.stringify(v):String(v));return '"'+s.replace(/"/g,'""')+'"';};
+    const lines=[['Bereich','ID','Feld','Wert'].map(q).join(';')];
+    Object.entries(b).forEach(([k,v])=>{
+      if(k==='exportiert_am'){lines.push(['Export','',k,v].map(q).join(';'));return;}
+      (Array.isArray(v)?v:[v]).forEach(o=>Object.entries(o||{}).forEach(([f,val])=>{ if(f==='photo'&&String(val).startsWith('data:')) val='[Bild]'; lines.push([k,o.id,f,val].map(q).join(';')); }));
+    });
+    dl(base+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
+  }
+  addActivity(`DSGVO-Export (${fmt.toUpperCase()}) für "${c.firma}"`,'gray');
+};
+window.dsgvoDelete=async function(id){
+  const c=DB.contacts.find(x=>x.id===id); if(!c) return;
+  const b=contactBundle(c);
+  const n=b.angebote.length+b.aufgaben.length+b.termine.length+b.wiedervorlagen.length;
+  const keep=b.rechnungen.length+b.retainer.length;
+  let msg=`„${c.firma}“ VOLLSTÄNDIG löschen?\n\nGelöscht werden: der Kontakt mit Notizen und Dokumenten, ${b.angebote.length} Angebote, ${b.aufgaben.length} Aufgaben, ${b.termine.length} Termine, ${b.wiedervorlagen.length} Wiedervorlagen.`;
+  if(keep) msg+=`\n\n⚠ ${b.rechnungen.length} Rechnung(en)${b.retainer.length?' und '+b.retainer.length+' Retainer':''} bleiben erhalten (gesetzliche Aufbewahrungspflicht, 10 Jahre) und werden nur vom Kontakt gelöst.`;
+  msg+='\n\nDas kann nicht rückgängig gemacht werden. Tipp: vorher exportieren.';
+  if(!confirm(msg)) return;
+  if(prompt('Zur Bestätigung bitte LÖSCHEN eintippen:')!=='LÖSCHEN') return;
+  try{
+    if(_useSupabase){
+      const sb=await getSupabase();
+      for(const [t,col] of [['angebote','kunde_id'],['aufgaben','kontakt_id'],['kal_events','kontakt_id'],['wiedervorlagen','kontakt_id']]){
+        const {error}=await sb.from(t).delete().eq(col,id); if(error) throw new Error(t+': '+error.message);
+      }
+      const {error}=await sb.from('contacts').delete().eq('id',id); if(error) throw new Error('contacts: '+error.message);
+    }
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); return; }
+  DB.angebote=(DB.angebote||[]).filter(a=>a.kundeId!==id);
+  DB.kanban=(DB.kanban||[]).filter(t=>t.kontaktId!==id);
+  DB.kalEvents=(DB.kalEvents||[]).filter(e=>e.kontaktId!==id);
+  DB.wiedervorlagen=(DB.wiedervorlagen||[]).filter(w=>w.kontaktId!==id);
+  (DB.rechnungen||[]).forEach(r=>{ if(r.kundeId===id){ r.kundeName=r.kundeName||c.firma; } });
+  DB.contacts=DB.contacts.filter(x=>x.id!==id);
+  addActivity(`Kontakt vollständig gelöscht (DSGVO)${keep?' · '+keep+' Rechnungen/Retainer behalten':''}`,'red');
+  save(); showPage('contacts');
+};
+const _origDetail=window.renderContactDetail;
+window.renderContactDetail=function(cid){
+  _origDetail.apply(this,arguments);
+  const c=DB.contacts.find(x=>x.id===cid); const host=document.getElementById('contact-detail-content'); if(!c||!host) return;
+  const box=document.createElement('div'); box.className='dash-card'; box.style.marginTop='14px';
+  box.innerHTML=`<h3 style="margin-bottom:10px">🧲 Deal</h3>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;align-items:center">
+      <span>Phase: ${getBadge(c.status)}</span>
+      <span>Wert: <strong>${c.dealWert?eur0(c.dealWert):'–'}</strong></span>
+      <span>Quelle: <strong>${esc(QUELLEN[c.quelle]||c.quelle||'–')}</strong></span>
+      <button class="btn-ghost btn-sm" onclick="openContactModal('${esc(c.id)}')">Bearbeiten</button>
+    </div>${nsInfo(c)}
+    <h3 style="margin:16px 0 8px">🛡 Datenschutz (DSGVO)</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-ghost btn-sm" onclick="dsgvoExport('${esc(c.id)}','json')">⬇ Export JSON</button>
+      <button class="btn-ghost btn-sm" onclick="dsgvoExport('${esc(c.id)}','csv')">⬇ Export CSV</button>
+      <button class="btn-danger btn-sm" onclick="dsgvoDelete('${esc(c.id)}')">🗑 Vollständig löschen</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">Rechnungen bleiben wegen der Aufbewahrungspflicht beim Löschen erhalten.</div>`;
+  host.appendChild(box);
+};
+
+// Zusatzmodule (standardmäßig ausgeblendet)
+const EXTRA=['roi','reporting','ziele','ausgaben'];
+window.applyExtraModules=function(){
+  const on=!!DB.settings?.extraModules;
+  EXTRA.forEach(p=>{ document.querySelectorAll(`.nav-item[data-page="${p}"]`).forEach(n=>{ if(!on) n.style.display='none'; else if(n.dataset.ffHidden!=='1') n.style.display=''; }); });
+  const cb=document.getElementById('s-extra-modules'); if(cb) cb.checked=on;
+  if(!on && EXTRA.some(p=>document.getElementById('page-'+p)?.classList.contains('active'))) showPage('dashboard');
+};
+window.setExtraModules=function(on){
+  DB.settings.extraModules=!!on; save();
+  if(typeof sbSaveSettings==='function') sbSaveSettings(DB.settings).catch(()=>{});
+  applyExtraModules();
+};
+const _origFF=window.applyFeatureFlags;
+if(_origFF) window.applyFeatureFlags=function(){ _origFF.apply(this,arguments); EXTRA.forEach(p=>{const n=document.querySelector(`.nav-item[data-page="${p}"]`); if(n) n.dataset.ffHidden=n.style.display==='none'?'1':'0';}); applyExtraModules(); };
+const _origLS=window.loadSettings;
+if(_origLS) window.loadSettings=function(){ _origLS.apply(this,arguments); applyExtraModules(); };
+const _origSP=window.showPage;
+window.showPage=function(id){ if(EXTRA.includes(id)&&!DB.settings?.extraModules) id='dashboard'; return _origSP.call(this,id); };
+// Nach Cloud-Sync erneut normalisieren und Hide anwenden
+setInterval(()=>{ (DB.contacts||[]).forEach(c=>{ if(!['lead','erstgespraech','angebot','gewonnen','verloren'].includes(c.status)) c.status=normStatus(c.status); }); applyExtraModules(); },3000);
+applyExtraModules();
 })();
 </script>
 
