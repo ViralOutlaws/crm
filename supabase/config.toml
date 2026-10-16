@@ -1,2 +1,5 @@
 [functions.website-lead]
 verify_jwt = false
+
+[functions.social-post]
+verify_jwt = false

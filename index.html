@@ -667,7 +667,12 @@ window._loginFallback = function() {
     </div>
 
     <!-- Bottom items INSIDE nav so they scroll together -->
-    <div class="nav-item" onclick="showPage('content')" data-page="content">
+    <div class="nav-item" onclick="showPage('social')" data-page="social">
+      <span class="nav-item-icon">📱</span>
+      <span class="nav-item-label">Social Media</span>
+    </div>
+    <!-- Alter Content Planer ausgeblendet (Seite/Daten bleiben erhalten) -->
+    <div class="nav-item" onclick="showPage('content')" data-page="content" style="display:none">
       <span class="nav-item-icon">📱</span>
       <span class="nav-item-label">Content Planer</span>
     </div>
@@ -1784,6 +1789,20 @@ window._loginFallback = function() {
   </div>
 </div>
 
+<!-- SOCIAL MEDIA (Redaktionsplan) -->
+<div class="page" id="page-social">
+  <div class="sec-header"><div class="sec-title">📱 Social Media</div></div>
+  <div class="sm-toolbar">
+    <button class="sm-btn on" id="sm-view-week" onclick="smSetView('week')">Woche</button>
+    <button class="sm-btn" id="sm-view-list" onclick="smSetView('list')">Liste</button>
+    <select id="sm-f-saeule" onchange="smRender()"><option value="">Alle Säulen</option></select>
+    <select id="sm-f-format" onchange="smRender()"><option value="">Alle Formate</option></select>
+    <select id="sm-f-status" onchange="smRender()"><option value="">Alle Status</option></select>
+    <button class="sm-btn" onclick="smLoad(true)">↻ Aktualisieren</button>
+    <span id="sm-count" style="font-size:12px;color:#888"></span>
+  </div>
+  <div id="sm-body"><p style="color:#888;font-size:13px">Lade Redaktionsplan …</p></div>
+</div>
 <!-- NUTZERVERWALTUNG -->
 <div class="page" id="page-content">
   <div class="sec-header">
@@ -10549,5 +10568,282 @@ window.addEventListener('blur', () => {
   }
 });
 </script>
+<!-- ═══ ADDON: Kontakte-Badge (neue Kontakte) + Social Media (Redaktionsplan) ═══ -->
+<style>
+.nav-item-badge.vo-gold{background:var(--yellow);color:var(--ink)}
+.bni-wrap{position:relative;display:inline-block}
+.bn-badge{position:absolute;top:-4px;right:-10px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;border-radius:9px;padding:0 5px;min-width:15px;line-height:15px;text-align:center}
+tr.vo-new-row td{background:rgba(245,196,0,.10)!important}
+tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
+#page-social .sm-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px}
+#page-social select,#page-social .sm-btn{font:inherit;font-size:12px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer}
+#page-social .sm-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#page-social .sm-week{margin:22px 0 10px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px}
+#page-social .sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+#page-social .sm-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+#page-social .sm-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
+#page-social .sm-date{font-weight:700;font-size:12px}
+#page-social .sm-pill{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:#f0ede7;color:#555}
+#page-social .sm-pill.fmt{background:var(--ink);color:#fff}
+#page-social .sm-pill.pil{background:var(--yellow-bg);color:#7a6200;border:1px solid rgba(245,196,0,.3)}
+#page-social .sm-title{font-weight:700;font-size:14px;line-height:1.3}
+#page-social .sm-hook{font-size:12px;color:#555;font-style:italic}
+#page-social details{font-size:12px}
+#page-social details summary{cursor:pointer;color:#555;font-weight:600}
+#page-social pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;margin:6px 0 0;background:#faf9f6;padding:8px;border-radius:6px}
+#page-social .sm-tags{font-size:11px;color:#7a6200;word-break:break-word}
+#page-social .sm-thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+#page-social .sm-thumb{position:relative;flex:0 0 auto;width:74px;height:92px;border-radius:6px;overflow:hidden;background:#111;cursor:pointer;border:1px solid #ddd}
+#page-social .sm-thumb img,#page-social .sm-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+#page-social .sm-thumb span{position:absolute;bottom:2px;right:3px;font-size:9px;color:#fff;text-shadow:0 0 3px #000}
+#page-social .sm-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+#page-social .sm-actions button{font:inherit;font-size:11px;padding:5px 9px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer}
+#page-social .sm-actions button.pri{background:var(--yellow);border-color:var(--yellow);color:var(--ink);font-weight:700}
+#page-social table.sm-list{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
+#page-social table.sm-list td,#page-social table.sm-list th{padding:8px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+#sm-preview{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:20px}
+#sm-preview img,#sm-preview video{max-width:95vw;max-height:80vh;border-radius:6px}
+#sm-preview .bar{display:flex;gap:8px}
+#sm-preview button,#sm-preview a{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:none;background:#fff;color:#111;cursor:pointer;text-decoration:none}
+</style>
+<div id="sm-preview" onclick="if(event.target===this)smClosePreview()">
+  <div id="sm-preview-media"></div>
+  <div class="bar"><a id="sm-preview-dl" href="#">⬇ Herunterladen</a><button onclick="smClosePreview()">Schließen</button></div>
+</div>
+<script>
+(function(){
+  'use strict';
+  const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // ───────── 1) Kontakte: Badge für neue Kontakte ─────────
+  const seenKey = () => 'vo_contacts_seen_' + (window._currentUser?.id || (typeof _currentUser!=='undefined' && _currentUser?.id) || 'local');
+  function getSeen(){
+    let v = localStorage.getItem(seenKey());
+    if(!v){ v = new Date().toISOString(); localStorage.setItem(seenKey(), v); } // Erststart: nichts als neu markieren
+    return v;
+  }
+  let _prevSeen = null;
+  function contactsList(){ try { return (DB && DB.contacts) || []; } catch(e){ return []; } }
+  function newCount(){
+    const seen = getSeen();
+    return contactsList().filter(c => c.createdAt && c.createdAt > seen && !c.archiviert).length;
+  }
+  function setBadge(n){
+    const nav = document.querySelector('.nav-item[data-page="contacts"]');
+    if(nav){
+      let b = nav.querySelector('.vo-contacts-badge');
+      if(!b){ b = document.createElement('span'); b.className = 'nav-item-badge vo-gold vo-contacts-badge'; nav.appendChild(b); }
+      b.textContent = n > 99 ? '99+' : String(n); b.style.display = n ? '' : 'none';
+      b.title = n ? n + ' neue Kontakte seit Ihrem letzten Besuch' : '';
+    }
+    const bn = document.querySelector('.bottom-nav-item[data-page="contacts"] .bni');
+    if(bn){
+      let b = bn.querySelector('.bn-badge');
+      if(!b){ b = document.createElement('span'); b.className = 'bn-badge'; bn.style.position='relative'; bn.appendChild(b); }
+      b.textContent = n > 99 ? '99+' : String(n); b.style.display = n ? '' : 'none';
+    }
+  }
+  function refreshBadge(){
+    try {
+      const active = document.querySelector('.page.active')?.id === 'page-contacts';
+      if(active) markSeen(); else setBadge(newCount());
+    } catch(e){ console.warn('badge', e); }
+  }
+  function highlightNew(){
+    if(!_prevSeen) return;
+    contactsList().forEach(c => {
+      if(c.createdAt && c.createdAt > _prevSeen){
+        const tr = document.querySelector('#contacts-tbody tr[onclick*="' + CSS.escape(String(c.id)) + '"]');
+        if(tr){ tr.classList.add('vo-new-row'); tr.title = 'Neu seit Ihrem letzten Besuch'; }
+      }
+    });
+  }
+  function markSeen(){
+    if(_prevSeen === null) _prevSeen = getSeen();
+    localStorage.setItem(seenKey(), new Date().toISOString());
+    setBadge(0);
+    setTimeout(highlightNew, 0);
+  }
+  window.voRefreshContactsBadge = refreshBadge;
+
+  if(typeof renderContacts === 'function'){
+    const _rc = renderContacts;
+    renderContacts = function(){ const r = _rc.apply(this, arguments); try { highlightNew(); } catch(e){} return r; };
+  }
+  if(typeof showPage === 'function'){
+    const _sp = showPage;
+    showPage = function(id){
+      if(id !== 'contacts') _prevSeen = null; // beim nächsten Öffnen neu bestimmen
+      else _prevSeen = getSeen();
+      const r = _sp.apply(this, arguments);
+      try {
+        if(id === 'contacts') markSeen();
+        if(id === 'social') { document.getElementById('page-title') && (document.getElementById('page-title').textContent = 'Social Media'); smLoad(false); }
+      } catch(e){ console.warn(e); }
+      return r;
+    };
+  }
+  async function reloadContactsFromDb(){
+    try {
+      if(typeof sbLoadContacts !== 'function') return;
+      const fresh = await sbLoadContacts();
+      if(Array.isArray(fresh) && fresh.length){ DB.contacts = fresh; try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){} }
+      if(document.querySelector('.page.active')?.id === 'page-contacts' && typeof renderContacts === 'function') renderContacts();
+    } catch(e){ console.warn('reloadContacts', e); }
+    refreshBadge();
+  }
+  if(typeof handleRealtimeChange === 'function'){
+    const _hr = handleRealtimeChange;
+    handleRealtimeChange = function(payload){
+      try {
+        if(payload && payload.table === 'contacts' && payload.eventType === 'INSERT') { reloadContactsFromDb(); }
+        if(payload && payload.table === 'social_media_posts' && document.querySelector('.page.active')?.id === 'page-social') smLoad(true);
+      } catch(e){}
+      return _hr.apply(this, arguments);
+    };
+  }
+  // Fallback ohne Realtime: alle 60 s und bei Fokus prüfen
+  setInterval(() => { if(document.visibilityState === 'visible' && typeof _currentUser !== 'undefined' && _currentUser) reloadContactsFromDb(); }, 60000);
+  window.addEventListener('focus', () => { if(typeof _currentUser !== 'undefined' && _currentUser) reloadContactsFromDb(); });
+  setTimeout(refreshBadge, 1500); setTimeout(refreshBadge, 5000);
+
+  // ───────── 2) Social Media ─────────
+  const SAEULEN = ['Webdesign','KI','Performance-Marketing','Ratgeber','Referenz','Kim & Allgäu'];
+  const FORMATE = ['Beitrag','Karussell','Story','Reel'];
+  const STATUS = ['Idee','Geplant','Content fertig','Erstellt','Veröffentlicht'];
+  const fill = (id, arr) => { const s = document.getElementById(id); if(s && s.options.length < 2) arr.forEach(v => s.add(new Option(v, v))); };
+  fill('sm-f-saeule', SAEULEN); fill('sm-f-format', FORMATE); fill('sm-f-status', STATUS);
+
+  let SM = { posts: [], loaded: false, view: 'week', urls: {} };
+  const wsId = () => (typeof _currentWorkspace !== 'undefined' && _currentWorkspace?.id) || (typeof _FALLBACK_WORKSPACE_ID !== 'undefined' ? _FALLBACK_WORKSPACE_ID : null);
+
+  async function smLoad(force){
+    if(SM.loaded && !force){ smRender(); return; }
+    const body = document.getElementById('sm-body');
+    try {
+      if(typeof _currentUser === 'undefined' || !_currentUser){ body.innerHTML = '<p style="color:#888">Bitte zuerst mit Supabase anmelden.</p>'; return; }
+      const sb = await getSupabase();
+      const { data, error } = await sb.from('social_media_posts').select('*').eq('workspace_id', wsId()).order('datum', { ascending: true });
+      if(error) throw error;
+      SM.posts = data || []; SM.loaded = true;
+      const paths = SM.posts.flatMap(p => (p.assets||[]).map(a => a.path)).filter(Boolean);
+      SM.urls = {};
+      for(let i = 0; i < paths.length; i += 100){
+        const { data: su } = await sb.storage.from('social-assets').createSignedUrls(paths.slice(i, i+100), 3600);
+        (su||[]).forEach(x => { if(x.signedUrl) SM.urls[x.path] = x.signedUrl; });
+      }
+      smRender();
+    } catch(e){ body.innerHTML = '<p style="color:#c00">Fehler beim Laden: ' + esc(e.message||e) + '</p>'; }
+  }
+  window.smLoad = smLoad;
+  window.smSetView = v => { SM.view = v; document.getElementById('sm-view-week').classList.toggle('on', v==='week'); document.getElementById('sm-view-list').classList.toggle('on', v==='list'); smRender(); };
+
+  function isoWeek(d){ const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const y = new Date(Date.UTC(t.getUTCFullYear(),0,1)); return [t.getUTCFullYear(), Math.ceil(((t-y)/86400000+1)/7)]; }
+  const fmtD = s => s ? new Date(s+'T12:00:00').toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'2-digit' }) : 'ohne Datum';
+  const fmtSize = n => n ? (n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB') : '';
+
+  function filtered(){
+    const fs = document.getElementById('sm-f-saeule').value, ff = document.getElementById('sm-f-format').value, fst = document.getElementById('sm-f-status').value;
+    return SM.posts.filter(p => (!fs || p.saeule===fs) && (!ff || p.format===ff) && (!fst || p.status===fst));
+  }
+  function card(p){
+    const assets = (p.assets||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
+    const thumbs = assets.map((a,i) => {
+      const u = SM.urls[a.path]; if(!u) return '';
+      const media = a.type==='video' ? `<video src="${esc(u)}#t=0.5" muted preload="metadata"></video><span>▶ ${esc(fmtSize(a.size))}</span>` : `<img src="${esc(u)}" loading="lazy" alt="${esc(a.filename)}"><span>${i+1}</span>`;
+      return `<div class="sm-thumb" title="${esc(a.filename)}" onclick="smPreview('${esc(p.id)}',${i})">${media}</div>`;
+    }).join('');
+    const statusSel = `<select onchange="smSetStatus('${esc(p.id)}',this.value)" style="font-size:11px;padding:2px 4px">${STATUS.map(s=>`<option ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
+    return `<div class="sm-card">
+      <div class="sm-head"><span class="sm-date">${esc(fmtD(p.datum))}${p.uhrzeit?' · '+esc(p.uhrzeit):''}</span>
+        <span class="sm-pill fmt" title="${esc(p.format_detail||'')}">${esc(p.format||'–')}</span>
+        ${p.saeule?`<span class="sm-pill pil">${esc(p.saeule)}</span>`:''}
+        <span style="margin-left:auto">${statusSel}</span></div>
+      <div class="sm-title">${esc(p.thema||p.external_id)}</div>
+      ${p.hook?`<div class="sm-hook">„${esc(p.hook)}“</div>`:''}
+      ${thumbs?`<div class="sm-thumbs">${thumbs}</div>`:''}
+      ${p.caption?`<details><summary>Caption${p.format==='Story'?' / Idee':''}</summary><pre>${esc(p.caption)}</pre></details>`:''}
+      ${(p.hashtags||[]).length?`<div class="sm-tags">${esc(p.hashtags.join(' '))}</div>`:''}
+      ${p.visual_hinweise?`<details><summary>Visual-Hinweise</summary><pre>${esc(p.visual_hinweise)}</pre></details>`:''}
+      ${p.reel_skript?`<details><summary>Reel-Skript</summary><pre>${esc(p.reel_skript)}</pre></details>`:''}
+      ${(p.cta||p.quelle||p.freigabe||p.format_detail)?`<details><summary>Details</summary><pre>${[p.format_detail&&'Format: '+p.format_detail, p.cta&&'CTA: '+p.cta, p.quelle&&'Quelle: '+p.quelle, p.freigabe&&'Freigabe: '+p.freigabe, p.content_ordner&&'Ordner: '+p.content_ordner].filter(Boolean).map(esc).join('\n')}</pre></details>`:''}
+      <div class="sm-actions">
+        ${p.caption?`<button class="pri" onclick="smCopy('${esc(p.id)}',this)">📋 Caption kopieren</button>`:''}
+        ${assets.length?`<button onclick="smZip('${esc(p.id)}',this)">⬇ Alle als ZIP (${assets.length})</button>`:''}
+      </div>
+    </div>`;
+  }
+  function smRender(){
+    const body = document.getElementById('sm-body'); if(!body) return;
+    const list = filtered();
+    document.getElementById('sm-count').textContent = list.length + ' von ' + SM.posts.length + ' Posts';
+    if(!list.length){ body.innerHTML = '<p style="color:#888;font-size:13px">Keine Posts für diese Auswahl.</p>'; return; }
+    if(SM.view === 'list'){
+      body.innerHTML = `<div style="overflow-x:auto"><table class="sm-list"><thead><tr><th>Datum</th><th>Format</th><th>Säule</th><th>Thema</th><th>Status</th><th>Dateien</th><th></th></tr></thead><tbody>${list.map(p=>`<tr>
+        <td style="white-space:nowrap">${esc(fmtD(p.datum))}${p.uhrzeit?'<br><span style="color:#888">'+esc(p.uhrzeit)+'</span>':''}</td><td>${esc(p.format||'')}</td><td>${esc(p.saeule||'')}</td>
+        <td><b>${esc(p.thema||'')}</b>${p.hook?'<br><span style="color:#666">'+esc(p.hook)+'</span>':''}</td><td>${esc(p.status)}</td><td>${(p.assets||[]).length||'–'}</td>
+        <td style="white-space:nowrap">${p.caption?`<button class="sm-btn" onclick="smCopy('${esc(p.id)}',this)">📋</button>`:''} ${(p.assets||[]).length?`<button class="sm-btn" onclick="smZip('${esc(p.id)}',this)">ZIP</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+      return;
+    }
+    const groups = {};
+    list.forEach(p => { const k = p.datum ? isoWeek(new Date(p.datum+'T12:00:00')).join('-KW') : 'ohne Datum'; (groups[k] = groups[k] || []).push(p); });
+    body.innerHTML = Object.entries(groups).map(([k, ps]) => {
+      let label = k;
+      if(k !== 'ohne Datum'){ const ds = ps.map(p=>p.datum).sort(); label = 'KW ' + k.split('-KW')[1] + ' · ' + fmtD(ds[0]) + ' – ' + fmtD(ds[ds.length-1]); }
+      return `<div class="sm-week">${esc(label)}</div><div class="sm-grid">${ps.map(card).join('')}</div>`;
+    }).join('');
+  }
+  window.smRender = smRender;
+
+  const byId = id => SM.posts.find(p => p.id === id);
+  window.smCopy = async (id, btn) => {
+    const p = byId(id); if(!p) return;
+    let text = p.caption || '';
+    const tags = (p.hashtags||[]).join(' ');
+    if(tags && !text.includes(p.hashtags[0])) text += '\n.\n' + tags;
+    try { await navigator.clipboard.writeText(text); }
+    catch(e){ const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    const o = btn.textContent; btn.textContent = '✓ Kopiert'; setTimeout(() => btn.textContent = o, 1500);
+  };
+  window.smSetStatus = async (id, status) => {
+    const p = byId(id); if(!p) return;
+    try { const sb = await getSupabase(); const { error } = await sb.from('social_media_posts').update({ status, updated_at: new Date().toISOString() }).eq('id', id); if(error) throw error; p.status = status; smRender(); }
+    catch(e){ alert('Status konnte nicht gespeichert werden: ' + (e.message||e)); }
+  };
+  let _pv = null;
+  window.smPreview = async (id, i) => {
+    const p = byId(id); const a = (p.assets||[]).slice().sort((x,y)=>(x.order||0)-(y.order||0))[i]; if(!a) return;
+    const u = SM.urls[a.path]; const m = document.getElementById('sm-preview-media');
+    m.innerHTML = a.type==='video' ? `<video src="${esc(u)}" controls autoplay playsinline></video>` : `<img src="${esc(u)}" alt="${esc(a.filename)}">`;
+    const dl = document.getElementById('sm-preview-dl'); dl.textContent = '⬇ ' + a.filename; dl.href = '#';
+    dl.onclick = async ev => { ev.preventDefault(); smDownload(a); };
+    document.getElementById('sm-preview').style.display = 'flex';
+  };
+  window.smClosePreview = () => { document.getElementById('sm-preview').style.display = 'none'; document.getElementById('sm-preview-media').innerHTML = ''; };
+  async function smDownload(a){
+    try { const sb = await getSupabase(); const { data, error } = await sb.storage.from('social-assets').createSignedUrl(a.path, 600, { download: a.filename }); if(error) throw error; const l = document.createElement('a'); l.href = data.signedUrl; l.rel = 'noopener'; document.body.appendChild(l); l.click(); l.remove(); }
+    catch(e){ alert('Download fehlgeschlagen: ' + (e.message||e)); }
+  }
+  function loadJSZip(){
+    if(window.JSZip) return Promise.resolve(window.JSZip);
+    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; s.onload = () => res(window.JSZip); s.onerror = () => rej(new Error('JSZip konnte nicht geladen werden')); document.head.appendChild(s); });
+  }
+  window.smZip = async (id, btn) => {
+    const p = byId(id); if(!p) return; const o = btn.textContent;
+    try {
+      btn.disabled = true; btn.textContent = 'Packe …';
+      const JSZip = await loadJSZip(); const zip = new JSZip();
+      const assets = (p.assets||[]).slice().sort((x,y)=>(x.order||0)-(y.order||0));
+      for(const a of assets){ const r = await fetch(SM.urls[a.path]); if(!r.ok) throw new Error(a.filename + ': HTTP ' + r.status); zip.file(a.filename, await r.blob()); }
+      if(p.caption) zip.file('caption.txt', p.caption + ((p.hashtags||[]).length && !p.caption.includes(p.hashtags[0]) ? '\n.\n' + p.hashtags.join(' ') : ''));
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = (p.external_id || 'post') + '.zip'; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 5000);
+    } catch(e){ alert('ZIP fehlgeschlagen: ' + (e.message||e)); }
+    finally { btn.disabled = false; btn.textContent = o; }
+  };
+  try { if(typeof PAGE_TITLES === 'object') PAGE_TITLES.social = 'Social Media'; } catch(e){}
+})();
+</script>
+
 </body>
 </html>
