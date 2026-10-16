@@ -1793,7 +1793,8 @@ window._loginFallback = function() {
 <div class="page" id="page-social">
   <div class="sec-header"><div class="sec-title">📱 Social Media</div></div>
   <div class="sm-toolbar">
-    <button class="sm-btn on" id="sm-view-week" onclick="smSetView('week')">Woche</button>
+    <button class="sm-btn on" id="sm-view-month" onclick="smSetView('month')">Monat</button>
+    <button class="sm-btn" id="sm-view-week" onclick="smSetView('week')">Woche</button>
     <button class="sm-btn" id="sm-view-list" onclick="smSetView('list')">Liste</button>
     <select id="sm-f-saeule" onchange="smRender()"><option value="">Alle Säulen</option></select>
     <select id="sm-f-format" onchange="smRender()"><option value="">Alle Formate</option></select>
@@ -1802,6 +1803,7 @@ window._loginFallback = function() {
     <span id="sm-count" style="font-size:12px;color:#888"></span>
   </div>
   <div id="sm-body"><p style="color:#888;font-size:13px">Lade Redaktionsplan …</p></div>
+  <div id="sm-detail" onclick="if(event.target===this)smCloseDetail()"><div class="box"><button class="x" onclick="smCloseDetail()" aria-label="Schließen">✕</button><div id="sm-detail-body"></div></div></div>
 </div>
 <!-- NUTZERVERWALTUNG -->
 <div class="page" id="page-content">
@@ -10605,6 +10607,39 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #sm-preview img,#sm-preview video{max-width:95vw;max-height:80vh;border-radius:6px}
 #sm-preview .bar{display:flex;gap:8px}
 #sm-preview button,#sm-preview a{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:none;background:#fff;color:#111;cursor:pointer;text-decoration:none}
+#page-social .sm-cal-nav{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+#page-social .sm-cal-nav .m{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1px;min-width:190px}
+#page-social .sm-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+#page-social .sm-cal .wd{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;padding:2px 6px}
+#page-social .sm-day{background:#fff;border:1px solid #eee;border-radius:8px;min-height:112px;padding:5px;display:flex;flex-direction:column;gap:3px;min-width:0}
+#page-social .sm-day.out{background:#faf9f6;opacity:.55}
+#page-social .sm-day.today{border:2px solid var(--yellow);box-shadow:0 0 0 2px rgba(245,196,0,.15)}
+#page-social .sm-day .n{font-size:11px;font-weight:700;color:#666}
+#page-social .sm-day.today .n{background:var(--yellow);color:var(--ink);border-radius:10px;padding:0 6px;align-self:flex-start}
+#page-social .sm-chip{display:flex;gap:4px;align-items:center;font-size:11px;line-height:1.25;padding:3px 5px;border-radius:5px;background:#f6f4ef;border-left:4px solid #999;cursor:pointer;overflow:hidden;white-space:nowrap}
+#page-social .sm-chip:hover{background:var(--yellow-bg)}
+#page-social .sm-chip .t{overflow:hidden;text-overflow:ellipsis}
+#page-social .sm-more{font-size:10px;color:#7a6200;font-weight:700;cursor:pointer;padding:0 4px}
+#page-social .sm-dots{display:none;gap:3px;flex-wrap:wrap}
+#page-social .sm-dots i{width:7px;height:7px;border-radius:50%;display:block}
+#page-social .sm-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:#666;margin-top:10px}
+#page-social .sm-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+#page-social .sm-agenda{display:none;margin-top:14px}
+#page-social .sm-agenda h4{font-size:13px;margin:12px 0 6px}
+#page-social .sm-agenda .sm-chip{white-space:normal;padding:7px 8px;font-size:12px;margin-bottom:4px}
+#sm-detail{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:none;align-items:flex-start;justify-content:center;padding:40px 12px;overflow-y:auto}
+#sm-detail .box{width:min(560px,100%);position:relative}
+#sm-detail .x{position:absolute;top:8px;right:8px;z-index:2;border:none;background:var(--ink);color:#fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:15px}
+#sm-detail .sm-card{padding-top:40px}
+@media(max-width:760px){
+  #page-social .sm-cal{gap:2px}
+  #page-social .sm-day{min-height:52px;padding:3px;cursor:pointer}
+  #page-social .sm-day .sm-chip,#page-social .sm-day .sm-more{display:none}
+  #page-social .sm-dots{display:flex}
+  #page-social .sm-day.sel{outline:2px solid var(--ink)}
+  #page-social .sm-agenda{display:block}
+  #page-social .sm-cal-nav .m{min-width:0;font-size:20px;flex:1}
+}
 </style>
 <div id="sm-preview" onclick="if(event.target===this)smClosePreview()">
   <div id="sm-preview-media"></div>
@@ -10714,7 +10749,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
   const fill = (id, arr) => { const s = document.getElementById(id); if(s && s.options.length < 2) arr.forEach(v => s.add(new Option(v, v))); };
   fill('sm-f-saeule', SAEULEN); fill('sm-f-format', FORMATE); fill('sm-f-status', STATUS);
 
-  let SM = { posts: [], loaded: false, view: 'week', urls: {} };
+  let SM = { posts: [], loaded: false, view: 'month', urls: {}, month: null, sel: null };
   const wsId = () => (typeof _currentWorkspace !== 'undefined' && _currentWorkspace?.id) || (typeof _FALLBACK_WORKSPACE_ID !== 'undefined' ? _FALLBACK_WORKSPACE_ID : null);
 
   async function smLoad(force){
@@ -10736,7 +10771,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     } catch(e){ body.innerHTML = '<p style="color:#c00">Fehler beim Laden: ' + esc(e.message||e) + '</p>'; }
   }
   window.smLoad = smLoad;
-  window.smSetView = v => { SM.view = v; document.getElementById('sm-view-week').classList.toggle('on', v==='week'); document.getElementById('sm-view-list').classList.toggle('on', v==='list'); smRender(); };
+  window.smSetView = v => { SM.view = v; document.getElementById('sm-view-month').classList.toggle('on', v==='month'); document.getElementById('sm-view-week').classList.toggle('on', v==='week'); document.getElementById('sm-view-list').classList.toggle('on', v==='list'); smRender(); };
 
   function isoWeek(d){ const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const y = new Date(Date.UTC(t.getUTCFullYear(),0,1)); return [t.getUTCFullYear(), Math.ceil(((t-y)/86400000+1)/7)]; }
   const fmtD = s => s ? new Date(s+'T12:00:00').toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'2-digit' }) : 'ohne Datum';
@@ -10777,6 +10812,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     const body = document.getElementById('sm-body'); if(!body) return;
     const list = filtered();
     document.getElementById('sm-count').textContent = list.length + ' von ' + SM.posts.length + ' Posts';
+    if(SM.view === 'month'){ body.innerHTML = smMonth(list); return; }
     if(!list.length){ body.innerHTML = '<p style="color:#888;font-size:13px">Keine Posts für diese Auswahl.</p>'; return; }
     if(SM.view === 'list'){
       body.innerHTML = `<div style="overflow-x:auto"><table class="sm-list"><thead><tr><th>Datum</th><th>Format</th><th>Säule</th><th>Thema</th><th>Status</th><th>Dateien</th><th></th></tr></thead><tbody>${list.map(p=>`<tr>
@@ -10794,6 +10830,49 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     }).join('');
   }
   window.smRender = smRender;
+
+  // ── Monatskalender ──
+  const PCOL = {'Webdesign':'#f5c400','KI':'#8b5cf6','Performance-Marketing':'#ef4444','Ratgeber':'#3b82f6','Referenz':'#10b981','Kim & Allgäu':'#f97316'};
+  const pcol = s => PCOL[s] || '#999';
+  const FICON = {'Story':'◔ Story','Beitrag':'▣ Post','Karussell':'❐ Karussell','Reel':'▶ Reel'};
+  const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const WD = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const pad = n => String(n).padStart(2,'0');
+  const ymd = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  function chip(p){
+    const t = (p.thema||p.external_id||'').trim();
+    return `<div class="sm-chip" style="border-left-color:${pcol(p.saeule)}" title="${esc((p.format||'')+' · '+(p.saeule||'')+' · '+t+(p.uhrzeit?' · '+p.uhrzeit:''))}" onclick="event.stopPropagation();smOpenDetail('${esc(p.id)}')"><b>${esc(FICON[p.format]||p.format||'–')}</b><span class="t">${esc(t.length>40?t.slice(0,38)+'…':t)}</span></div>`;
+  }
+  function smMonth(list){
+    if(!SM.month){ const n = new Date(); SM.month = new Date(n.getFullYear(), n.getMonth(), 1); }
+    const y = SM.month.getFullYear(), m = SM.month.getMonth(), today = ymd(new Date());
+    const by = {}; list.forEach(p => { if(p.datum) (by[p.datum] = by[p.datum] || []).push(p); });
+    Object.values(by).forEach(a => a.sort((x,z)=>(x.uhrzeit||'').localeCompare(z.uhrzeit||'')));
+    const start = new Date(y, m, 1); start.setDate(1 - ((start.getDay()+6)%7));
+    const last = new Date(y, m+1, 0); const end = new Date(last); end.setDate(last.getDate() + (7 - ((last.getDay()+6)%7) - 1));
+    const MAX = 3; let cells = '';
+    for(const d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+      const k = ymd(d), ps = by[k] || [];
+      const cls = 'sm-day' + (d.getMonth()!==m?' out':'') + (k===today?' today':'') + (SM.sel===k?' sel':'');
+      cells += `<div class="${cls}" onclick="smSelDay('${k}')"><span class="n">${d.getDate()}</span>${ps.slice(0,MAX).map(chip).join('')}${ps.length>MAX?`<span class="sm-more" onclick="event.stopPropagation();smDayList('${k}')">+${ps.length-MAX} weitere</span>`:''}<div class="sm-dots">${ps.map(p=>`<i style="background:${pcol(p.saeule)}"></i>`).join('')}</div></div>`;
+    }
+    const inMonth = Object.keys(by).filter(k => k.startsWith(y+'-'+pad(m+1))).sort();
+    const cnt = inMonth.reduce((s,k)=>s+by[k].length,0);
+    const agKeys = SM.sel && SM.sel.startsWith(y+'-'+pad(m+1)) ? [SM.sel] : inMonth;
+    const agenda = agKeys.length ? agKeys.map(k => `<h4>${esc(fmtD(k))}</h4>${(by[k]||[]).map(chip).join('') || '<p style="color:#888;font-size:12px">Keine Posts.</p>'}`).join('') + (SM.sel?`<p><button class="sm-btn" onclick="smSelDay(null)">Ganzen Monat zeigen</button></p>`:'') : '<p style="color:#888;font-size:12px">Keine Posts in diesem Monat.</p>';
+    const noDate = list.filter(p=>!p.datum).length;
+    return `<div class="sm-cal-nav"><button class="sm-btn" onclick="smMonthNav(-1)" aria-label="Vorheriger Monat">‹</button><span class="m">${MONTHS[m]} ${y}</span><button class="sm-btn" onclick="smMonthNav(1)" aria-label="Nächster Monat">›</button><button class="sm-btn" onclick="smMonthNav(0)">Heute</button><span style="font-size:12px;color:#888">${cnt} Posts im Monat</span></div>
+      <div class="sm-cal">${WD.map(w=>`<div class="wd">${w}</div>`).join('')}${cells}</div>
+      <div class="sm-legend">${SAEULEN.map(s=>`<span><i style="background:${pcol(s)}"></i>${esc(s)}</span>`).join('')}</div>
+      ${noDate?`<p style="font-size:12px;color:#888">${noDate} Post(s) ohne Datum – in der Listenansicht sichtbar.</p>`:''}
+      <div class="sm-agenda">${agenda}</div>`;
+  }
+  window.smMonthNav = dir => { const n = new Date(); SM.month = dir===0 ? new Date(n.getFullYear(), n.getMonth(), 1) : new Date(SM.month.getFullYear(), SM.month.getMonth()+dir, 1); SM.sel = null; smRender(); };
+  window.smSelDay = k => { SM.sel = (k && SM.sel !== k) ? k : null; if(window.matchMedia('(max-width:760px)').matches || !k) smRender(); };
+  window.smDayList = k => { SM.sel = k; const ps = filtered().filter(p=>p.datum===k); document.getElementById('sm-detail-body').innerHTML = `<div class="sm-week" style="color:#fff;margin-top:0">${esc(fmtD(k))}</div>` + ps.map(card).join('<div style="height:10px"></div>'); document.getElementById('sm-detail').style.display='flex'; };
+  window.smOpenDetail = id => { const p = SM.posts.find(x=>x.id===id); if(!p) return; SM.detail = id; document.getElementById('sm-detail-body').innerHTML = card(p); document.getElementById('sm-detail').style.display='flex'; };
+  window.smCloseDetail = () => { SM.detail = null; document.getElementById('sm-detail').style.display='none'; document.getElementById('sm-detail-body').innerHTML=''; };
+  document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getElementById('sm-preview')?.style.display!=='flex' && document.getElementById('sm-detail')?.style.display==='flex') smCloseDetail(); });
 
   const byId = id => SM.posts.find(p => p.id === id);
   window.smCopy = async (id, btn) => {
