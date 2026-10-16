@@ -453,9 +453,6 @@ td.actions{text-align:right;white-space:nowrap;display:flex;gap:6px;justify-cont
   /* ── CONTACT DETAIL ── */
   #contact-detail-content > div{grid-template-columns:1fr !important}
 
-  /* ── WETTBEWERB ── */
-  #page-wettbewerb > div{grid-template-columns:1fr !important}
-
   /* ── ROI CHARTS ── */
   #page-roi > div:nth-child(2){grid-template-columns:1fr !important}
 
@@ -649,17 +646,9 @@ window._loginFallback = function() {
       <span class="nav-item-icon">📑</span>
       <span class="nav-item-label">Kampagnen-Report</span>
     </div>
-    <div class="nav-item" onclick="showPage('kundenradar')" data-page="kundenradar">
-      <span class="nav-item-icon">🗺</span>
-      <span class="nav-item-label">Kundenradar</span>
-    </div>
     <div class="nav-item" onclick="showPage('konfigurator')" data-page="konfigurator">
       <span class="nav-item-icon">🛒</span>
       <span class="nav-item-label">Angebots-Konfigurator</span>
-    </div>
-    <div class="nav-item" onclick="showPage('wettbewerb')" data-page="wettbewerb">
-      <span class="nav-item-icon">🔍</span>
-      <span class="nav-item-label">Wettbewerbs-Analyse</span>
     </div>
     <div class="nav-item" onclick="showPage('ausgaben')" data-page="ausgaben">
       <span class="nav-item-icon">💶</span>
@@ -1484,172 +1473,6 @@ window._loginFallback = function() {
   </div>
 </div>
 
-<!-- WETTBEWERBS-ANALYSE -->
-<div class="page" id="page-wettbewerb">
-  <div class="sec-header">
-    <div class="sec-title">Wettbewerbs-Analyse</div>
-    <button class="btn-ghost" onclick="wettbReset()">&#8634; Neu starten</button>
-    <button class="btn-primary" onclick="wettbPDF()">&#128196; PDF exportieren</button>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
-    <div class="dash-card">
-      <h3 style="margin-bottom:14px">&#127970; Unternehmen</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="field form-full"><label>Firmenname *</label><input id="wb-firma" placeholder="Müller Elektro GmbH" style="font-size:12px"></div>
-        <div class="field"><label>Branche</label><input id="wb-branche" placeholder="Elektriker" style="font-size:12px"></div>
-        <div class="field"><label>Ort / PLZ</label><input id="wb-ort" placeholder="Memmingen" style="font-size:12px"></div>
-        <div class="field"><label>Website</label><input id="wb-website" placeholder="muellerelektro.de" style="font-size:12px"></div>
-        <div class="field"><label>Google Business</label>
-          <select id="wb-gbusiness" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
-            <option value="0">&#10060; Nicht vorhanden</option><option value="1">&#9888; Vorhanden, nicht optimiert</option><option value="2">&#9989; Optimiert &amp; aktiv</option>
-          </select>
-        </div>
-        <div class="field"><label>Google-Bewertung</label>
-          <select id="wb-rating" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
-            <option value="0">Keine Bewertungen</option><option value="1">Unter 3,0 &#11088;</option><option value="2">3,0 &#8211; 3,9 &#11088;&#11088;&#11088;</option><option value="3">4,0 &#8211; 4,4 &#11088;&#11088;&#11088;&#11088;</option><option value="4">4,5 &#8211; 5,0 &#11088;&#11088;&#11088;&#11088;&#11088;</option>
-          </select>
-        </div>
-        <div class="field"><label>Anzahl Bewertungen</label><input id="wb-reviews" type="number" placeholder="12" style="font-size:12px"></div>
-        <div class="field"><label>Google Ads aktiv?</label>
-          <select id="wb-gads" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
-            <option value="0">&#10060; Nein</option><option value="1">&#9888; Sporadisch</option><option value="2">&#9989; Aktiv</option>
-          </select>
-        </div>
-        <div class="field"><label>Meta Ads aktiv?</label>
-          <select id="wb-mads" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
-            <option value="0">&#10060; Nein</option><option value="1">&#9888; Sporadisch</option><option value="2">&#9989; Aktiv</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="dash-card">
-      <h3 style="margin-bottom:14px">&#127760; Website-Check</h3>
-      <div style="display:flex;flex-direction:column;gap:8px" id="wb-website-checks">
-        <!-- filled by JS -->
-      </div>
-    </div>
-    <div class="dash-card">
-      <h3 style="margin-bottom:14px">&#128241; Social Media</h3>
-      <div style="display:flex;flex-direction:column;gap:8px" id="wb-social-checks">
-        <!-- filled by JS -->
-      </div>
-    </div>
-    <div class="dash-card" style="border:2px solid var(--yellow)">
-      <h3 style="margin-bottom:16px">&#127919; Score &amp; Potenzial</h3>
-      <div id="wb-score-area"><div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Fülle die Felder aus und klicke auf "Auswerten".</div></div>
-      <div class="field" style="margin-top:14px"><label>Notizen / Beobachtungen</label>
-        <textarea id="wb-notizen" rows="4" placeholder="Was fällt auf? Was ist die größte Schwäche?" style="font-size:12px;resize:vertical"></textarea>
-      </div>
-      <button class="btn-primary" style="width:100%;margin-top:12px" onclick="wettbCalc()">&#128202; Auswertung generieren</button>
-    </div>
-    <div class="dash-card" style="grid-column:1/-1;display:none" id="wb-empfehlungen"></div>
-  </div>
-</div>
-
-<!-- AUSGABEN & EUER -->
-<div class="page" id="page-ausgaben">
-  <div class="sec-header">
-    <div class="sec-title">Ausgaben & EÜR</div>
-    <div style="display:flex;gap:8px;margin-left:0">
-      <select id="ausgaben-jahr" onchange="renderAusgaben()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none"></select>
-      <select id="ausgaben-filter" onchange="renderAusgaben()" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
-        <option value="">Alle Kategorien</option>
-        <option value="software">Software & Tools</option>
-        <option value="werbung">Werbung & Marketing</option>
-        <option value="buero">Büro & Ausstattung</option>
-        <option value="fahrtkosten">Fahrtkosten</option>
-        <option value="weiterbildung">Weiterbildung</option>
-        <option value="telefon">Telefon & Internet</option>
-        <option value="steuer">Steuer & Beratung</option>
-        <option value="sonstiges">Sonstiges</option>
-      </select>
-    </div>
-    <button class="btn-ghost" onclick="ausgabenPDF()">📄 EÜR exportieren</button>
-    <button class="btn-primary" onclick="openAusgabeModal()">+ Ausgabe</button>
-  </div>
-
-  <!-- KPI Strip -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" id="ausgaben-kpis"></div>
-
-  <!-- Jahresübersicht Chart -->
-  <div class="dash-card" style="margin-bottom:14px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h3>📊 Monatsübersicht</h3>
-      <div style="display:flex;gap:12px;font-size:10px">
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--green);display:inline-block"></span>Einnahmen</span>
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);display:inline-block"></span>Ausgaben</span>
-      </div>
-    </div>
-    <div id="ausgaben-chart" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:120px"></div>
-    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:4px">
-      <div style="font-size:9px;color:var(--muted);text-align:center">Jan</div><div style="font-size:9px;color:var(--muted);text-align:center">Feb</div><div style="font-size:9px;color:var(--muted);text-align:center">Mrz</div><div style="font-size:9px;color:var(--muted);text-align:center">Apr</div><div style="font-size:9px;color:var(--muted);text-align:center">Mai</div><div style="font-size:9px;color:var(--muted);text-align:center">Jun</div><div style="font-size:9px;color:var(--muted);text-align:center">Jul</div><div style="font-size:9px;color:var(--muted);text-align:center">Aug</div><div style="font-size:9px;color:var(--muted);text-align:center">Sep</div><div style="font-size:9px;color:var(--muted);text-align:center">Okt</div><div style="font-size:9px;color:var(--muted);text-align:center">Nov</div><div style="font-size:9px;color:var(--muted);text-align:center">Dez</div>
-    </div>
-  </div>
-
-  <!-- Tabelle -->
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th>Datum</th><th>Beschreibung</th><th>Kategorie</th><th>Betrag (netto)</th><th>MwSt</th><th>Betrag (brutto)</th><th>Beleg</th><th></th>
-      </tr></thead>
-      <tbody id="ausgaben-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- KUNDENRADAR -->
-<div class="page" id="page-kundenradar">
-  <div class="sec-header">
-    <div class="sec-title">Kundenradar</div>
-  </div>
-
-  <!-- Search bar -->
-  <div class="dash-card" style="margin-bottom:14px">
-    <h3 style="margin-bottom:14px">🔍 Neue Betriebe finden</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr 120px auto;gap:10px;align-items:end">
-      <div class="field" style="margin:0"><label>Branche / Suchbegriff</label>
-        <input id="radar-query" placeholder="z.B. Elektriker, Zahnarzt, Bäcker" style="font-size:12px" onkeydown="if(event.key==='Enter')radarSearch()">
-      </div>
-      <div class="field" style="margin:0"><label>Ort / PLZ</label>
-        <input id="radar-location" placeholder="Memmingen" value="Memmingen" style="font-size:12px" onkeydown="if(event.key==='Enter')radarSearch()">
-      </div>
-      <div class="field" style="margin:0"><label>Radius (km)</label>
-        <select id="radar-radius" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
-          <option value="5000">5 km</option>
-          <option value="10000">10 km</option>
-          <option value="20000" selected>20 km</option>
-          <option value="30000">30 km</option>
-          <option value="50000">50 km</option>
-        </select>
-      </div>
-      <button class="btn-primary" onclick="radarSearch()" id="radar-btn" style="height:38px;white-space:nowrap">🔍 Suchen</button>
-    </div>
-
-    <!-- API Key hint -->
-    <!-- API Key / Worker URL -->
-    <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px">
-      <div style="display:flex;gap:8px;align-items:center">
-        <div style="flex:1">
-          <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Cloudflare Worker URL</label>
-          <input id="radar-api-key" placeholder="https://places-proxy.NAME.workers.dev" style="width:100%;font-family:'DM Mono',monospace;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
-        </div>
-        <button class="btn-yellow" onclick="saveRadarKey()" style="height:32px;white-space:nowrap;margin-top:18px">Speichern</button>
-      </div>
-      <div id="radar-api-hint" style="margin-top:10px;display:none">
-        <strong style="display:block;margin-bottom:6px;color:var(--yellow2)">Noch nicht eingerichtet – Anleitung:</strong>
-        <ol style="padding-left:16px;line-height:2;color:var(--ink2)">
-          <li>Gehe zu <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--blue)">workers.cloudflare.com</a> → neuen Worker erstellen</li>
-          <li>Code aus <strong>places-worker.js</strong> einfügen + API Key in Zeile 3 eintragen</li>
-          <li>Deploy → Worker-URL oben eintragen → Speichern</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-
-  <!-- Results -->
-  <div id="radar-results"></div>
-</div>
-
 <!-- ROI TRACKER -->
 <div class="page" id="page-roi">
   <div class="sec-header">
@@ -1981,17 +1804,6 @@ window._loginFallback = function() {
       <button class="btn-ghost" onclick="closeModal('workspace-settings-modal')">Abbrechen</button>
       <button class="btn-yellow" onclick="saveWorkspaceSettings()">💾 Speichern & Anwenden</button>
     </div>
-  </div>
-</div>
-
-<!-- RADAR DETAIL MODAL -->
-<div class="overlay" id="radar-detail-modal">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-header">
-      <h2>🔍 Betrieb Details</h2>
-      <button class="modal-close" onclick="closeModal('radar-detail-modal')">✕</button>
-    </div>
-    <div class="modal-body" id="radar-detail-content"></div>
   </div>
 </div>
 
@@ -3065,8 +2877,8 @@ const PAGE_TITLES = {
   angebote:'Angebote', rechnungen:'Rechnungen', kanban:'Aufgaben',
   ziele:'Ziele & MRR', settings:'Einstellungen', 'contact-detail':'Kontakt',
   rechner:'Performance-Rechner', konfigurator:'Angebots-Konfigurator',
-  wettbewerb:'Wettbewerbs-Analyse', ausgaben:'Ausgaben & EÜR',
-  kundenradar:'Kundenradar', roi:'ROI-Tracker', reporting:'Kampagnen-Report',
+  ausgaben:'Ausgaben & EÜR',
+  roi:'ROI-Tracker', reporting:'Kampagnen-Report',
   users:'Nutzerverwaltung', content:'Content Planer'
 };
 
@@ -3100,9 +2912,7 @@ function showPage(id) {
   if(id==='ziele') renderZiele();
   if(id==='rechner') rechnerCalc();
   if(id==='konfigurator') initKonfigurator();
-  if(id==='wettbewerb') initWettbewerb();
   if(id==='ausgaben') initAusgaben();
-  if(id==='kundenradar') initKundenradar();
   if(id==='roi') initROI();
   if(id==='reporting') initReporting();
   if(id==='users') initUsersPage();
@@ -6899,155 +6709,6 @@ function konfPDF() {
 }
 
 // ==================================================
-// WETTBEWERBS-ANALYSE
-// ==================================================
-const WB_WEBSITE_CHECKS = ['Mobilfreundlich (responsive)','HTTPS / SSL vorhanden','Ladezeit unter 3 Sekunden','Klares Angebot auf Startseite','Kontaktformular / CTA vorhanden','Impressum & Datenschutz','Blog / aktuelle Inhalte','Google Maps eingebunden'];
-const WB_SOCIAL = [{id:'instagram',label:'Instagram',icon:'Insta'},{id:'facebook',label:'Facebook',icon:'FB'},{id:'linkedin',label:'LinkedIn',icon:'LI'},{id:'tiktok',label:'TikTok',icon:'TT'},{id:'youtube',label:'YouTube',icon:'YT'}];
-let _wbCheckStates = {};
-
-function initWettbewerb() {
-  const wc = document.getElementById('wb-website-checks');
-  if(wc) {
-    wc.innerHTML = WB_WEBSITE_CHECKS.map((l,i) => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg);border-radius:4px;margin-bottom:4px">'
-      + '<span style="font-size:12px;font-weight:500">'+l+'</span>'
-      + '<div style="display:flex;gap:6px">'
-      + '<button data-k="wc'+i+'" data-v="2" onclick="wbSetCheck(this,2)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#9989;</button>'
-      + '<button data-k="wc'+i+'" data-v="1" onclick="wbSetCheck(this,1)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#9888;</button>'
-      + '<button data-k="wc'+i+'" data-v="0" onclick="wbSetCheck(this,0)" style="width:28px;height:28px;border-radius:4px;border:1.5px solid var(--border);background:var(--paper);cursor:pointer;font-size:13px">&#10060;</button>'
-      + '</div></div>'
-    ).join('');
-  }
-  const sc = document.getElementById('wb-social-checks');
-  if(sc) {
-    sc.innerHTML = WB_SOCIAL.map(s => '<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg);border-radius:4px;margin-bottom:4px">'
-      + '<span style="font-size:12px;font-weight:700;width:28px;flex-shrink:0">'+s.icon+'</span>'
-      + '<span style="font-size:12px;font-weight:500;flex:1">'+s.label+'</span>'
-      + '<select id="wb-sm-'+s.id+'" style="font-family:Sora,sans-serif;font-size:11px;border:1.5px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--paper);color:var(--ink);outline:none">'
-      + '<option value="0">Nicht vorhanden</option><option value="1">Inaktiv</option><option value="2">Aktiv</option></select></div>'
-    ).join('');
-  }
-}
-
-function wbSetCheck(btn, val) {
-  const key = btn.dataset.k;
-  _wbCheckStates[key] = val;
-  const container = btn.closest('div');
-  container.querySelectorAll('button[data-k]').forEach(b => {
-    const bval = parseInt(b.dataset.v);
-    const active = bval === val;
-    b.style.background = active ? (val===2?'var(--green-bg)':val===1?'var(--orange-bg)':'var(--red-bg)') : 'var(--paper)';
-    b.style.borderColor = active ? (val===2?'var(--green)':val===1?'var(--orange)':'var(--red)') : 'var(--border)';
-  });
-}
-
-function wettbCalc() {
-  const firma = document.getElementById('wb-firma').value.trim();
-  if(!firma) { alert('Bitte Firmenname eingeben.'); return; }
-  const gbusiness=parseInt(document.getElementById('wb-gbusiness').value||0);
-  const rating=parseInt(document.getElementById('wb-rating').value||0);
-  const gads=parseInt(document.getElementById('wb-gads').value||0);
-  const mads=parseInt(document.getElementById('wb-mads').value||0);
-  const reviews=parseInt(document.getElementById('wb-reviews').value||0);
-  const wcVals=Object.values(_wbCheckStates);
-  const wcScore=wcVals.reduce((s,v)=>s+v,0);
-  const wcMax=WB_WEBSITE_CHECKS.length*2;
-  const smScore=WB_SOCIAL.reduce((s,p)=>s+parseInt(document.getElementById('wb-sm-'+p.id)?.value||0),0);
-  const smMax=WB_SOCIAL.length*2;
-  const mktScore=gads+mads+(reviews>=10?2:reviews>=3?1:0);
-  const gScore=gbusiness+rating+(reviews>=20?2:reviews>=5?1:0);
-  const totalScore=wcScore+smScore+mktScore+gScore;
-  const totalMax=wcMax+smMax+6+6;
-  const pct=Math.round(totalScore/totalMax*100);
-  const level=pct>=75?{label:'Stark aufgestellt',color:'var(--green)',icon:''}
-    :pct>=50?{label:'Ausbaufaehig',color:'var(--orange)',icon:''}
-    :pct>=25?{label:'Grosses Potenzial',color:'var(--yellow2)',icon:''}
-    :{label:'Kritischer Nachholbedarf',color:'var(--red)',icon:''};
-  const potenzial=100-pct;
-  const scoreEl=document.getElementById('wb-score-area');
-  if(scoreEl) {
-    scoreEl.innerHTML='<div style="text-align:center;margin-bottom:16px">'
-      +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:60px;color:'+level.color+';line-height:1">'+pct+'%</div>'
-      +'<div style="font-size:13px;font-weight:700;color:'+level.color+'">'+level.label+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-top:4px">Online-Sichtbarkeit von '+firma+'</div></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
-      +[['Website',wcScore,wcMax,'var(--blue)'],['Google',gScore,6,'var(--green)'],['Social',smScore,smMax,'#8040b0'],['Marketing',mktScore,6,'var(--orange)']].map(([l,s,m,c])=>
-        '<div style="background:var(--bg);border-radius:4px;padding:10px;text-align:center">'
-        +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">'+l+'</div>'
-        +'<div style="font-size:18px;font-weight:700;color:'+c+'">'+Math.round(s/m*100)+'%</div>'
-        +'<div style="height:4px;background:var(--border);border-radius:2px;margin-top:6px"><div style="height:100%;background:'+c+';border-radius:2px;width:'+Math.round(s/m*100)+'%"></div></div></div>'
-      ).join('')+'</div>'
-      +'<div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px;padding:10px 12px;font-size:12px">'
-      +'<strong style="display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow2);margin-bottom:4px">Potenzial-Score</strong>'
-      +'<span style="font-size:20px;font-weight:800;color:var(--yellow2)">'+potenzial+'%</span>'
-      +'<span style="font-size:11px;color:var(--muted);margin-left:6px">Verbesserungspotenzial</span></div>';
-  }
-  const recs=[];
-  if(gbusiness<2) recs.push({p:'HOCH',t:'Google Business Profil optimieren',d:'Vollstaendiges Profil erhoht Sichtbarkeit massiv.'});
-  if(rating<3) recs.push({p:'HOCH',t:'Google Bewertungen aufbauen',d:'Unter 4,0 Sterne: bis zu 40% weniger Klicks.'});
-  if(gads===0) recs.push({p:'HOCH',t:'Google Ads schalten',d:'Wettbewerber ist nicht aktiv – perfekte Chance.'});
-  if(mads===0) recs.push({p:'MITTEL',t:'Meta Ads starten',d:'Lokale Bekanntheit und Remarketing.'});
-  if(wcScore<wcMax*0.6) recs.push({p:'HOCH',t:'Website-Optimierung',d:'Website hat deutliche Schwaechen. Relaunch empfohlen.'});
-  if(smScore<smMax*0.4) recs.push({p:'MITTEL',t:'Social Media aufbauen',d:'Kaum Praesenz vorhanden.'});
-  const empfEl=document.getElementById('wb-empfehlungen');
-  if(empfEl && recs.length) {
-    empfEl.style.display='block';
-    empfEl.innerHTML='<h3 style="margin-bottom:16px">Handlungsempfehlungen fuer '+firma+'</h3>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">'
-      +recs.map(r=>'<div style="background:var(--bg);border-radius:6px;padding:12px 14px;border-left:3px solid '+(r.p==='HOCH'?'var(--red)':'var(--orange)')+'"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-        +'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;background:'+(r.p==='HOCH'?'var(--red-bg)':'var(--orange-bg)')+';color:'+(r.p==='HOCH'?'var(--red)':'var(--orange)')+';padding:2px 7px;border-radius:10px">'+r.p+'</span>'
-        +'<span style="font-size:12px;font-weight:700">'+r.t+'</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'+r.d+'</div></div>'
-      ).join('')+'</div>';
-  }
-  window._wbLastData={firma,pct,level,recs};
-}
-
-function wettbReset() {
-  ['wb-firma','wb-branche','wb-ort','wb-website','wb-reviews','wb-notizen'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  ['wb-gbusiness','wb-rating','wb-gads','wb-mads'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
-  _wbCheckStates={};
-  initWettbewerb();
-  const s=document.getElementById('wb-score-area');
-  if(s) s.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Felder ausfullen und Auswerten klicken.</div>';
-  const e=document.getElementById('wb-empfehlungen');
-  if(e){e.style.display='none';e.innerHTML='';}
-}
-
-function wettbPDF() {
-  wettbCalc();
-  const firma=document.getElementById('wb-firma').value||'Analyse';
-  const branche=document.getElementById('wb-branche').value||'';
-  const ort=document.getElementById('wb-ort').value||'';
-  const website=document.getElementById('wb-website').value||'';
-  const notizen=document.getElementById('wb-notizen').value||'';
-  const datum=new Date().toLocaleDateString('de-DE');
-  const s=DB.settings;
-  const data=window._wbLastData;
-  if(!data){alert('Bitte zuerst auswerten.');return;}
-  const logoHtml=s.logo?'<img src="'+s.logo+'" style="height:40px;object-fit:contain;margin-bottom:6px;display:block">':'';
-  const scoreHtml=document.getElementById('wb-score-area')?.innerHTML||'';
-  const empfHtml=document.getElementById('wb-empfehlungen')?.innerHTML||'';
-  const html='<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Wettbewerbs-Analyse '+firma+'</title>'
-    +'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,Arial,sans-serif;color:#111;background:#fff;padding:14mm 16mm;font-size:12px}'
-    +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f5c400}'
-    +'@media print{body{padding:10mm};@page{margin:0;size:A4}}</style></head><body>'
-    +'<div class="header"><div>'+logoHtml+'<div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:3px">VIRAL <span style="color:#f5c400">OUTLAWS</span></div>'
-    +'<div style="font-size:11px;color:#666">'+(s.name||'Viral Outlaws')+'</div></div>'
-    +'<div style="text-align:right"><div style="font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:2px">WETTBEWERBS-ANALYSE</div>'
-    +'<div style="font-size:13px;color:#666;margin-top:4px"><strong>'+firma+'</strong></div>'
-    +'<div style="font-size:11px;color:#888">'+(branche?branche+' | ':'')+ort+' | '+datum+'</div></div></div>'
-    +scoreHtml
-    +(notizen?'<div style="margin:16px 0;background:#f8f7f4;border-left:3px solid #f5c400;padding:12px 14px;font-size:12px"><strong>Notizen: </strong>'+notizen+'</div>':'')
-    +(empfHtml?'<div style="margin-top:16px">'+empfHtml+'</div>':'')
-    +'<div style="margin-top:28px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#aaa;text-align:center">Erstellt von Viral Outlaws | crm.viraloutlaws.de | '+datum+'</div>'
-    +'<script>window.onload=()=>{window.print();}<\/script></body></html>';
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  window.open(url,'_blank');
-  setTimeout(()=>URL.revokeObjectURL(url),60000);
-}
-
-// ==================================================
 // LEISTUNGSVERWALTUNG (Einstellungen)
 // ==================================================
 
@@ -7744,408 +7405,6 @@ function ausgabenPDF() {
 
   const blob = new Blob([html], {type:'text/html;charset=utf-8'});
   window.open(URL.createObjectURL(blob),'_blank');
-}
-
-// ==================================================
-// KUNDENRADAR
-// ==================================================
-function initKundenradar() {
-  const apiKey = DB.settings?.placesApiKey || '';
-  const keyInput = document.getElementById('radar-api-key');
-  const hintEl = document.getElementById('radar-api-hint');
-  if(keyInput) keyInput.value = apiKey;
-  if(hintEl) hintEl.style.display = apiKey ? 'none' : 'block';
-  if(!apiKey) {
-    document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Bitte zuerst die Worker-URL eintragen und speichern.</div>';
-  } else {
-    document.getElementById('radar-results').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Branche und Ort eingeben und auf Suchen klicken.</div>';
-  }
-}
-
-function saveRadarKey() {
-  const key = document.getElementById('radar-api-key').value.trim();
-  if(!key) { alert('Bitte API-Key eingeben.'); return; }
-  DB.settings.placesApiKey = key;
-  save();
-  document.getElementById('radar-api-hint').style.display = 'none';
-  alert('API-Key gespeichert!');
-}
-
-async function radarSearch() {
-  const query = document.getElementById('radar-query').value.trim();
-  const location = document.getElementById('radar-location').value.trim();
-  const radius = document.getElementById('radar-radius').value;
-  const workerUrl = DB.settings?.placesApiKey || '';
-
-  if(!query) { alert('Bitte Branche / Suchbegriff eingeben.'); return; }
-  if(!location) { alert('Bitte Ort oder PLZ eingeben.'); return; }
-  if(!workerUrl) {
-    document.getElementById('radar-api-hint').style.display = 'block';
-    alert('Bitte zuerst die Worker-URL eintragen.');
-    return;
-  }
-
-  const btn = document.getElementById('radar-btn');
-  btn.textContent = '⏳ Suche...';
-  btn.disabled = true;
-  const resultsEl = document.getElementById('radar-results');
-  resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Suche läuft...</div>';
-
-  try {
-    const searchQuery = `${query} in ${location}`;
-    // Use Cloudflare Worker proxy – avoids CORS issues
-    const base = workerUrl.replace(/\/$/, '');
-    const url = `${base}?action=textsearch&query=${encodeURIComponent(searchQuery)}&radius=${radius}&language=de`;
-
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-
-    if(data.status === 'REQUEST_DENIED') {
-      throw new Error('API-Key abgelehnt: ' + (data.error_message||'Bitte API-Key im Worker prüfen'));
-    }
-    if(data.status === 'ZERO_RESULTS' || !data.results?.length) {
-      resultsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Keine Ergebnisse gefunden.<br>Versuche einen anderen Suchbegriff.</div>';
-      return;
-    }
-    if(data.error) throw new Error(data.error);
-    if(data.status && data.status !== 'OK') throw new Error('Google: ' + data.status);
-
-    renderRadarResults(data.results, query, location);
-  } catch(err) {
-    resultsEl.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:6px;padding:14px 16px;color:var(--red);font-size:12px;line-height:1.8">
-      <strong>Fehler:</strong> ${err.message}
-    </div>`;
-  } finally {
-    btn.textContent = '🔍 Suchen';
-    btn.disabled = false;
-  }
-}
-
-function renderRadarResults(places, query, location) {
-  const resultsEl = document.getElementById('radar-results');
-  const existingFirmen = DB.contacts.map(c => c.firma.toLowerCase());
-  const newPlaces = places.filter(p => !existingFirmen.includes(p.name.toLowerCase()));
-
-  resultsEl.innerHTML = `
-    <!-- Toolbar -->
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding:12px 16px;background:var(--paper);border:1px solid var(--border);border-radius:6px">
-      <div style="font-size:12px;color:var(--muted)">
-        <strong>${places.length}</strong> Ergebnisse · <strong>${newPlaces.length}</strong> noch nicht im CRM
-        <span id="radar-scan-status" style="margin-left:10px;color:var(--yellow2);font-weight:600"></span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
-          <input type="checkbox" id="radar-select-all" onchange="radarToggleAll(this.checked)" style="width:15px;height:15px;accent-color:var(--yellow)">
-          Alle auswählen
-        </label>
-        <button class="btn-yellow" onclick="radarImportSelected()" id="radar-import-btn" style="display:none">
-          + Ausgewählte ins CRM (<span id="radar-selected-count">0</span>)
-        </button>
-      </div>
-    </div>
-    <!-- Grid -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px" id="radar-grid">
-    ${places.map((p,i) => {
-      const alreadyIn = existingFirmen.includes(p.name.toLowerCase());
-      const stars = p.rating ? '★'.repeat(Math.round(p.rating)) + ' ' + p.rating : '';
-      const encoded = encodeURIComponent(JSON.stringify({name:p.name, addr:p.vicinity||'', placeId:p.place_id}));
-      return `<div style="background:var(--paper);border:1.5px solid ${alreadyIn?'var(--green)':'var(--border)'};border-radius:6px;padding:14px;position:relative;transition:all .15s" id="radar-card-${i}">
-        ${!alreadyIn ? `<div style="position:absolute;top:10px;right:10px" onclick="event.stopPropagation()">
-          <input type="checkbox" class="radar-check" data-encoded="${encoded}" data-idx="${i}"
-            onchange="radarUpdateSelection()"
-            style="width:18px;height:18px;accent-color:var(--yellow);cursor:pointer">
-        </div>` : ''}
-        <div onclick="radarShowDetail('${encoded}')" style="cursor:pointer">
-          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding-right:${!alreadyIn?'24px':'0'}">
-            <div style="font-size:13px;font-weight:700;color:var(--ink);flex:1">${p.name}</div>
-            ${alreadyIn?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700;flex-shrink:0">✓ CRM</span>':''}
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">📍 ${p.vicinity||'–'}</div>
-          ${stars?`<div style="font-size:11px;color:var(--yellow2);margin-bottom:4px">${stars} <span style="color:var(--muted)">(${p.user_ratings_total||0})</span></div>`:''}
-          <div id="radar-email-${i}" style="font-size:11px;margin-top:6px;min-height:18px">
-            <span style="color:var(--muted);font-size:10px">✉ wird gesucht...</span>
-          </div>
-          <div style="margin-top:8px;font-size:10px;color:var(--blue);font-weight:600">Details ansehen →</div>
-        </div>
-      </div>`;
-    }).join('')}
-    </div>`;
-
-  // Store places for email scanning
-  window._radarPlaces = places;
-
-  // Start auto email scan in background
-  autoScanEmails(places);
-}
-
-async function autoScanEmails(places) {
-  const workerUrl = (DB.settings?.placesApiKey||'').replace(/\/$/, '');
-  if(!workerUrl) return;
-
-  const statusEl = document.getElementById('radar-scan-status');
-  let scanned = 0;
-  let found = 0;
-  const total = places.filter(p => p.website || p.vicinity).length;
-
-  // First get details for all places to get websites
-  for(let i = 0; i < places.length; i++) {
-    const p = places[i];
-    const emailEl = document.getElementById(`radar-email-${i}`);
-    if(!emailEl) continue;
-
-    try {
-      // Get place details to find website
-      let website = p.website || '';
-      if(!website && p.place_id) {
-        const detailResp = await fetch(`${workerUrl}?action=details&place_id=${p.place_id}`, {
-          signal: AbortSignal.timeout(8000)
-        });
-        const detailData = await detailResp.json();
-        website = detailData.result?.website || '';
-        // Store phone too
-        if(detailData.result?.formatted_phone_number) p.tel = detailData.result.formatted_phone_number;
-        // Store address components for PLZ/Ort
-        if(detailData.result?.address_components) p.address_components = detailData.result.address_components;
-      }
-
-      if(website) {
-        // Scan for email
-        if(statusEl) statusEl.textContent = `✉ Scanne ${scanned+1}/${places.length}...`;
-        const scanResp = await fetch(`${workerUrl}?action=scan_email&website=${encodeURIComponent(website)}`, {
-          signal: AbortSignal.timeout(10000)
-        });
-        const scanData = await scanResp.json();
-
-        if(scanData.ok && scanData.email) {
-          found++;
-          // Store email on place object
-          p.email = scanData.email;
-          p.website = website;
-          // Update card
-          if(emailEl) emailEl.innerHTML = `<a href="mailto:${scanData.email}" onclick="event.stopPropagation()" style="color:var(--green);font-size:11px;font-weight:600;text-decoration:none">✉ ${scanData.email}</a>`;
-          // Update encoded data in checkbox
-          const cb = document.querySelector(`.radar-check[data-idx="${i}"]`);
-          if(cb) {
-            const existingData = JSON.parse(decodeURIComponent(cb.dataset.encoded));
-            existingData.email = scanData.email;
-            existingData.web = website;
-            cb.dataset.encoded = encodeURIComponent(JSON.stringify(existingData));
-          }
-        } else {
-          if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ keine E-Mail gefunden</span>`;
-        }
-      } else {
-        if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ keine Website</span>`;
-      }
-    } catch(e) {
-      if(emailEl) emailEl.innerHTML = `<span style="color:var(--muted);font-size:10px">✉ –</span>`;
-    }
-
-    scanned++;
-    if(statusEl) statusEl.textContent = scanned < places.length
-      ? `✉ Scanne ${scanned}/${places.length}...`
-      : `✅ ${found} E-Mails gefunden`;
-  }
-}
-
-function radarToggleAll(checked) {
-  document.querySelectorAll('.radar-check').forEach(cb => {
-    cb.checked = checked;
-    const card = document.getElementById('radar-card-'+cb.dataset.idx);
-    if(card) card.style.borderColor = checked ? 'var(--yellow)' : 'var(--border)';
-  });
-  radarUpdateSelection();
-}
-
-function radarUpdateSelection() {
-  const checked = document.querySelectorAll('.radar-check:checked');
-  const btn = document.getElementById('radar-import-btn');
-  const count = document.getElementById('radar-selected-count');
-  const allCb = document.getElementById('radar-select-all');
-  const total = document.querySelectorAll('.radar-check').length;
-
-  if(count) count.textContent = checked.length;
-  if(btn) btn.style.display = checked.length > 0 ? '' : 'none';
-  if(allCb) allCb.checked = checked.length === total && total > 0;
-
-  // Update card borders
-  document.querySelectorAll('.radar-check').forEach(cb => {
-    const card = document.getElementById('radar-card-'+cb.dataset.idx);
-    if(card && !card.style.borderColor.includes('green')) {
-      card.style.borderColor = cb.checked ? 'var(--yellow)' : 'var(--border)';
-      card.style.background = cb.checked ? 'var(--yellow-bg)' : 'var(--paper)';
-    }
-  });
-}
-
-function radarImportSelected() {
-  const checked = document.querySelectorAll('.radar-check:checked');
-  if(!checked.length) return;
-
-  let imported = 0;
-  checked.forEach(cb => {
-    try {
-      const data = JSON.parse(decodeURIComponent(cb.dataset.encoded));
-      const plzMatch = (data.addr||'').match(/\d{5}/);
-      const contact = {
-        id: uid(), firma: data.name,
-        person: '', email: data.email||'', tel: data.tel||'',
-        web: (data.web||'').replace(/^https?:\/\//,''),
-        plz: data.plz || (plzMatch ? plzMatch[0] : ''),
-        ort: data.ort||'',
-        status: 'offen', branche: '', notes: '',
-        notizen: [], dokumente: [], checks: [],
-        updatedAt: new Date().toISOString()
-      };
-      DB.contacts.unshift(contact);
-      sbSaveContact(contact);
-      imported++;
-    } catch(e) { console.warn('Import error:', e); }
-  });
-
-  save();
-  addActivity(`${imported} Betriebe aus Kundenradar ins CRM importiert`, 'blue');
-  alert(`✅ ${imported} Betriebe ins CRM aufgenommen!\n\nDu findest sie unter Kontakte mit Status "Offen".`);
-
-  // Uncheck all and refresh
-  document.querySelectorAll('.radar-check').forEach(cb => { cb.checked = false; });
-  document.getElementById('radar-select-all').checked = false;
-  radarUpdateSelection();
-
-  // Mark imported cards as already in CRM
-  checked.forEach(cb => {
-    const card = document.getElementById('radar-card-'+cb.dataset.idx);
-    if(card) {
-      card.style.borderColor = 'var(--green)';
-      card.style.background = 'var(--paper)';
-      card.style.opacity = '0.7';
-    }
-  });
-}
-
-async function radarShowDetail(encoded) {
-  const data = JSON.parse(decodeURIComponent(encoded));
-  const workerUrl = (DB.settings?.placesApiKey||'').replace(/\/$/, '');
-  const modal = document.getElementById('radar-detail-modal');
-  const content = document.getElementById('radar-detail-content');
-  if(!modal || !content) return;
-
-  content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">⏳ Lade Details...</div>';
-  modal.classList.add('open');
-
-  try {
-    let details = {};
-    if(workerUrl && data.placeId) {
-      const resp = await fetch(`${workerUrl}?action=details&place_id=${data.placeId}`, {signal:AbortSignal.timeout(10000)});
-      const json = await resp.json();
-      if(json.result) details = json.result;
-    }
-
-    const name = details.name || data.name;
-    const addr = details.formatted_address || data.addr || '';
-    const tel  = details.formatted_phone_number || details.international_phone_number || '';
-    const web  = details.website || '';
-    const rating = details.rating || '';
-    const reviews = details.user_ratings_total || '';
-    const alreadyIn = DB.contacts.some(c => c.firma.toLowerCase() === name.toLowerCase());
-
-    // Extract PLZ and Ort from address_components
-    let plz = '', ort = '';
-    if(details.address_components) {
-      details.address_components.forEach(comp => {
-        if(comp.types.includes('postal_code')) plz = comp.long_name;
-        if(comp.types.includes('locality')) ort = comp.long_name;
-      });
-    }
-    // Fallback: extract from formatted_address
-    if(!plz) { const m = addr.match(/\b(\d{5})\b/); if(m) plz = m[1]; }
-    if(!ort && plz) { const parts = addr.split(plz); if(parts[1]) ort = parts[1].replace(/,/g,'').trim().split(',')[0].trim(); }
-
-    const encoded2 = encodeURIComponent(JSON.stringify({name, addr, placeId:data.placeId, tel, web, plz, ort}));
-
-    // Email search links
-    const emailSearchGoogle = `https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' E-Mail Kontakt')}`;
-    const emailSearchWeb = web ? `https://${web.replace(/^https?:\/\//,'')}/kontakt` : '';
-
-    content.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">
-        <div style="width:48px;height:48px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--yellow);flex-shrink:0">${name.slice(0,2).toUpperCase()}</div>
-        <div style="flex:1">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">${name}</div>
-          ${rating?`<div style="font-size:12px;color:var(--yellow2);margin-top:2px">${'★'.repeat(Math.round(rating))} ${rating} <span style="color:var(--muted)">(${reviews} Bewertungen)</span></div>`:''}
-        </div>
-        ${alreadyIn?'<span style="font-size:11px;background:var(--green-bg);color:var(--green);padding:4px 10px;border-radius:10px;font-weight:700">✓ Im CRM</span>':''}
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
-        ${addr?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">📍</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Adresse</div>
-          <div style="font-size:12px">${addr}</div>
-          ${plz||ort?`<div style="font-size:11px;color:var(--muted);margin-top:2px">PLZ: <strong>${plz}</strong> · Ort: <strong>${ort}</strong></div>`:''}
-          </div>
-        </div>`:''}
-
-        ${tel?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">📞</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Telefon</div>
-          <a href="tel:${tel}" style="font-size:13px;color:var(--blue);font-weight:600;text-decoration:none">${tel}</a></div>
-        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">📞 Keine Telefonnummer gefunden</div>'}
-
-        ${web?`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <span style="font-size:16px">🌐</span>
-          <div><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Website</div>
-          <a href="${web}" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:none;word-break:break-all">${web.replace(/^https?:\/\//,'')}</a></div>
-        </div>`:'<div style="padding:10px 12px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">🌐 Keine Website gefunden</div>'}
-
-        <!-- Email Search -->
-        <div id="email-scanner-box" style="padding:10px 12px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:6px">
-          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">✉ E-Mail automatisch suchen</div>
-          ${web ? `
-          <button class="btn-yellow" onclick="scanEmailFromWebsite('${web.replace(/^https?:\/\//,'')}','email-scanner-box')" style="width:100%;margin-bottom:6px">
-            🔍 Impressum & Website scannen
-          </button>` : ''}
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' E-Mail Kontakt')}" target="_blank" class="btn-ghost btn-sm">🔍 Google</a>
-            ${web?`<a href="https://${web.replace(/^https?:\/\//,'')}/impressum" target="_blank" class="btn-ghost btn-sm">📄 Impressum</a>`:''}
-            ${web?`<a href="https://${web.replace(/^https?:\/\//,'')}/kontakt" target="_blank" class="btn-ghost btn-sm">📬 Kontakt</a>`:''}
-          </div>
-          <div id="email-scan-result" style="margin-top:8px"></div>
-        </div>
-
-        <!-- Quick links -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;background:var(--bg);border-radius:6px">
-          <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;width:100%;margin-bottom:4px">Schnelllinks</div>
-          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort)}" target="_blank" class="btn-ghost btn-sm">🔍 Google</a>
-          <a href="https://www.google.de/search?q=${encodeURIComponent(name+' '+ort+' Facebook')}" target="_blank" class="btn-ghost btn-sm">👥 Facebook</a>
-          <a href="https://www.instagram.com/explore/search/?q=${encodeURIComponent(name)}" target="_blank" class="btn-ghost btn-sm">📸 Instagram</a>
-          ${web?`<a href="https://pagespeed.web.dev/report?url=${encodeURIComponent(web)}" target="_blank" class="btn-ghost btn-sm">⚡ PageSpeed</a>`:''}
-        </div>
-      </div>
-
-      ${!alreadyIn?`<button class="btn-primary" style="width:100%" onclick="radarAddContact('${encoded2}');closeModal('radar-detail-modal')">+ Jetzt ins CRM aufnehmen</button>`
-      :`<div style="text-align:center;padding:10px;background:var(--green-bg);border-radius:6px;font-size:12px;color:var(--green);font-weight:600">✓ Bereits als Kontakt im CRM vorhanden</div>`}`;
-  } catch(e) {
-    content.innerHTML = `<div style="color:var(--red);font-size:12px">Fehler beim Laden: ${e.message}</div>`;
-  }
-}
-
-
-function radarAddContact(encodedData) {
-  try {
-    const data = JSON.parse(decodeURIComponent(encodedData));
-    openContactModal();
-    setTimeout(() => {
-      document.getElementById('c-firma').value = data.name || '';
-      if(data.plz) document.getElementById('c-plz').value = data.plz;
-      if(data.ort) { const ortEl = document.getElementById('c-ort'); if(ortEl) ortEl.value = data.ort; }
-      if(data.tel) document.getElementById('c-tel').value = data.tel;
-      if(data.web) document.getElementById('c-web').value = data.web.replace(/^https?:\/\//,'');
-      document.getElementById('c-status').value = 'offen';
-    }, 100);
-    showPage('contacts');
-  } catch(e) { alert('Fehler beim Hinzufügen.'); }
 }
 
 // ==================================================
@@ -9484,7 +8743,7 @@ async function loadFromDrive() {
 const DEFAULT_FEATURES = {
   kontakte:true, angebote:true, rechnungen:true, kalender:true,
   aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true,
-  kundenradar:true, konfigurator:true, wettbewerb:true, email:true, content:true
+  konfigurator:true, email:true, content:true
 };
 
 function getFeatures() {
@@ -9506,9 +8765,7 @@ function applyFeatureFlags() {
     ausgaben:    ['ausgaben'],
     roi:         ['roi'],
     reporting:   ['reporting'],
-    kundenradar: ['kundenradar'],
     konfigurator:['konfigurator'],
-    wettbewerb:  ['wettbewerb'],
     email:       [], // handled separately (email compose button)
   };
 
@@ -9558,8 +8815,8 @@ async function openFeatureManager() {
     kontakte:'👥 Kontakte', angebote:'📋 Angebote', rechnungen:'🧾 Rechnungen',
     kalender:'📅 Kalender', aufgaben:'🗂 Aufgaben', ziele:'🎯 Ziele & MRR',
     ausgaben:'💶 Ausgaben & EÜR', roi:'📈 ROI-Tracker', reporting:'📑 Kampagnen-Report',
-    kundenradar:'🗺 Kundenradar', konfigurator:'🛒 Angebots-Konfigurator',
-    wettbewerb:'🔍 Wettbewerbs-Analyse', email:'✉ E-Mail Versand'
+    konfigurator:'🛒 Angebots-Konfigurator',
+    email:'✉ E-Mail Versand'
   };
 
   const modal = document.createElement('div');
@@ -9631,9 +8888,9 @@ function updateFMItem(key) {
 }
 
 const FM_PAKETE = {
-  starter:      { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:false, ausgaben:false, roi:false, reporting:false, kundenradar:false, konfigurator:false, wettbewerb:false, email:false },
-  professional: { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, kundenradar:false, konfigurator:true, wettbewerb:true, email:true },
-  full:         { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, kundenradar:true, konfigurator:true, wettbewerb:true, email:true }
+  starter:      { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:false, ausgaben:false, roi:false, reporting:false, konfigurator:false, email:false },
+  professional: { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, konfigurator:true, email:true },
+  full:         { kontakte:true, angebote:true, rechnungen:true, kalender:true, aufgaben:true, ziele:true, ausgaben:true, roi:true, reporting:true, konfigurator:true, email:true }
 };
 
 function applyFMPaket(paket) {
@@ -9996,74 +9253,6 @@ async function removeUserGlobal(userId, name) {
     showAdminView('users');
     addActivity('Nutzer entfernt: ' + name, 'red');
   } catch(e) { alert('Fehler: ' + e.message); }
-}
-
-// ==================================================
-// EMAIL SCANNER
-// ==================================================
-async function scanEmailFromWebsite(website, boxId) {
-  const workerUrl = (DB.settings?.placesApiKey||'').replace(/\/$/, '');
-  if(!workerUrl) {
-    alert('Bitte zuerst den Places API Worker in den Einstellungen eintragen.');
-    return;
-  }
-
-  const resultEl = document.getElementById('email-scan-result');
-  const btn = document.querySelector(`#${boxId} button`);
-  if(btn) { btn.disabled = true; btn.textContent = '⏳ Scanne Website...'; }
-  if(resultEl) resultEl.innerHTML = '<div style="font-size:11px;color:var(--muted)">⏳ Scanne Impressum und Kontaktseite...</div>';
-
-  try {
-    const resp = await fetch(`${workerUrl}?action=scan_email&website=${encodeURIComponent(website)}`, {
-      signal: AbortSignal.timeout(15000)
-    });
-    const data = await resp.json();
-
-    if(data.ok && data.email) {
-      if(resultEl) resultEl.innerHTML = `
-        <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:6px;padding:10px 12px">
-          <div style="font-size:10px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">✅ E-Mail gefunden</div>
-          <div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:8px">${data.email}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn-yellow btn-sm" onclick="useScannedEmail('${data.email}')">+ Ins CRM übernehmen</button>
-            <a href="mailto:${data.email}" class="btn-ghost btn-sm">✉ Direkt schreiben</a>
-            <button class="btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${data.email}').then(()=>alert('Kopiert!'))">📋 Kopieren</button>
-          </div>
-          ${data.allEmails?.length > 1 ? `<div style="margin-top:8px;font-size:10px;color:var(--muted)">Weitere gefunden: ${data.allEmails.slice(1).join(', ')}</div>` : ''}
-          <div style="margin-top:6px;font-size:9px;color:var(--muted)">Quelle: ${data.source}</div>
-        </div>`;
-    } else {
-      if(resultEl) resultEl.innerHTML = `
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
-          <div style="font-size:11px;color:var(--muted)">⚠ Keine E-Mail automatisch gefunden.<br>Bitte manuell im Impressum nachschauen.</div>
-        </div>`;
-    }
-  } catch(e) {
-    if(resultEl) resultEl.innerHTML = `<div style="font-size:11px;color:var(--red)">Fehler: ${e.message}</div>`;
-  } finally {
-    if(btn) { btn.disabled = false; btn.textContent = '🔍 Impressum & Website scannen'; }
-  }
-}
-
-// Übernimmt die gefundene E-Mail in den aktuell offenen Kontakt
-function useScannedEmail(email) {
-  // If contact detail is open, update it
-  if(currentDetailContactId) {
-    const c = DB.contacts.find(x => x.id === currentDetailContactId);
-    if(c) {
-      c.email = email;
-      sbSaveContact(c);
-      save();
-      renderContactDetail(currentDetailContactId);
-      closeModal('radar-detail-modal');
-      alert('✅ E-Mail "' + email + '" wurde beim Kontakt gespeichert!');
-      return;
-    }
-  }
-  // Otherwise copy to clipboard
-  navigator.clipboard.writeText(email).then(() => {
-    alert('E-Mail "' + email + '" in Zwischenablage kopiert!\nBeim nächsten Kontakt einfügen.');
-  });
 }
 
 // ==================================================
