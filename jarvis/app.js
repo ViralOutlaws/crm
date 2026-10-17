@@ -93,7 +93,7 @@ function setMode(m, sub) {
 
 function tickClock() {
   const d = new Date();
-  $("#clock").innerHTML = `${d.toLocaleDateString("de-DE", { weekday: "long" })}<b>${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</b>`;
+  $("#clock").innerHTML = `<span class="clock-day">${d.toLocaleDateString("de-DE", { weekday: "long" })}</span><b>${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</b>`;
 }
 
 function renderSide(data) {
@@ -464,7 +464,23 @@ $("#launcher").addEventListener("click", (e) => {
   toggleMenu(false);
   openArea(id);
 });
+function setNav(open) {
+  const header = document.querySelector("#app header");
+  if (!header) return;
+  header.classList.toggle("nav-open", open);
+  $("#navBtn")?.setAttribute("aria-expanded", open ? "true" : "false");
+}
+$("#navBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setNav(!document.querySelector("#app header").classList.contains("nav-open"));
+});
+addEventListener("click", (e) => {
+  if (e.target.closest("#navBtn") || e.target.closest("#navMenu")) return;
+  setNav(false);
+});
+addEventListener("keydown", (e) => { if (e.key === "Escape") setNav(false); });
 $("#areasBtn").onclick = () => {
+  setNav(false);
   const open = toggleMenu();
   if (open) say("Welchen Bereich soll ich öffnen?");
 };
