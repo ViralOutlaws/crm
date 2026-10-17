@@ -1,5 +1,6 @@
 // Reine Planung/Validierung für Jarvis-Schreibwerkzeuge. Kein Netzwerk, keine Secrets.
 // Jeder Plan wird serverseitig erneut geprüft, bevor etwas geschrieben wird.
+import { revalidateCrm } from "./schema.ts";
 
 export const BOTS: Record<string, { name: string; role: string; letter: string }> = {
   webby: { name: "Webby", role: "Websites", letter: "W" },
@@ -55,6 +56,10 @@ export const WRITE_TOOLS = new Set([
   "create_roi",
   "set_aufgaben_status",
   "delete_aufgaben",
+  "crm_insert",
+  "crm_update",
+  "crm_delete",
+  "crm_undo",
 ]);
 
 export function isWriteTool(name: string): boolean {
@@ -145,12 +150,14 @@ Du erfindest niemals Zahlen, Namen, Beträge, Termine, Status oder Zitate. Nur w
 Wenn ein Werkzeug nichts liefert, ein Feld leer ist oder eine Abfrage scheitert, sagst du ausdrücklich, dass die Daten fehlen.
 Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Bestätigung vor und antworten mit awaiting_confirmation.
 Solange das so ist, sagst du nicht, etwas sei angelegt, gespeichert oder erledigt. Bitte um Bestätigung.
-Du versendest keine E-Mails, keine Mahnungen und keine Angebote. Du markierst Rechnungen nicht als offen, versendet oder bezahlt.
-Aufgaben erledigst oder öffnest du mit set_aufgaben_status (done oder todo), eine oder mehrere, immer über die Bestätigungskarte.
-Aufgaben löschst du nur mit delete_aufgaben. Die Karte nennt Anzahl und Titel. Eine einzelne genannte Aufgabe braucht das Feld confirm nicht. Mehrere oder alle löschst du nur, wenn Kim das ausdrücklich sagt, und dann setzt du confirm auf true. Ohne dieses Werkzeug behauptest du nie, etwas sei gelöscht.
-Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer löschst du nicht.
+Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand.
+Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, immer mit Bestätigungskarte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
+crm_delete zeigt Anzahl und Titel, die Karte ist rot. Eine einzelne Zeile braucht confirm nicht. Mehrere oder alle nur, wenn Kim das ausdrücklich sagt, dann confirm true. crm_update und crm_insert zeigen bei mehreren Zeilen Anzahl und Vorschau. all braucht ebenfalls confirm true.
+Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bezahlt, ueberfaellig. Angebot: entwurf, gesendet, akzeptiert, abgelehnt. Aufgabe: todo, doing, done. Ein Bot steht als Zeile „Zuständig: Name (Rolle).“ in der Beschreibung, ein Termin-Ende als „Bis: HH:MM“ in der Notiz.
+„Rückgängig“ ruft crm_undo auf. Das macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig.
+Die älteren Werkzeuge create_angebot und create_rechnung legen weiter nur Entwürfe an. Für einen anderen Status nimm crm_insert oder crm_update. set_aufgaben_status und delete_aufgaben bleiben für Aufgaben gültig.
 Wenn eine Aktion nicht unterstützt ist oder ein Werkzeug einen Fehler meldet, sagst du das in einem klaren Satz. Du öffnest dann nicht ersatzweise ein Panel.
-Angebote und Rechnungen legst du nur als Entwurf an. Social-Media-Posts nur als Entwurf; im CRM heißt dieser Status „Idee“.
+Fehlt der Status, bleiben Angebote und Rechnungen ein Entwurf und Social-Posts eine Idee. Sagt Kim einen anderen CRM-Status, übernimmst du ihn mit crm_insert oder crm_update.
 Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy (Finanzen) oder Developy (Software) werden Aufgaben im CRM, erst nach Kims Bestätigung.
 Beträge aus dem CRM sind netto, sofern das Werkzeug nicht ausdrücklich brutto nennt.
 Öffne passende Werkzeuge, damit das HUD ein Panel zeigen kann.
@@ -158,7 +165,7 @@ Jeden CRM-Bereich öffnest du mit open_area: contacts, pipeline, angebote, rechn
 Auf Briefing, Guten Morgen oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen, begrüße Kim, füge keine Zahlen hinzu.
 Auf „Was ist der Stand bei …“ nutzt du customer_file. Sprich das Feld summary in zwei Sätzen, ohne neue Zahlen.
 Eine Gesprächsnotiz, ein Recap oder „merk dir das Telefonat“ geht an meeting_recap: eine einzige Bestätigung. Die Notiz wird angehängt und überschreibt nichts, dazu die vereinbarten Aufgaben und eine Wiedervorlage.
-Retainer legst du nur nach Bestätigung an, standardmäßig pausiert, außer Kim sagt ausdrücklich aktiv. Ausgaben und ROI-Zeilen ebenfalls nur nach Bestätigung. Pakete und Zielwerte änderst du nicht.
+Retainer legst du über crm_insert an, standardmäßig pausiert, außer Kim sagt ausdrücklich aktiv. Paketpreise stehen in der Tabelle pakete, Zielwerte in ziele. Die Einstellungen mit dem Leistungskatalog fasst du nicht an.
 upsert_contact.notes ersetzt die internen Notizen. Zum Anhängen neue_notiz oder meeting_recap nutzen.`;
 
 type TextBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
@@ -535,6 +542,59 @@ const EXTRA_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    name: "crm_insert",
+    description: "Legt eine oder mehrere CRM-Zeilen an (rows, höchstens 30). table: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. Kein workspace_id, keine settings, keine Geheimnisse, keine Datei-Uploads. Aufgaben: bot webby|marky|saley|cashy|developy. Termine: bis als HH:MM. Status nur die CRM-Werte, Rechnung gesendet heißt offen-rg. Erst die Bestätigungskarte.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table", "rows"],
+      properties: {
+        table: { type: "string" },
+        rows: { type: "array", items: { type: "object" } },
+      },
+    },
+  },
+  {
+    name: "crm_update",
+    description: "Ändert bestehende Zeilen. id, ids, query (Titel, Firma, Betreff) oder all. all nur mit confirm true, und nur wenn Kim alle meint. patch enthält nur die Felder, die sich ändern. Mehrere Treffer: Karte mit Anzahl und Vorschau. Kein Versand, kein Upload, keine settings.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table", "patch"],
+      properties: {
+        table: { type: "string" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string" },
+        all: { type: "boolean" },
+        confirm: { type: "boolean" },
+        patch: { type: "object" },
+      },
+    },
+  },
+  {
+    name: "crm_delete",
+    description: "Löscht Zeilen endgültig. Die Karte ist rot und nennt Anzahl und Titel. confirm muss true sein, wenn es mehrere oder alle sind und Kim das ausdrücklich gesagt hat. Eine einzelne ID braucht confirm nicht. Nicht für settings oder Geheimnisse.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table"],
+      properties: {
+        table: { type: "string" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string" },
+        all: { type: "boolean" },
+        confirm: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "crm_undo",
+    description: "Macht die letzte protokollierte Jarvis-Änderung rückgängig, nach einer Bestätigungskarte. Nur wenn Kim Rückgängig sagt. Ohne Argumente.",
+    input_schema: { type: "object", additionalProperties: false, properties: {} },
+  },
 ];
 
 export function anthropicTools(): ToolDef[] {
@@ -623,6 +683,11 @@ export function revalidate(input: unknown, ctx: Ctx): Plan {
       return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "status", status: normAufgabeStatus(data.status) }, true);
     case "aufgabe_delete":
       return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "delete" }, true);
+    case "crm_insert":
+    case "crm_update":
+    case "crm_delete":
+    case "crm_undo":
+      return revalidateCrm(kind, data, ctx.today);
     case "social_insert":
     case "social_update": {
       const copy = { ...data };

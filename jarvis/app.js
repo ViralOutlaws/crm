@@ -497,6 +497,21 @@ function engine(raw) {
   if (create && has(q, "rechnung")) return { say: "Rechnung als Entwurf. Sie gilt nicht als offene Forderung und wird nicht versendet.", cardPlan: { kind: "rechnung", tool: "create_rechnung", summary: "Rechnung anlegen", bot: "cashy", lines: ["Kunde: Musterfirma GmbH", "Status: Entwurf"], data: { status: "entwurf" } } };
   if (create && has(q, "retainer")) return { say: "Retainer bleibt pausiert, bis du ihn ausdrücklich aktivierst.", cardPlan: { kind: "retainer", tool: "create_retainer", summary: "Retainer anlegen", lines: ["Paket: Social Betreuung", "Betrag: 850,00 € / Monat", "Status: pausiert"], data: { status: "pausiert" } } };
   if (has(q, "marky", "reel", "posts erstellen")) return { say: "Aufgabe an Marky. Sie landet erst nach deiner Bestätigung im Kanban.", bot: ["marky", "Posts erstellen"], cardPlan: { kind: "aufgabe", tool: "route_to_bot", bot: "marky", summary: "Aufgabe an Marky", lines: ["Aufgabe: 3 Reels schneiden", "Zuständig: Marky", "Status: Offen"], data: { status: "todo" } } };
+  if (has(q, "e-mail", "email", " mail", "mahnung")) return { say: "E-Mails und Mahnungen verschicke ich nicht. Einen Status kann ich nach deiner Bestätigung setzen, verschickt wird dabei nichts." };
+  if (has(q, "hochlad", "upload")) return { say: "Dateien und Social-Uploads lade ich nicht hoch." };
+  if (has(q, "rückgängig", "rueckgaengig")) {
+    return {
+      say: "Ich setze die letzte Änderung zurück, sobald du bestätigst. Im Demo wird nichts verändert.",
+      cardPlan: { kind: "crm_undo", tool: "crm_undo", summary: "1 Aufgabe auf den vorherigen Stand setzen", lines: ["Anzahl: 1", "Setzt die Felder auf den Stand vor der letzten Änderung.", "Angebot nachfassen"], data: { count: 1 } },
+    };
+  }
+  if ((has(q, "bezahlt") || has(q, "gesendet")) && has(q, "rechnung")) {
+    const paid = has(q, "bezahlt");
+    return {
+      say: "Ich setze den Rechnungsstatus, sobald du bestätigst. Verschickt wird dabei nichts.",
+      cardPlan: { kind: "crm_update", tool: "crm_update", summary: "Rechnung ändern: Beispielrechnung", lines: ["Anzahl: 1", paid ? "status: bezahlt" : "status: offen-rg", "Beispielrechnung"], data: { status: paid ? "bezahlt" : "offen-rg" } },
+    };
+  }
   if (has(q, "lösch", "loesch")) {
     if (has(q, "aufgabe", "kanban")) {
       return {
@@ -511,7 +526,13 @@ function engine(raw) {
         },
       };
     }
-    return { say: "Löschen geht hier nur bei Aufgaben. Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer lösche ich nicht." };
+    if (has(q, "einstellung", "geheim", "passwort")) return { say: "Einstellungen und Geheimnisse ändere ich nicht." };
+    const what = has(q, "rechnung") ? "Rechnung" : has(q, "angebot") ? "Angebot" : has(q, "kontakt") ? "Kontakt" : has(q, "termin", "kalender") ? "Termin" : has(q, "retainer") ? "Retainer" : has(q, "wiedervorlage") ? "Wiedervorlage" : has(q, "ausgabe") ? "Ausgabe" : has(q, "social", "post") ? "Social-Post" : has(q, "paket") ? "Paket" : has(q, "ziel") ? "Ziel" : has(q, "roi") ? "ROI" : "";
+    if (!what) return { say: "Sag mir, welchen CRM-Eintrag ich löschen soll. Einstellungen und Geheimnisse ändere ich nicht." };
+    return {
+      say: `Ich lösche ${what === "ROI" ? "die ROI-Zeile" : "den Eintrag"} nur nach deiner Bestätigung. Die Karte nennt Anzahl und Titel. Im Demo wird nichts gelöscht.`,
+      cardPlan: { kind: "crm_delete", tool: "crm_delete", danger: true, summary: `${what} löschen: Beispiel`, lines: ["Anzahl: 1", "Endgültig löschen.", "Beispiel"], data: { count: 1 } },
+    };
   }
   if (has(q, "aufgabe", "kanban") && has(q, "erledig", "abhake", "abhaken", "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt")) {
     const reopen = has(q, "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt");

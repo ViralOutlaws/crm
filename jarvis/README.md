@@ -55,20 +55,21 @@ Erlaubt sind `https://crm.viraloutlaws.de` sowie `http://localhost` und `http://
 
 `supabase/migrations/20261017190000_jarvis_actions.sql` legt das Protokoll `jarvis_actions` an. `supabase/migrations/20261017220000_jarvis_actions_delete.sql` erweitert den Check um `action = delete`, damit gelöschte Aufgaben mit der kompletten Zeile im Protokoll stehen. Beide nicht automatisch gegen die Live-Datenbank ausführen. Ohne die zweite Migration schlägt nur der Logeintrag fehl, die Löschung bleibt, und die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion erhalten und die Antwort enthält ebenfalls `log_warning`.
 
-Aufgaben erledigen, wieder öffnen und löschen stecken in `jarvis-chat`. Dafür die Funktion neu deployen: `supabase functions deploy jarvis-chat` (ohne `--no-verify-jwt`).
+Anlegen, Ändern, Löschen und Rückgängig stecken in `jarvis-chat`. Dafür die Funktion neu deployen: `supabase functions deploy jarvis-chat` (ohne `--no-verify-jwt`). Ohne diesen Redeploy kennt die laufende Funktion die Werkzeuge nicht.
 
 Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migration nötig. Diese Spalten sind freier Text ohne CHECK.
 
 ## Bestätigung
 
-Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Aufgaben löschen zeigt dieselbe Karte in Rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Aufgaben löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. Eine einzelne Aufgabe braucht dieses Extra nicht, die Karte aber schon. E-Mail-Versand und die Status Bezahlt oder Versendet gibt es nicht. Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer werden nicht gelöscht. Was nicht geht, sagt Jarvis in einem Satz, statt ersatzweise ein Panel zu öffnen.
+Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Mehrere Zeilen zeigen Anzahl und eine Vorschau. Löschen ist rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Zeilen löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. „Rückgängig“ macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig. Dafür liegt bei jedem Löschen und Ändern der vorherige Zeilenstand in `jarvis_actions`. E-Mails, Mahnungen und Datei-Uploads gibt es nicht. `settings`, `integration_secrets`, Profile und Workspaces fasst Jarvis nicht an. Was nicht geht, sagt er in einem Satz, statt ersatzweise ein Panel zu öffnen.
 
 ## Status
 
-- Aufgaben, die Jarvis anlegt, haben immer `todo`, damit sie im Kanban sichtbar sind. Erledigen setzt `done`, Wieder-Öffnen setzt `todo`. Löschen entfernt die Zeile und schreibt sie vollständig nach `jarvis_actions.summary.row`.
-- Eine Löschkarte nennt die Anzahl und bis zu zwölf Titel. Höchstens 300 Aufgaben pro Aufruf. Die bestätigten IDs werden gelöscht oder geändert, nicht eine neue „alle“-Suche.
-- Angebote und Rechnungen entstehen als `entwurf`. Das CRM kennt diesen Status in Dropdown, Filter und Badge. Speichern im CRM lässt den Entwurf stehen. Entwürfe zählen nicht als gesendete Angebote und nicht als offene oder überfällige Forderungen.
-- Social-Entwürfe sind Status `Idee`. `Veröffentlicht` ändert Jarvis nicht. Format und Säule nutzen dieselben Werte wie der Redaktionsplan.
+- `crm_insert`, `crm_update` und `crm_delete` schreiben die Tabellen, die das CRM in `index.html` speichert: Kontakte, Angebote, Rechnungen, Retainer, Pakete, Aufgaben, Wiedervorlagen, Termine, Social-Posts, Ausgaben, ROI und Ziele. `workspace_id` setzt der Server. Unbekannte Spalten werden abgelehnt.
+- Aufgaben, die Jarvis anlegt, haben ohne andere Angabe `todo`, damit sie im Kanban sichtbar sind. Erledigen setzt `done`, Wieder-Öffnen setzt `todo`, `doing` bleibt gültig. Ein Bot steht weiter als `Zuständig: Marky (Marketing / Social).` in der Beschreibung.
+- Eine Löschkarte nennt die Anzahl und bis zu zwölf Titel. Höchstens 300 Zeilen pro Aufruf, höchstens 30 neue Zeilen. Die bestätigten IDs werden gelöscht oder geändert, nicht eine neue „alle“-Suche. Gelöschte und geänderte Zeilen stehen komplett im Protokoll (`summary.before`), damit Rückgängig sie zurücksetzen kann.
+- Angebote kennen `entwurf`, `gesendet`, `akzeptiert`, `abgelehnt`. Rechnungen kennen `entwurf`, `offen-rg`, `bezahlt`, `ueberfaellig`. Sagt Kim bei einer Rechnung „gesendet“ oder „offen“, speichert Jarvis `offen-rg`. Fehlt der Status, bleibt es ein Entwurf. Entwürfe zählen nicht als gesendete Angebote und nicht als offene Forderungen.
+- Social-Status sind `Idee`, `Geplant`, `Content fertig`, `Erstellt`, `Veröffentlicht`. Ohne Angabe bleibt es `Idee`. Assets und Dateien schreibt Jarvis nicht. Format und Säule nutzen dieselben Werte wie der Redaktionsplan.
 - Bot-Aufträge sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte. Im CRM steht dasselbe im Feld „Zugewiesen an Bot“ und auf der Karte.
 - Termine haben keine Ende-Spalte. Steht ein Ende fest, liegt es in `notiz` als eigene Zeile `Bis: HH:MM`. Das CRM zeigt sie im Feld „Bis“.
 - Retainer legt Jarvis standardmäßig als `pausiert` an. `aktiv` nur, wenn das ausdrücklich in der Karte steht. Pausierte Retainer zählen nicht im MRR.
@@ -89,4 +90,4 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Folgepunkte
 
-Löschen außerhalb von Aufgaben, Rechnungen als bezahlt oder versendet markieren, Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Ziele und Paketpreise bearbeiten, Retainer-Rechnungen erzeugen, Posts veröffentlichen, Nutzer und Auswertungen. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest die Tabelle trotzdem.
+Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Retainer-Rechnungen erzeugen, Posts bei den Netzwerken veröffentlichen, Nutzer und Auswertungen. Zielwerte und Paketpreise im lokalen Einstellungsobjekt bleiben unangetastet; Jarvis schreibt die Tabellen `ziele` und `pakete`. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest und schreibt die Tabelle trotzdem.

@@ -9,6 +9,7 @@ import {
   systemBlocks,
   weekRange,
 } from "./logic.ts";
+import { parseCrmSelector, planCrmChange, planCrmInsert, planCrmUndo, resolveTable } from "./schema.ts";
 
 const ctx = { today: "2026-10-17" };
 
@@ -18,7 +19,7 @@ Deno.test("Systemprompt ist deutsch, cached und spricht als wir", () => {
     throw new Error("system cache_control fehlt");
   }
   const text = blocks[0].text;
-  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee", "delete_aufgaben", "set_aufgaben_status", "nicht ersatzweise ein Panel"]) {
+  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee", "delete_aufgaben", "set_aufgaben_status", "crm_delete", "crm_undo", "nicht ersatzweise ein Panel", "Bezahlt"]) {
     if (!text.includes(part)) throw new Error(`Prompt ohne ${part}`);
   }
   if (!blocks[1].text.includes("Kim")) throw new Error("Name fehlt");
@@ -224,6 +225,93 @@ Deno.test("Aufgaben löschen und erledigen laufen über die Karte", () => {
     throw new Error(JSON.stringify(statusAgain));
   }
   if ((statusAgain.data.ids as string[]).length !== 1) throw new Error("frozen filter");
+});
+
+Deno.test("CRM-Werkzeuge prüfen Spalten, Status und Löschbestätigung", () => {
+  const a = "11111111-1111-4111-8111-111111111111";
+  const b = "22222222-2222-4222-8222-222222222222";
+  let blocked = false;
+  try {
+    resolveTable("integration_secrets");
+  } catch (e) {
+    blocked = e instanceof Error && e.message.includes("Geheimnisse");
+  }
+  if (!blocked) throw new Error("secrets");
+
+  let ws = false;
+  try {
+    planCrmInsert({ table: "contacts", rows: [{ firma: "Beispiel", workspace_id: "x" }] }, ctx.today);
+  } catch (e) {
+    ws = e instanceof Error && e.message.includes("workspace_id");
+  }
+  if (!ws) throw new Error("workspace");
+
+  const paid = planCrmInsert({ table: "rechnungen", rows: [{ betreff: "Retainer", status: "bezahlt" }] }, ctx.today);
+  const paidRow = (paid.data.rows as Array<Record<string, unknown>>)[0];
+  if (paidRow.status !== "bezahlt" || paid.action !== "insert") throw new Error(JSON.stringify(paidRow));
+  const sent = planCrmInsert({ table: "rechnungen", rows: [{ betreff: "Retainer", status: "gesendet" }] }, ctx.today);
+  if ((sent.data.rows as Array<Record<string, unknown>>)[0].status !== "offen-rg") throw new Error("gesendet");
+
+  const task = planCrmInsert({ table: "aufgaben", rows: [{ titel: "Reel schneiden", bot: "marky" }] }, ctx.today);
+  const taskRow = (task.data.rows as Array<Record<string, unknown>>)[0];
+  if (taskRow.status !== "todo" || taskRow.bot !== "marky") throw new Error(JSON.stringify(taskRow));
+
+  const event = planCrmInsert({ table: "kal_events", rows: [{ titel: "Call", datum: "2026-10-20", bis: "9:30" }] }, ctx.today);
+  if ((event.data.rows as Array<Record<string, unknown>>)[0].bis !== "09:30") throw new Error("bis");
+
+  let assets = false;
+  try {
+    planCrmInsert({ table: "social_media_posts", rows: [{ thema: "Hook", assets: [] }] }, ctx.today);
+  } catch (e) {
+    assets = e instanceof Error && e.message.includes("Dateien");
+  }
+  if (!assets) throw new Error("assets");
+
+  let all = false;
+  try {
+    parseCrmSelector({ table: "contacts", all: true }, "delete");
+  } catch (e) {
+    all = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!all) throw new Error("all");
+
+  const del = planCrmChange(parseCrmSelector({ table: "contacts", all: true, confirm: true }, "delete"), [
+    { id: a, titel: "Beispiel GmbH" },
+    { id: b, titel: "Café" },
+  ]);
+  if (!del.danger || del.action !== "delete" || del.data.count !== 2) throw new Error(JSON.stringify(del));
+  if (!del.lines.includes("Anzahl: 2") || !del.lines.includes("Beispiel GmbH")) throw new Error(del.lines.join("|"));
+
+  let many = false;
+  try {
+    planCrmChange(parseCrmSelector({ table: "contacts", query: "Beispiel" }, "delete"), [
+      { id: a, titel: "A" },
+      { id: b, titel: "B" },
+    ]);
+  } catch (e) {
+    many = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!many) throw new Error("bulk");
+
+  const upd = planCrmChange(parseCrmSelector({ table: "rechnungen", query: "Retainer", patch: { status: "bezahlt" } }, "update"), [
+    { id: a, titel: "Retainer März" },
+    { id: b, titel: "Retainer April" },
+  ]);
+  if (upd.danger || upd.data.count !== 2 || (upd.data.patch as { status?: string }).status !== "bezahlt") throw new Error(JSON.stringify(upd));
+  if (!upd.lines.includes("Anzahl: 2")) throw new Error(upd.lines.join("|"));
+
+  const again = revalidate(del, ctx);
+  if (!again.danger || again.action !== "delete" || again.data.count !== 2) throw new Error(JSON.stringify(again));
+
+  const undo = planCrmUndo(a, [{
+    action: "delete",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Reel schneiden", before: { id: b, titel: "Reel schneiden" } },
+  }]);
+  if (undo.kind !== "crm_undo" || undo.action !== "insert" || undo.danger) throw new Error(JSON.stringify(undo));
+  const undoAgain = revalidate(undo, ctx);
+  if (undoAgain.data.batch !== a || undoAgain.action !== "insert") throw new Error(JSON.stringify(undoAgain));
 });
 
 Deno.test("Wiedervorlage ist nie erledigt, Kontakt braucht Firma, Woche startet Montag", () => {
