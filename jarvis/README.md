@@ -12,17 +12,18 @@ supabase secrets set JARVIS_MODEL=claude-sonnet-5-5
 supabase secrets set ELEVENLABS_API_KEY=...
 supabase secrets set ELEVENLABS_VOICE_ID=amAPTcyESqCO9CgYuf64
 supabase secrets set ELEVENLABS_MODEL=eleven_multilingual_v2
+supabase secrets set ELEVENLABS_SPEED=1.15
 ```
 
 `JARVIS_MODEL` ist optional. Ohne das Secret nimmt `jarvis-chat` `claude-sonnet-5-5`.
 
-`ELEVENLABS_API_KEY` ist für die Stimme Pflicht. `ELEVENLABS_VOICE_ID` ist optional und steht sonst auf `amAPTcyESqCO9CgYuf64`. `ELEVENLABS_MODEL` ist optional: Standard `eleven_multilingual_v2`, schnellere Alternative `eleven_flash_v2_5`. Andere Werte werden ignoriert. Der ElevenLabs-Schlüssel bleibt nur serverseitig.
+`ELEVENLABS_API_KEY` ist für die Stimme Pflicht. `ELEVENLABS_VOICE_ID` ist optional und steht sonst auf `amAPTcyESqCO9CgYuf64`. `ELEVENLABS_MODEL` ist optional: Standard `eleven_multilingual_v2`, schnellere Alternative `eleven_flash_v2_5`. Andere Werte werden ignoriert. `ELEVENLABS_SPEED` ist optional und setzt `voice_settings.speed`. Erlaubt sind 0.7 bis 1.2, der Standard ist 1.15. Werte außerhalb oder ungültige Angaben fallen auf 1.15 zurück. Der ElevenLabs-Schlüssel bleibt nur serverseitig.
 
 Beide Funktionen stehen in `supabase/config.toml` mit `verify_jwt = false`, weil sie das Nutzer-JWT selbst prüfen und OPTIONS für CORS beantworten müssen. Beim Deploy kein `--no-verify-jwt` setzen. `jarvis-chat` liest und schreibt mit dem JWT der angemeldeten Person, also unter RLS. Die Service-Role wird nicht verwendet. `jarvis-tts` prüft nur die Anmeldung und streamt `audio/mpeg`.
 
 ## Stimme
 
-Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
+Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). Das Sprechtempo ist `voice_settings.speed` 1.15, sofern `ELEVENLABS_SPEED` nichts anderes zwischen 0.7 und 1.2 setzt. Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
 
 Ein lokales `localStorage.jarvis_fn` auf `http://localhost` oder `http://127.0.0.1` … `/jarvis-chat` lenkt die Stimme auf dasselbe Ziel mit `/jarvis-tts`.
 

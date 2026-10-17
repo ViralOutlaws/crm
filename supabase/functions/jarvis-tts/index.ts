@@ -1,7 +1,7 @@
 // Jarvis-Stimme: prüft das Nutzer-JWT selbst und streamt MPEG von ElevenLabs.
 // Der Schlüssel bleibt in ELEVENLABS_API_KEY. Die Oberfläche schickt nur {text}.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { allowedOrigin, prepareText, resolveModel, resolveVoice } from "./logic.ts";
+import { allowedOrigin, prepareText, resolveModel, resolveSpeed, resolveVoice } from "./logic.ts";
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
 
   const voice = resolveVoice(Deno.env.get("ELEVENLABS_VOICE_ID"));
   const model = resolveModel(Deno.env.get("ELEVENLABS_MODEL"));
+  const speed = resolveSpeed(Deno.env.get("ELEVENLABS_SPEED"));
   const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`;
 
   let upstream: Response;
@@ -68,6 +69,7 @@ Deno.serve(async (req) => {
         text,
         model_id: model,
         language_code: "de",
+        voice_settings: { speed },
       }),
       signal: AbortSignal.timeout(25_000),
     });

@@ -3,6 +3,9 @@
 export const DEFAULT_MODEL = "eleven_multilingual_v2";
 export const FAST_MODEL = "eleven_flash_v2_5";
 export const DEFAULT_VOICE = "amAPTcyESqCO9CgYuf64";
+export const DEFAULT_SPEED = 1.15;
+export const MIN_SPEED = 0.7;
+export const MAX_SPEED = 1.2;
 export const MAX_TEXT = 1500;
 
 const MODELS = new Set([DEFAULT_MODEL, FAST_MODEL]);
@@ -20,6 +23,14 @@ export function resolveModel(raw: string | undefined): string {
 export function resolveVoice(raw: string | undefined): string {
   const v = String(raw ?? "").trim();
   return /^[A-Za-z0-9]{10,40}$/.test(v) ? v : DEFAULT_VOICE;
+}
+
+export function resolveSpeed(raw: string | undefined): number {
+  const v = String(raw ?? "").trim().replace(",", ".");
+  if (!v) return DEFAULT_SPEED;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < MIN_SPEED || n > MAX_SPEED) return DEFAULT_SPEED;
+  return Math.round(n * 100) / 100;
 }
 
 export function prepareText(input: unknown, max = MAX_TEXT): string {
