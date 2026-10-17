@@ -1221,8 +1221,12 @@ $("#logout").onclick = async () => {
   location.reload();
 };
 
-const chips = ["Briefing", "Was ist der Stand bei Beispiel-Café?", "Gespräch mit Beispiel-Café notieren", "Offene Rechnungen", "Social diese Woche", "Pipeline", "Bereiche"];
-$("#chips").innerHTML = chips.map((c) => `<button type="button" class="chip">${esc(c)}</button>`).join("");
+if (DEMO) {
+  const chips = ["Briefing", "Was ist der Stand bei Beispiel-Café?", "Gespräch mit Beispiel-Café notieren", "Offene Rechnungen", "Social diese Woche", "Pipeline", "Bereiche"];
+  $("#chips").innerHTML = chips.map((c) => `<button type="button" class="chip">${esc(c)}</button>`).join("");
+} else {
+  $("#chips").remove();
+}
 
 renderSide(DEMO ? demoSide() : { today: [], counts: {}, volume: 0, invoices: [] });
 tickClock();
