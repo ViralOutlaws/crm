@@ -139,6 +139,12 @@ export function ttsUrl() {
   return `${SUPABASE_URL}/functions/v1/jarvis-tts`;
 }
 
+export function dispatchUrl() {
+  const chat = fnUrl();
+  if (chat.endsWith("/jarvis-chat")) return `${chat.slice(0, -"jarvis-chat".length)}jarvis-dispatch`;
+  return `${SUPABASE_URL}/functions/v1/jarvis-dispatch`;
+}
+
 let client = null;
 export async function getSupabase() {
   if (client) return client;
@@ -1026,31 +1032,116 @@ export function demoMeeting() {
   };
 }
 
+export const NOT_CONNECTED = "Bot noch nicht verbunden";
+
 export const BOTS = [
-  { id: "webby", name: "Webby", role: "Websites", letter: "W" },
-  { id: "marky", name: "Marky", role: "Marketing / Social", letter: "M" },
-  { id: "saley", name: "Saley", role: "Vertrieb", letter: "S" },
-  { id: "cashy", name: "Cashy", role: "Finanzen", letter: "C" },
-  { id: "developy", name: "Developy", role: "Software", letter: "D" },
+  { id: "webby", name: "Webby", role: "Websites", focus: "Website / Tech", letter: "W" },
+  { id: "marky", name: "Marky", role: "Marketing / Social", focus: "Marketing / Social", letter: "M" },
+  { id: "saley", name: "Saley", role: "Vertrieb", focus: "Vertrieb / Leads", letter: "S" },
+  { id: "cashy", name: "Cashy", role: "Finanzen", focus: "Finanzen / Rechnungen", letter: "C" },
+  { id: "developy", name: "Developy", role: "Software", focus: "Software / Jarvis", letter: "D" },
 ];
 
-export function botsView() {
+const RUN_LABEL = {
+  queued: "Warteschlange",
+  sent: "Gesendet",
+  in_arbeit: "In Arbeit",
+  erledigt: "Erledigt",
+  blockiert: "Blockiert",
+  fehler: "Fehler",
+};
+
+export function runLabel(status) {
+  return RUN_LABEL[status] || status || "—";
+}
+
+export function connectionFromRuns(runs) {
+  if (!runs?.length) return "unbekannt";
+  const last = runs[0];
+  const events = Array.isArray(last.events) ? last.events : [];
+  const text = `${last.result || ""} ${events.map((e) => e?.message || "").join(" ")}`;
+  if (text.includes(NOT_CONNECTED)) return "nicht verbunden";
+  if (last.status === "fehler") return "fehler";
+  if (["sent", "in_arbeit", "erledigt", "blockiert"].includes(last.status)) return "verbunden";
+  return "unbekannt";
+}
+
+export function groupRuns(runs) {
+  const grouped = Object.fromEntries(BOTS.map((b) => [b.id, []]));
+  for (const run of runs || []) {
+    if (grouped[run.bot]) grouped[run.bot].push(run);
+  }
+  return grouped;
+}
+
+export function leitstandView(runs, note) {
+  const grouped = groupRuns(runs);
   return {
-    title: "Bots",
-    meta: "Netzwerk",
+    title: "Bot-Leitstand",
+    meta: "Aufträge",
     crm: "aufgaben",
-    spoken: "Fünf Bots. Ein Auftrag wird eine Aufgabe und landet erst nach deiner Bestätigung.",
-    rows: BOTS.map((b) => ({
-      search: b.name.toLowerCase(),
-      cells: { name: b.name, rolle: b.role, stand: "Bereit" },
-      badge: { text: "Bereit", tone: "f" },
+    wide: true,
+    leitstand: true,
+    spoken: "Fünf Bots. Webby macht Website und Tech, Marky Marketing, Saley Vertrieb und Leads, Cashy Finanzen und Rechnungen, Developy Software und Jarvis. Ein Auftrag geht erst nach deiner Bestätigung raus.",
+    note: note || "",
+    bots: BOTS.map((b) => ({
+      ...b,
+      connection: connectionFromRuns(grouped[b.id]),
+      runs: grouped[b.id].slice(0, 5),
     })),
-    columns: [
-      { key: "name", label: "Bot" },
-      { key: "rolle", label: "Rolle" },
-      { key: "stand", label: "Stand" },
-    ],
-    kpis: [{ label: "Bots", value: String(BOTS.length) }],
-    note: "Zuständig steht in der Aufgabe als erste Zeile. Es gibt keine eigene Bot-Tabelle.",
   };
+}
+
+const DEMO_RUNS = [
+  {
+    id: "b1000000-0000-4000-8000-000000000001",
+    bot: "webby",
+    title: "Website für ein Yogastudio",
+    instructions: "Ruhige Landingpage, mobil zuerst.",
+    status: "in_arbeit",
+    result: "Entwurf steht, Texte fehlen noch.",
+    links: ["https://example.com/yoga"],
+    created_at: "2026-10-17T09:00:00.000Z",
+    events: [
+      { at: "2026-10-17T09:00:00.000Z", status: "queued", message: "Auftrag angelegt." },
+      { at: "2026-10-17T09:01:00.000Z", status: "sent", message: "Webhook angenommen." },
+      { at: "2026-10-17T09:20:00.000Z", status: "in_arbeit", message: "Webby hat angefangen." },
+    ],
+  },
+  {
+    id: "b1000000-0000-4000-8000-000000000002",
+    bot: "marky",
+    title: "Verbindungstest",
+    instructions: "ping",
+    status: "queued",
+    result: NOT_CONNECTED,
+    links: [],
+    created_at: "2026-10-17T10:00:00.000Z",
+    events: [
+      { at: "2026-10-17T10:00:00.000Z", status: "queued", message: NOT_CONNECTED },
+    ],
+  },
+];
+
+export function demoLeitstand() {
+  return leitstandView(DEMO_RUNS);
+}
+
+export function botsView() {
+  return demoLeitstand();
+}
+
+export async function loadLeitstand(sb) {
+  const res = await sb.from("bot_runs")
+    .select("id, bot, aufgabe_id, title, instructions, status, result, links, created_at, updated_at, events")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (res.error) return leitstandView([], "Bot-Läufe sind noch nicht lesbar. Migration 20261017240000 anwenden.");
+  return leitstandView(res.data || []);
+}
+
+export async function loadBotRuns(sb) {
+  const res = await sb.from("bot_runs").select("bot, status, result, events, created_at").order("created_at", { ascending: false }).limit(100);
+  if (res.error) return [];
+  return res.data || [];
 }

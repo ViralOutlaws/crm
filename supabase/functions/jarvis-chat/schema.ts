@@ -12,6 +12,7 @@ const BLOCKED = new Set([
   "integration_secrets", "secrets", "secret", "geheimnisse", "geheimnis",
   "profiles", "profile", "workspaces", "workspace", "nutzer", "users",
   "social_posts", "jarvis_actions",
+  "bot_tokens", "bot_token", "bot_runs", "bot_run",
 ]);
 
 const ALIAS: Record<string, string> = {

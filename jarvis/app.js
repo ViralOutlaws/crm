@@ -30,9 +30,15 @@ import {
   esc,
   eur,
   fnUrl,
+  dispatchUrl,
   getSupabase,
   ttsUrl,
-  botsView,
+  connectionFromRuns,
+  demoLeitstand,
+  groupRuns,
+  loadBotRuns,
+  loadLeitstand,
+  runLabel,
   demoTask,
   loadArea,
   loadBriefing,
@@ -128,7 +134,7 @@ function renderSide(data) {
   const invoices = d.invoices || [];
   $("#invMini").innerHTML = invoices.length ? invoices.map((i) => `<button type="button" class="inv tap ${i.over ? "over" : ""}" data-open="rechnungen"><span>${esc(i.k)}<span class="nr">${esc(i.nr)}</span></span><span class="amt">${eur(i.b)}<small>${i.over ? "überfällig" : "offen"}</small></span></button>`).join("") : `<div class="empty">${DEMO ? "Keine offenen Beispielrechnungen." : "Keine offenen Rechnungen."}</div>`;
   $("#invSum").textContent = eur(invoices.reduce((s, i) => s + (Number(i.b) || 0), 0));
-  $("#botList").innerHTML = BOTS.map((b) => `<button type="button" class="bot idle tap" id="bot-${b.id}" data-open="bots"><span class="av">${b.letter}</span><span><span class="nm">${b.name}</span><span class="rl">${esc(b.role)}</span></span><span class="st">Bereit</span></button>`).join("");
+  $("#botList").innerHTML = BOTS.map((b) => `<button type="button" class="bot idle tap" id="bot-${b.id}" data-open="bots"><span class="av">${b.letter}</span><span><span class="nm">${b.name}</span><span class="rl">${esc(b.focus || b.role)}</span></span><span class="st">Bereit</span></button>`).join("");
   $("#footMode").textContent = DEMO ? "◆ Beispieldaten · keine Verbindung zum CRM" : "◆ Live · Daten unter deiner Anmeldung";
   const mode = $("#hMode");
   if (mode) mode.textContent = DEMO ? "Demo" : "Live";
@@ -271,6 +277,11 @@ function openView(view, areaId) {
   });
   const form = el.querySelector(".task-form");
   if (form && view.task) wireTaskForm(form, view.task);
+  if (view.leitstand) {
+    el.dataset.leitstand = "1";
+    wireLeitstand(el);
+    startLeitstand();
+  }
   holoLayer.appendChild(el);
   holoLayer.classList.add("has");
   holoCount();
@@ -282,6 +293,7 @@ function renderBody(view) {
   const kpis = kpiHtml(view.kpis);
   const filters = (view.filters || []).map((f) => `<button type="button" data-filter="${esc(JSON.stringify(f.filter))}">${esc(f.label)}</button>`).join("");
   const bar = filters ? `<div class="filters">${filters}</div>` : "";
+  if (view.leitstand) return spoken + (view.note ? `<p class="spoken">${esc(view.note)}</p>` : "") + leitstandHtml(view);
   if (view.task) return spoken + taskHtml(view.task);
   if (view.customer) return spoken + kpis + dossierHtml(view.customer);
   if (view.lanes) return spoken + kpis + boardHtml(view);
@@ -435,14 +447,192 @@ async function openTask(id) {
   }
 }
 
-async function openBots() {
+function safeHttp(url) {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return u.href;
+  } catch {
+    return "";
+  }
+}
+
+function leitstandHtml(view) {
+  const conn = {
+    verbunden: ["Verbunden", "conn-verbunden"],
+    "nicht verbunden": ["Nicht verbunden", "conn-offen"],
+    fehler: ["Fehler", "conn-fehler"],
+    unbekannt: ["Unbekannt", "conn-offen"],
+  };
+  return `<div class="leitstand">${(view.bots || []).map((b) => {
+    const [label, cls] = conn[b.connection] || conn.unbekannt;
+    const runs = b.runs || [];
+    const current = runs[0];
+    const timeline = (current?.events || []).slice(-6).map((e) => `<li><time>${esc(e.at ? new Date(e.at).toLocaleString("de-DE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "")}</time>${esc(runLabel(e.status))} · ${esc(e.message || "")}</li>`).join("");
+    const links = (current?.links || []).map(safeHttp).filter(Boolean).map((href) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(href)}</a>`).join("");
+    const body = current
+      ? `<div class="runline"><b>${esc(current.title)}</b><span class="badge ${current.status === "erledigt" ? "f" : current.status === "fehler" || current.status === "blockiert" ? "o" : "w"}">${esc(runLabel(current.status))}</span></div>${current.result ? `<p class="noteblock">${esc(current.result)}</p>` : ""}${links ? `<div class="runline">${links}</div>` : ""}${timeline ? `<ol class="timeline">${timeline}</ol>` : ""}`
+      : `<div class="empty">Noch kein Auftrag.</div>`;
+    return `<article class="leit-card"><header><span class="av">${esc(b.letter)}</span><div><b>${esc(b.name)}</b><span>${esc(b.focus || b.role)}</span></div><span class="st ${cls}">${esc(label)}</span></header>${body}<div class="acts"><button type="button" data-send="${esc(b.id)}">Auftrag senden</button><button type="button" class="ghost" data-ping="${esc(b.id)}">Verbindung testen</button></div><form class="task-form dispatch-form" hidden><label>Titel<input name="title" maxlength="300" required></label><label>Anweisung<textarea name="instructions" maxlength="4000"></textarea></label><div class="acts"><button type="submit">Karte zeigen</button><button type="button" class="ghost" data-cancel>Abbrechen</button></div></form></article>`;
+  }).join("")}</div>`;
+}
+
+function dispatchCard(d) {
+  const b = BOTS.find((x) => x.id === d.bot);
+  const name = b ? b.name : d.bot;
+  const focus = b?.focus || b?.role || "";
+  const linked = typeof d.aufgabe_id === "string" && /^[0-9a-f-]{36}$/i.test(d.aufgabe_id);
+  return {
+    kind: "bot_dispatch",
+    tool: "dispatch_to_bot",
+    table: "bot_runs",
+    action: "insert",
+    bot: d.bot,
+    summary: `Auftrag an ${name}`,
+    lines: [
+      `Bot: ${name} (${focus})`,
+      `Auftrag: ${d.title}`,
+      d.instructions ? `Anweisung: ${String(d.instructions).slice(0, 180)}` : "Anweisung: —",
+      linked ? "Bestehende Aufgabe, kein zweites Kanban" : "Neue Aufgabe im CRM und Versand an den Bot",
+    ],
+    data: {
+      bot: d.bot,
+      title: d.title,
+      instructions: d.instructions || "",
+      aufgabe_id: linked ? d.aufgabe_id : null,
+      kontakt_id: d.kontakt_id || null,
+      create_aufgabe: !linked,
+    },
+  };
+}
+
+function paintBotStand(runs) {
+  const grouped = groupRuns(runs);
+  for (const b of BOTS) {
+    const el = document.getElementById("bot-" + b.id);
+    if (!el || el.classList.contains("active")) continue;
+    const connection = connectionFromRuns(grouped[b.id]);
+    const label = connection === "verbunden" ? "Verbunden" : connection === "nicht verbunden" ? "Offen" : connection === "fehler" ? "Fehler" : "Bereit";
+    const st = el.querySelector(".st");
+    if (st) st.textContent = label;
+    el.classList.remove("wait", "bad");
+    if (connection === "fehler") {
+      el.classList.add("bad");
+      el.classList.remove("idle");
+    } else {
+      el.classList.add("idle");
+      el.classList.toggle("wait", connection === "nicht verbunden");
+    }
+  }
+}
+
+let leitstandTimer = null;
+let leitstandChannel = null;
+
+function stopLeitstand() {
+  if (leitstandTimer) clearInterval(leitstandTimer);
+  leitstandTimer = null;
+  if (leitstandChannel) {
+    const ch = leitstandChannel;
+    leitstandChannel = null;
+    Promise.resolve(ch.unsubscribe()).catch(() => {});
+  }
+}
+
+function startLeitstand() {
+  stopLeitstand();
+  if (DEMO || !sb) return;
+  leitstandTimer = setInterval(() => { refreshLeitstand().catch(() => {}); }, 5000);
+  try {
+    leitstandChannel = sb.channel("jarvis-bot-runs")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bot_runs" }, () => { refreshLeitstand().catch(() => {}); })
+      .subscribe();
+  } catch { /* Polling bleibt */ }
+}
+
+async function refreshLeitstand() {
+  const host = holoLayer.querySelector(".holo[data-leitstand]:not(.closing)");
+  if (!host) {
+    stopLeitstand();
+    return;
+  }
+  if (document.activeElement && document.activeElement.closest(".dispatch-form")) return;
+  const view = await loadLeitstand(sb);
+  const body = host.querySelector(".hb");
+  if (!body) return;
+  body.innerHTML = renderBody(view);
+  wireLeitstand(host);
+  paintBotStand((view.bots || []).flatMap((b) => (b.runs || []).map((r) => ({ ...r, bot: b.id }))));
+}
+
+function wireLeitstand(el) {
+  el.querySelectorAll("[data-ping]").forEach((btn) => {
+    btn.onclick = () => pingBot(btn.getAttribute("data-ping"));
+  });
+  el.querySelectorAll("[data-send]").forEach((btn) => {
+    btn.onclick = () => {
+      const card = btn.closest(".leit-card");
+      const form = card?.querySelector(".dispatch-form");
+      if (!form) return;
+      form.hidden = false;
+      form.querySelector("input")?.focus();
+    };
+  });
+  el.querySelectorAll(".dispatch-form").forEach((form) => {
+    form.querySelector("[data-cancel]").onclick = () => { form.hidden = true; };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const card = form.closest(".leit-card");
+      const bot = card?.querySelector("[data-send]")?.getAttribute("data-send");
+      const title = form.title.value.trim();
+      if (!bot || !title) return;
+      form.hidden = true;
+      showConfirm(dispatchCard({ bot, title, instructions: form.instructions.value.trim() }));
+    };
+  });
+}
+
+async function pingBot(bot) {
+  const b = BOTS.find((x) => x.id === bot);
+  if (DEMO || !session) {
+    toast(b?.name || "Bot", "Im Demo wird kein Webhook gerufen.", "i");
+    return;
+  }
+  try {
+    const res = await fetch(dispatchUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: SUPABASE_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ op: "ping", bot }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Test fehlgeschlagen.");
+    toast(b?.name || "Bot", body.message || (body.connected ? "Verbunden" : "Keine Verbindung"), body.connected ? "J" : "!");
+    await refreshLeitstand();
+  } catch (e) {
+    toast("Verbindung", e.message || "Test fehlgeschlagen.", "!");
+  }
+}
+
+async function openBots(opts) {
   const cut = speechCut;
-  beginReply();
-  setMode("think");
-  const view = botsView();
-  openView(view, "aufgaben");
-  if (cut !== speechCut) return;
-  await say(view.spoken);
+  if (!opts?.quiet) {
+    beginReply();
+    setMode("think");
+  }
+  try {
+    const view = DEMO ? demoLeitstand() : await loadLeitstand(sb);
+    openView(view, "aufgaben");
+    paintBotStand((view.bots || []).flatMap((b) => (b.runs || []).map((r) => ({ ...r, bot: b.id }))));
+    if (opts?.quiet || cut !== speechCut) return;
+    await say(view.spoken);
+  } catch (e) {
+    if (opts?.quiet || cut !== speechCut) return;
+    await say(e.message || "Der Leitstand ist nicht lesbar.");
+  }
 }
 
 function openDash(el) {
@@ -488,6 +678,7 @@ function closeEl(h, instant) {
   setTimeout(() => {
     h.remove();
     if (!holoLayer.querySelector(".holo")) holoLayer.classList.remove("has");
+    if (!holoLayer.querySelector("[data-leitstand]")) stopLeitstand();
     holoCount();
   }, instant ? 180 : 450);
 }
@@ -528,6 +719,14 @@ async function confirmPlan(plan, el) {
     el.remove();
     cardNote = `Zuletzt bestätigt, im Demo nicht gespeichert: ${plan.summary || "Karte"}`;
     if (plan.bot) activateBot(plan.bot, plan.summary);
+    if (plan.kind === "aufgabe" && plan.bot) {
+      showConfirm(dispatchCard({
+        bot: plan.bot,
+        title: plan.data?.titel || plan.summary,
+        instructions: plan.data?.beschreibung || "",
+        aufgabe_id: plan.data?.id || "demo",
+      }));
+    }
     await say("Im Demo-Modus wird nichts gespeichert. Die Karte zeigt nur, was Jarvis nach deiner Bestätigung schreiben würde.");
     return;
   }
@@ -550,8 +749,11 @@ async function confirmPlan(plan, el) {
       if (side) renderSide(side);
     }
     if (body.bot) activateBot(body.bot, body.summary || plan.summary);
-    await say(body.log_warning ? `${body.summary}. ${body.log_warning}` : `${body.summary || "Gespeichert"}.`);
-    if (body.panel) openArea(panelToArea(body.panel)).catch(() => {});
+    if (body.offer_dispatch) showConfirm(dispatchCard(body.offer_dispatch));
+    const msg = [body.summary || "Gespeichert", body.message, body.log_warning].filter(Boolean).join(". ");
+    await say(`${msg}.`);
+    if (body.panel === "bots" || body.offer_dispatch) openBots({ quiet: true });
+    else if (body.panel) openArea(panelToArea(body.panel)).catch(() => {});
   } catch (e) {
     el.querySelectorAll("button").forEach((b) => { b.disabled = false; });
     toast("Nicht gespeichert", e.message || "Fehler", "!");
@@ -1445,6 +1647,7 @@ async function bootSession() {
     userId = session.user.id;
     $("#login").hidden = true;
     renderSide(await loadSide(sb).catch(() => ({ today: [], counts: {}, volume: 0, invoices: [], live: true })));
+    paintBotStand(await loadBotRuns(sb).catch(() => []));
     const day = localStorage.getItem("jarvis_briefing_day");
     if (day !== berlinToday() && !params.has("noboot")) openBriefing(false);
   } catch (e) {
@@ -1464,6 +1667,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
     userId = session.user.id;
     $("#login").hidden = true;
     renderSide(await loadSide(sb));
+    paintBotStand(await loadBotRuns(sb).catch(() => []));
     openBriefing(false);
   } catch (err) {
     $("#loginErr").textContent = err.message || "Anmeldung fehlgeschlagen.";

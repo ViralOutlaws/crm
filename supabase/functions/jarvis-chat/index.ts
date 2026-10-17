@@ -3,6 +3,7 @@
 // Bestätigte Pläne prüft revalidate() erneut. Danach darf Jarvis in den CRM-Tabellen anlegen, ändern und löschen.
 // Einstellungen und Geheimnisse bleiben tabu. Mails und Datei-Uploads gibt es nicht.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { leitstandPayload } from "../_shared/bot_leitstand.ts";
 import { customerFile, fuzzyFind, morningBriefing, openArea } from "./areas.ts";
 import {
   anthropicTools,
@@ -10,6 +11,7 @@ import {
   botFromText,
   BOTS,
   matchBot,
+  normBot,
   MAX_TOOL_ROUNDS,
   AUFGABE_MATCH_LIMIT,
   isWriteTool,
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
   try {
     if (body.op === "confirm") {
       if (!workspaceId) return json({ error: "Kein Workspace im Profil." }, 403, headers);
-      const result = await executeConfirm(sb, workspaceId, user.id, body, ctx);
+      const result = await executeConfirm(sb, workspaceId, user.id, body, ctx, jwt);
       return json(result, 200, headers);
     }
   } catch (e) {
@@ -203,6 +205,9 @@ async function runChat(
             : planFromTool(tool.name, input, ctx);
           send("confirm", plan);
           if (plan.bot) send("bot", { id: plan.bot, task: plan.summary, pending: true });
+          const hinweis = plan.kind === "aufgabe" && plan.bot
+            ? "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung. Nach dem Speichern bietet die Oberfläche den Versand an diesen Bot an. dispatch_to_bot jetzt nicht zusätzlich aufrufen."
+            : "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung.";
           results.push({
             type: "tool_result",
             tool_use_id: tool.id,
@@ -210,7 +215,7 @@ async function runChat(
               status: "awaiting_confirmation",
               summary: plan.summary,
               lines: plan.lines,
-              hinweis: "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung.",
+              hinweis,
             }),
           });
         } else {
@@ -339,8 +344,10 @@ async function executeConfirm(
   userId: string,
   body: Record<string, unknown>,
   ctx: Ctx,
+  jwt: string,
 ): Promise<Record<string, unknown>> {
   const plan = revalidate({ kind: body.kind, tool: body.tool, bot: body.bot, data: body.data }, ctx);
+  if (plan.kind === "bot_dispatch") return await forwardDispatch(jwt, plan);
   if (plan.kind === "crm_insert" || plan.kind === "crm_update" || plan.kind === "crm_delete" || plan.kind === "crm_undo") {
     return await executeCrm(sb, workspaceId, userId, plan, ctx);
   }
@@ -369,6 +376,14 @@ async function executeConfirm(
   }
   const id = await writePlan(sb, workspaceId, plan, ctx);
   const warning = await logAction(sb, workspaceId, userId, plan, id);
+  const offer_dispatch = plan.kind === "aufgabe" && plan.bot
+    ? {
+      bot: plan.bot,
+      title: String(plan.data.titel || ""),
+      instructions: String(plan.data.beschreibung || ""),
+      aufgabe_id: id,
+    }
+    : null;
   return {
     ok: true,
     id,
@@ -379,6 +394,41 @@ async function executeConfirm(
     bot: plan.bot,
     panel: openPanelFor(plan.tool),
     log_warning: warning,
+    offer_dispatch,
+  };
+}
+
+async function forwardDispatch(jwt: string, plan: Plan): Promise<Record<string, unknown>> {
+  const base = Deno.env.get("SUPABASE_URL");
+  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+  if (!base || !anon) throw new Error("Supabase-Umgebung unvollständig.");
+  const res = await fetch(`${base.replace(/\/$/, "")}/functions/v1/jarvis-dispatch`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      apikey: anon,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ op: "dispatch", ...plan.data }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const payload = await res.json().catch(() => ({})) as Record<string, unknown>;
+  if (!res.ok) throw new Error(typeof payload.error === "string" ? payload.error : "Versand an den Bot fehlgeschlagen.");
+  const message = typeof payload.message === "string" ? payload.message : "";
+  return {
+    ok: true,
+    id: payload.run_id ?? null,
+    aufgabe_id: payload.aufgabe_id ?? null,
+    table: "bot_runs",
+    action: "insert",
+    summary: typeof payload.summary === "string" ? payload.summary : plan.summary,
+    lines: message ? [...plan.lines, message] : plan.lines,
+    bot: plan.bot,
+    panel: "bots",
+    status: payload.status ?? null,
+    message,
+    connected: payload.connected === true,
+    log_warning: typeof payload.log_warning === "string" ? payload.log_warning : null,
   };
 }
 
@@ -653,6 +703,7 @@ const CUSTOMER_FK: Record<string, "kunde_id" | "kontakt_id"> = {
   create_wiedervorlage: "kontakt_id",
   create_kal_event: "kontakt_id",
   route_to_bot: "kontakt_id",
+  dispatch_to_bot: "kontakt_id",
 };
 
 const INSERT_FK: Record<string, "kunde_id" | "kontakt_id"> = {
@@ -1326,7 +1377,67 @@ function runRead(
   if (name === "morning_briefing") return morningBriefing(sb, userId, ctx);
   if (name === "customer_file") return customerFile(sb, o, ctx);
   if (name === "list_tasks") return listTasks(sb, o, ctx);
+  if (name === "list_bot_runs") return listBotRuns(sb, o);
+  if (name === "get_bot_run") return getBotRun(sb, o);
   throw new Error("Unbekanntes Lesewerkzeug.");
+}
+
+async function listBotRuns(sb: SupabaseClient, o: Record<string, unknown>) {
+  let q = sb.from("bot_runs")
+    .select("id, bot, aufgabe_id, title, instructions, status, result, links, created_at, updated_at, events")
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (o.bot) q = q.eq("bot", normBot(o.bot));
+  const status = typeof o.status === "string" ? o.status : "";
+  if (["queued", "sent", "in_arbeit", "erledigt", "blockiert", "fehler"].includes(status)) q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) {
+    return {
+      ui: null,
+      forModel: { hinweis: "Bot-Läufe sind noch nicht lesbar. Migration 20261017240000 anwenden.", laeufe: [] },
+    };
+  }
+  const runs = data ?? [];
+  return {
+    ui: { panel: "bots", data: leitstandPayload(runs as Array<Record<string, unknown>>) },
+    forModel: {
+      hinweis: runs.length ? "Bot-Läufe, neueste zuerst. Keine IDs vorlesen." : "Noch keine Bot-Läufe.",
+      anzahl: runs.length,
+      laeufe: runs.map((r) => ({
+        id: r.id,
+        bot: r.bot,
+        title: r.title,
+        status: r.status,
+        result: r.result,
+        aufgabe_id: r.aufgabe_id,
+      })),
+    },
+  };
+}
+
+async function getBotRun(sb: SupabaseClient, o: Record<string, unknown>) {
+  const id = String(o.run_id || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Lauf nicht gefunden.");
+  const { data, error } = await sb.from("bot_runs")
+    .select("id, bot, aufgabe_id, title, instructions, status, result, links, created_at, updated_at, events")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error("Bot-Läufe sind noch nicht lesbar. Migration 20261017240000 anwenden.");
+  if (!data) throw new Error("Lauf nicht gefunden.");
+  return {
+    ui: { panel: "bots", data: leitstandPayload([data as Record<string, unknown>]) },
+    forModel: {
+      hinweis: "Ein Bot-Lauf. Keine IDs vorlesen.",
+      lauf: {
+        bot: data.bot,
+        title: data.title,
+        status: data.status,
+        result: data.result,
+        links: data.links,
+        events: data.events,
+      },
+    },
+  };
 }
 
 async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {

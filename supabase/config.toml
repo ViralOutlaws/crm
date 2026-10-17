@@ -11,3 +11,11 @@ verify_jwt = false
 # Stimme: gleicher Grund. Der Schlüssel ELEVENLABS_API_KEY bleibt nur hier.
 [functions.jarvis-tts]
 verify_jwt = false
+
+# Versand an die Grok-Bots. Prüft das Nutzer-JWT selbst. Webhook-Secrets bleiben hier.
+[functions.jarvis-dispatch]
+verify_jwt = false
+
+# Rückkanal der Bots. Auth ist der Bot-Token gegen bot_tokens, nicht das Nutzer-JWT.
+[functions.bot-api]
+verify_jwt = false
