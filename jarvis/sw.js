@@ -1,7 +1,7 @@
 // Jarvis-PWA, Scope nur /jarvis/. Der CRM-Service-Worker unter /sw.js fasst diesen Pfad nicht an.
-const CACHE = "jarvis-v3";
+const CACHE = "jarvis-v4";
 const BASE = new URL("./", self.location).href;
-const ASSETS = ["", "index.html", "styles.css", "app.js", "data.js", "speech.js", "manifest.json", "icon-192.png", "icon-512.png"]
+const ASSETS = ["", "index.html", "styles.css", "app.js", "data.js", "speech.js", "listen.js", "manifest.json", "icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"]
   .map((p) => new URL(p, BASE).href);
 
 self.addEventListener("install", (event) => {

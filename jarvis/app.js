@@ -1246,6 +1246,56 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
 }
 
+installHint();
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.matchMedia("(display-mode: fullscreen)").matches
+    || window.navigator.standalone === true;
+}
+
+function installHintSeen() {
+  try { return localStorage.getItem("jarvis_install_hint") === "1"; } catch { return true; }
+}
+
+function installHint() {
+  if (isStandalone() || installHintSeen()) return;
+  if (!window.matchMedia("(max-width: 800px)").matches) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let deferred = null;
+  const el = document.createElement("div");
+  el.className = "install-hint";
+  el.setAttribute("role", "note");
+  const text = document.createElement("span");
+  text.innerHTML = ios
+    ? "Vollbild: Teilen, dann <b>Zum Home-Bildschirm</b>."
+    : "Vollbild: Browser-Menü, dann <b>Zum Home-Bildschirm</b>.";
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.textContent = "OK";
+  const dismiss = () => {
+    try { localStorage.setItem("jarvis_install_hint", "1"); } catch { /* Hinweis bleibt bis zum Neuladen */ }
+    el.remove();
+  };
+  ok.addEventListener("click", async () => {
+    if (deferred) {
+      deferred.prompt();
+      try { await deferred.userChoice; } catch { /* Abbruch ist in Ordnung */ }
+      deferred = null;
+    }
+    dismiss();
+  });
+  el.append(text, ok);
+  document.body.appendChild(el);
+  window.addEventListener("beforeinstallprompt", (e) => {
+    if (!el.isConnected) return;
+    e.preventDefault();
+    deferred = e;
+    text.innerHTML = "Vollbild: <b>Zum Home-Bildschirm</b>.";
+    ok.textContent = "Installieren";
+  });
+}
+
 async function applyQuery() {
   if (!DEMO && !session) return;
   if (params.has("menu")) toggleMenu(true);
