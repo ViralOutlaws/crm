@@ -1,4 +1,4 @@
--- Protokoll für Schreibaktionen von Jarvis. Nicht live ausführen – Kim wendet die Migration selbst an.
+-- Protokoll für Schreibaktionen von Jarvis. Teil des Jarvis-Go-live, anzuwenden über die Go-live-Checkliste in jarvis/README.md (idempotent).
 -- Keine Änderung an bestehenden Tabellen oder Spalten. Löschen und Ändern der Logzeilen ist nicht vorgesehen.
 
 create table if not exists public.jarvis_actions (
