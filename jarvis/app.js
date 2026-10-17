@@ -1,4 +1,4 @@
-import { createSpeech } from "./speech.js";
+import { createElevenLabsSpeech } from "./speech.js";
 import {
   AREAS,
   BOTS,
@@ -15,6 +15,7 @@ import {
   eur,
   fnUrl,
   getSupabase,
+  ttsUrl,
   loadArea,
   loadBriefing,
   loadCustomer,
@@ -25,8 +26,26 @@ const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
 const DEMO = params.has("demo");
 const INSTANT = params.has("instant");
-const speech = createSpeech();
-if (INSTANT) speech.setMuted(true);
+const speech = createElevenLabsSpeech({
+  enabled: () => !DEMO && !!(session && session.access_token),
+  apikey: SUPABASE_KEY,
+  url: ttsUrl,
+  token: async () => {
+    if (sb) {
+      try {
+        const got = await sb.auth.getSession();
+        if (got.data.session) session = got.data.session;
+      } catch { /* behalte die letzte Sitzung */ }
+    }
+    return session?.access_token || "";
+  },
+});
+if (INSTANT) {
+  speech.setMuted(true);
+  $("#mute").classList.add("off");
+  $("#muteWave").style.display = "none";
+}
+addEventListener("pointerdown", () => speech.unlock(), { once: true });
 
 const S = { mode: "idle", amp: 0, target: 0, mic: 0, speakEnd: 0, impulse: 0, listening: false };
 let speakToken = 0;
@@ -168,6 +187,7 @@ async function say(text) {
   speech.speak(text, {
     onboundary() { S.impulse = 1; },
     onend() { if (tok === speakToken) S.speakEnd = 0; },
+    onfallback() { toast("Stimme", "ElevenLabs nicht erreichbar. Ich nutze die Browserstimme.", "i"); },
   });
   await typeWrite(text, tok);
 }
@@ -509,6 +529,20 @@ async function liveAsk() {
     const dec = new TextDecoder();
     let buf = "";
     let full = "";
+    const voiced = !speech.isMuted();
+    const voice = voiced ? speech.openStream({
+      onstart() {
+        setMode("speak");
+        S.speakEnd = performance.now() + 120000;
+      },
+      onboundary() { S.impulse = 1; },
+      onend() {
+        S.speakEnd = 0;
+        if (S.mode === "speak") endSpeak();
+        else if (S.mode === "think") setMode("idle");
+      },
+      onfallback() { toast("Stimme", "ElevenLabs nicht erreichbar. Ich nutze die Browserstimme.", "i"); },
+    }) : null;
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -525,7 +559,7 @@ async function liveAsk() {
           full += data.text;
           sp.textContent = full;
           $("#log").scrollTop = 1e9;
-          if (S.mode !== "speak") setMode("speak");
+          voice?.push(data.text);
         } else if (ev === "confirm") showConfirm(data);
         else if (ev === "ui" && data.data) openView(data.data, panelToArea(data.panel));
         else if (ev === "bot" && data.id) activateBot(data.id, data.task || "Auftrag");
@@ -533,9 +567,10 @@ async function liveAsk() {
       }
     }
     if (full) history.push({ role: "assistant", content: full });
-    speech.speak(full, { onend: endSpeak });
-    setMode("idle");
+    if (voice) voice.close();
+    else setMode("idle");
   } catch (e) {
+    speech.cancel();
     sp.textContent = e.message || "Jarvis ist gerade nicht erreichbar.";
     setMode("idle");
   }
@@ -543,12 +578,16 @@ async function liveAsk() {
 
 $("#form").addEventListener("submit", (e) => {
   e.preventDefault();
+  speech.unlock?.();
   const v = $("#inp").value;
   $("#inp").value = "";
   ask(v);
 });
 $("#chips").addEventListener("click", (e) => {
-  if (e.target.classList.contains("chip")) ask(e.target.textContent);
+  if (e.target.classList.contains("chip")) {
+    speech.unlock?.();
+    ask(e.target.textContent);
+  }
 });
 $("#mute").onclick = () => {
   const next = !speech.isMuted();
@@ -714,7 +753,8 @@ function drawCore(t) {
 }
 function loop(t) {
   if (S.mode === "speak") {
-    S.target = 0.45 + 0.35 * Math.abs(Math.sin(t * 0.012));
+    if (speech.hearing?.()) S.target = Math.min(1, 0.12 + speech.level());
+    else S.target = 0.45 + 0.35 * Math.abs(Math.sin(t * 0.012));
     if (performance.now() > S.speakEnd && !speech.isSpeaking()) endSpeak();
   } else if (S.mode === "listen") {
     if (analyser) {

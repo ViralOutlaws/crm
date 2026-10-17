@@ -81,6 +81,12 @@ export function fnUrl() {
   return `${SUPABASE_URL}/functions/v1/jarvis-chat`;
 }
 
+export function ttsUrl() {
+  const chat = fnUrl();
+  if (chat.endsWith("/jarvis-chat")) return `${chat.slice(0, -"jarvis-chat".length)}jarvis-tts`;
+  return `${SUPABASE_URL}/functions/v1/jarvis-tts`;
+}
+
 let client = null;
 export async function getSupabase() {
   if (client) return client;
