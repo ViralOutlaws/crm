@@ -34,6 +34,8 @@ Erlaubt sind `https://crm.viraloutlaws.de` sowie `http://localhost` und `http://
 
 `supabase/migrations/20261017190000_jarvis_actions.sql` legt das Protokoll `jarvis_actions` an. Nicht automatisch gegen die Live-Datenbank ausführen. Solange die Tabelle fehlt, bleibt die CRM-Schreibaktion erhalten und die Antwort enthält `log_warning`.
 
+Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migration nötig. Diese Spalten sind freier Text ohne CHECK.
+
 ## Bestätigung
 
 Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Löschen, E-Mail-Versand und die Status Bezahlt oder Versendet gibt es nicht.
@@ -41,12 +43,15 @@ Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abb
 ## Status
 
 - Aufgaben, die Jarvis anlegt, haben immer `todo`, damit sie im Kanban sichtbar sind.
-- Angebote entstehen als `entwurf`.
-- Rechnungen entstehen ebenfalls als `entwurf`, obwohl das CRM-Dropdown nur Offen, Bezahlt und Überfällig kennt. So zählen sie nicht als offene Forderung. Ein späteres Speichern im CRM kann den Status auf Offen setzen.
-- Social-Entwürfe sind Status `Idee`. `Veröffentlicht` ändert Jarvis nicht.
-- Bot-Aufträge sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte.
-- Retainer legt Jarvis standardmäßig als `pausiert` an. `aktiv` nur, wenn das ausdrücklich in der Karte steht.
-- Eine Gesprächsnotiz wird an `notes` und an die Notiz-Timeline angehängt. Vorhandene Notizen bleiben.
+- Angebote und Rechnungen entstehen als `entwurf`. Das CRM kennt diesen Status in Dropdown, Filter und Badge. Speichern im CRM lässt den Entwurf stehen. Entwürfe zählen nicht als gesendete Angebote und nicht als offene oder überfällige Forderungen.
+- Social-Entwürfe sind Status `Idee`. `Veröffentlicht` ändert Jarvis nicht. Format und Säule nutzen dieselben Werte wie der Redaktionsplan.
+- Bot-Aufträge sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte. Im CRM steht dasselbe im Feld „Zugewiesen an Bot“ und auf der Karte.
+- Termine haben keine Ende-Spalte. Steht ein Ende fest, liegt es in `notiz` als eigene Zeile `Bis: HH:MM`. Das CRM zeigt sie im Feld „Bis“.
+- Retainer legt Jarvis standardmäßig als `pausiert` an. `aktiv` nur, wenn das ausdrücklich in der Karte steht. Pausierte Retainer zählen nicht im MRR.
+- Kontakte nutzen die Phasen `lead`, `erstgespraech`, `angebot`, `gewonnen`, `verloren` und die Quellen `website`, `ki-check`, `empfehlung`, `instagram`, `google`, `kaltakquise`, `sonstiges`.
+- Eine Gesprächsnotiz wird angehängt, nichts überschrieben: in `notes` als Block `[YYYY-MM-DD] Gespräch:` und zusätzlich als Timeline-Eintrag `{typ:'notiz'}`. Beides ist in der Kundenakte sichtbar.
+- ROI-Kanäle von Jarvis sind `google`, `meta`, `instagram`, `seo`, `sonstiges`. Bestehende Werte `beide` und `sonstige` bleiben.
+- Ausgaben dürfen eine freie Kategorie und einen MwSt-Satz zwischen 0 und 100 haben. Das CRM behält den Wert beim erneuten Speichern.
 
 ## Bereiche
 
@@ -56,7 +61,7 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v1`) gilt nur für `/jarvis/`.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v1`) gilt nur für `/jarvis/`.
 
 ## Folgepunkte
 

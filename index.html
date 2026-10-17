@@ -915,6 +915,7 @@ window._loginFallback = function() {
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="rechnungen-summary"></div>
   <div class="filters-bar">
     <button class="filter-chip active" data-rf="alle" onclick="setRechnungFilter('alle',this)">Alle</button>
+    <button class="filter-chip" data-rf="entwurf" onclick="setRechnungFilter('entwurf',this)">Entwurf</button>
     <button class="filter-chip" data-rf="offen-rg" onclick="setRechnungFilter('offen-rg',this)">Offen</button>
     <button class="filter-chip" data-rf="bezahlt" onclick="setRechnungFilter('bezahlt',this)">Bezahlt</button>
     <button class="filter-chip" data-rf="ueberfaellig" onclick="setRechnungFilter('ueberfaellig',this)">Überfällig</button>
@@ -1614,8 +1615,11 @@ window._loginFallback = function() {
           <select id="roi-m-kanal" style="font-family:Sora,sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
             <option value="google">🔵 Google Ads</option>
             <option value="meta">🟣 Meta Ads</option>
+            <option value="instagram">📸 Instagram</option>
+            <option value="seo">🔍 SEO</option>
             <option value="beide">🔵🟣 Google + Meta</option>
             <option value="sonstige">Sonstige</option>
+            <option value="sonstiges">Sonstiges</option>
           </select>
         </div>
         <div class="field"><label>Monat</label>
@@ -2105,7 +2109,8 @@ window._loginFallback = function() {
         </div>
         <div class="field"><label>Status</label>
           <select id="r-status">
-            <option value="offen-rg">Offen</option>
+            <option value="entwurf">Entwurf</option>
+            <option value="offen-rg" selected>Offen</option>
             <option value="bezahlt">Bezahlt</option>
             <option value="ueberfaellig">Überfällig</option>
           </select>
@@ -2286,6 +2291,16 @@ window._loginFallback = function() {
           </select>
         </div>
         <div class="field"><label>Fällig am</label><input id="kt-datum" type="date"></div>
+        <div class="field form-full"><label>Zugewiesen an Bot</label>
+          <select id="kt-bot">
+            <option value="">— Niemand —</option>
+            <option value="webby">Webby (Websites)</option>
+            <option value="marky">Marky (Marketing / Social)</option>
+            <option value="saley">Saley (Vertrieb)</option>
+            <option value="cashy">Cashy (Finanzen)</option>
+            <option value="developy">Developy (Software)</option>
+          </select>
+        </div>
         <div class="field form-full"><label>Notiz</label><textarea id="kt-notiz" rows="2" placeholder="Details…"></textarea></div>
       </div>
     </div>
@@ -3028,6 +3043,77 @@ function getBadge(status) {
   return `<span class="badge ${cls}">${rest.join(' ')}</span>`;
 }
 
+// Hält unbekannte Werte (z. B. von Jarvis) im Select, statt sie beim Speichern auf die erste Option zu setzen.
+function setSelectValue(id, value, fallback) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  const v = (value==null || value==='') ? '' : String(value);
+  if(v && ![...el.options].some(o => o.value===v)) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    el.appendChild(opt);
+  }
+  el.value = v || (fallback==null ? '' : String(fallback));
+}
+
+function isOpenRechnung(r) {
+  return !!(r && (r.status==='offen-rg' || r.status==='ueberfaellig'));
+}
+
+const BOT_LINES = {
+  webby: 'Zuständig: Webby (Websites).',
+  marky: 'Zuständig: Marky (Marketing / Social).',
+  saley: 'Zuständig: Saley (Vertrieb).',
+  cashy: 'Zuständig: Cashy (Finanzen).',
+  developy: 'Zuständig: Developy (Software).'
+};
+function stripBotLines(text) {
+  return String(text||'')
+    .split(/\r?\n/)
+    .filter(line => !/^Zuständig:\s*(Webby|Marky|Saley|Cashy|Developy)\s*\([^)]*\)\.\s*$/i.test(line))
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '');
+}
+function splitBot(notiz) {
+  const text = String(notiz||'');
+  const m = text.match(/Zuständig:\s*(Webby|Marky|Saley|Cashy|Developy)\s*\([^)]*\)\./i);
+  const bot = m && BOT_LINES[m[1].toLowerCase()] ? m[1].toLowerCase() : '';
+  return { bot, rest: stripBotLines(text) };
+}
+function joinBot(bot, rest) {
+  const body = stripBotLines(rest);
+  const line = BOT_LINES[bot];
+  if(!line) return body;
+  return body ? line+'\n'+body : line;
+}
+function botLabel(id) {
+  const line = BOT_LINES[id];
+  return line ? line.replace(/^Zuständig:\s*/, '').replace(/\.$/, '') : '';
+}
+
+const BIS_LINE = /^Bis:\s*(\d{1,2}:\d{2})\s*$/;
+function splitBis(notiz) {
+  const lines = String(notiz||'').split(/\r?\n/);
+  let bis = '';
+  const rest = [];
+  lines.forEach(line => {
+    const m = line.match(BIS_LINE);
+    if(m && !bis) {
+      bis = String(m[1].split(':')[0]).padStart(2,'0')+':'+m[1].split(':')[1];
+    } else rest.push(line);
+  });
+  return { bis, rest: rest.join('\n').replace(/^\n+|\n+$/g, '') };
+}
+function joinBis(notiz, bis) {
+  const rest = splitBis(notiz).rest;
+  const b = String(bis||'').trim();
+  if(!b) return rest;
+  const m = b.match(/^(\d{1,2}):(\d{2})$/);
+  const hh = m ? String(m[1]).padStart(2,'0')+':'+m[2] : b;
+  return rest ? rest+'\nBis: '+hh : 'Bis: '+hh;
+}
+
 function getMwst() { return parseFloat(DB.settings.mwst||19)/100; }
 function getZahlung() { return parseInt(DB.settings.zahlung||14); }
 
@@ -3181,7 +3267,7 @@ function openContactModal(id) {
   document.getElementById('contact-modal-title').textContent = id ? 'Kontakt bearbeiten' : 'Neuer Kontakt';
   document.getElementById('c-firma').value = c?.firma||'';
   document.getElementById('c-person').value = c?.person||'';
-  document.getElementById('c-branche').value = c?.branche||'handwerk';
+  setSelectValue('c-branche', c?.branche, 'handwerk');
   document.getElementById('c-str').value = c?.str||'';
   document.getElementById('c-plz').value = c?.plz||'';
   const ortEl = document.getElementById('c-ort'); if(ortEl) ortEl.value = c?.ort||'';
@@ -3191,8 +3277,8 @@ function openContactModal(id) {
   const ig=document.getElementById('c-instagram'); if(ig) ig.value=c?.instagram||'';
   const fb=document.getElementById('c-facebook'); if(fb) fb.value=c?.facebook||'';
   const gb=document.getElementById('c-gbusiness'); if(gb) gb.value=c?.gbusiness||'';
-  document.getElementById('c-status').value = normStatus(c?.status||'lead');
-  document.getElementById('c-quelle').value = c?.quelle||'';
+  setSelectValue('c-status', normStatus(c?.status||'lead'), 'lead');
+  setSelectValue('c-quelle', c?.quelle, '');
   document.getElementById('c-dealwert').value = c?.dealWert ?? '';
   document.getElementById('c-ns-datum').value = c?.naechsterSchritt||'';
   document.getElementById('c-ns-text').value = c?.naechsterSchrittText||'';
@@ -3285,7 +3371,7 @@ function renderContacts() {
   if(!list.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="emo">👥</div><p>Keine Kontakte gefunden.<br>Klicke auf "+ Neuer Kontakt".</p></div></td></tr>`; return; }
   // get total value per contact
   tbody.innerHTML = list.map(c => {
-    const rgs = DB.rechnungen.filter(r=>r.kundeId===c.id);
+    const rgs = DB.rechnungen.filter(r=>r.kundeId===c.id && r.status!=='entwurf');
     const wert = rgs.reduce((s,r)=>s+sumPositions(r.positions).brutto,0);
     const lastUpdate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('de-DE') : '–';
     return `<tr style="cursor:pointer" onclick="openContactDetail('${c.id}')">
@@ -3339,7 +3425,7 @@ function openAngebotModal(id) {
   document.getElementById('a-kunde').value = a?.kundeId||'';
   document.getElementById('a-datum').value = a?.datum||today();
   document.getElementById('a-betreff').value = a?.betreff||'';
-  document.getElementById('a-status').value = a?.status||'entwurf';
+  setSelectValue('a-status', a?.status, 'entwurf');
   document.getElementById('a-notes').value = a?.notes||'';
   document.getElementById('a-valid').value = a?.validBis||addDays(today(),30);
   fillPositions('a', a?.positions||[]);
@@ -3457,8 +3543,8 @@ function openRechnungModal(id) {
   document.getElementById('r-datum').value=r?.datum||today();
   document.getElementById('r-faellig').value=r?.faellig||addDays(today(),getZahlung());
   document.getElementById('r-betreff').value=r?.betreff||'';
-  document.getElementById('r-status').value=r?.status||'offen-rg';
-  document.getElementById('r-abrechnungsart').value=r?.abrechnungsart||'einmalig';
+  setSelectValue('r-status', r?.status, 'offen-rg');
+  setSelectValue('r-abrechnungsart', r?.abrechnungsart, 'einmalig');
   document.getElementById('r-notes').value=r?.notes||'';
   document.getElementById('r-typ').value=r?.rTyp||'normal';
   document.getElementById('r-anzahl').value=r?.anzahl||'';
@@ -3849,9 +3935,9 @@ function renderRechnungen(){
       <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td data-label="Status">${getBadge(r.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
-        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openZahlungserinnerung('${r.id}')" style="color:var(--blue);border-color:var(--blue)">🔔 Erinnerung</button>`:''}
-        ${r.status!=='bezahlt'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red);border-color:var(--red)">⚠ Mahnung</button>`:''}
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openZahlungserinnerung('${r.id}')" style="color:var(--blue);border-color:var(--blue)">🔔 Erinnerung</button>`:''}
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red);border-color:var(--red)">⚠ Mahnung</button>`:''}
         <button class="btn-ghost btn-sm" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">🖨 PDF</button>
         <button class="btn-ghost btn-sm" onclick="event.stopPropagation();openRechnungModal('${r.id}')">✏</button>
         <button class="btn-ghost btn-sm" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${r.archiviert?'📤':'📦'}</button>
@@ -4037,7 +4123,7 @@ function renderDashboard() {
   // Today / Wiedervorlagen
   if(!DB.wiedervorlagen) DB.wiedervorlagen = [];
   renderTodoSection();
-  const offeneAngebote = DB.angebote.filter(a=>a.status==='gesendet'||a.status==='entwurf');
+  const offeneAngebote = DB.angebote.filter(a=>a.status==='gesendet');
   const pipelineWert = offeneAngebote.reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
   const bezahlteRg = DB.rechnungen.filter(r=>r.status==='bezahlt');
   const umsatz = bezahlteRg.reduce((s,r)=>{
@@ -4046,7 +4132,7 @@ function renderDashboard() {
     return s + Math.max(0, brutto - abzug);
   },0);
   const kunden = DB.contacts.filter(c=>c.status==='gewonnen').length;
-  const offeneRg = DB.rechnungen.filter(r=>r.status!=='bezahlt');
+  const offeneRg = DB.rechnungen.filter(isOpenRechnung);
   const offenWert = offeneRg.reduce((s,r)=>{
     const brutto = sumPositions(r.positions).brutto;
     const abzug = (r.rTyp==='schluss' && r.anzahl>0) ? r.anzahl : 0;
@@ -4054,7 +4140,7 @@ function renderDashboard() {
   },0);
 
   document.getElementById('kpi-pipeline').textContent = fmtEur(pipelineWert);
-  document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote offen';
+  document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote gesendet';
   document.getElementById('kpi-umsatz').textContent = fmtEur(umsatz);
   document.getElementById('kpi-umsatz-sub').textContent = bezahlteRg.length+' Rechnungen bezahlt';
   document.getElementById('kpi-kunden').textContent = kunden;
@@ -4664,7 +4750,7 @@ async function sbLoadAufgaben() {
       id: r.id, kontaktId: r.kontakt_id,
       text: r.titel,      // DB.kanban uses 'text' not 'titel'
       notiz: r.beschreibung||'',
-      col: r.status||'todo',
+      col: ['todo','doing','done'].includes(r.status) ? r.status : 'todo',
       prio: r.prioritaet||'mittel',
       datum: r.faellig||null,
       createdAt: r.created_at
@@ -4677,10 +4763,13 @@ async function sbSaveKalEvent(e) {
   if(!_useSupabase) return;
   try {
     const sb = await getSupabase();
+    const parsed = splitBis(e.notiz||'');
+    const bis = e.bis || parsed.bis;
     await sb.from('kal_events').upsert({
       id: e.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
       titel: e.titel, datum: e.datum, zeit: e.zeit||null,
-      typ: e.typ||'termin', kontakt_id: e.kontaktId||null, notiz: e.notiz||null
+      typ: e.typ||'termin', kontakt_id: e.kontaktId||null,
+      notiz: joinBis(parsed.rest, bis) || null
     });
   } catch(e) { console.warn(e); }
 }
@@ -4697,11 +4786,14 @@ async function sbLoadKalEvents() {
     const sb = await getSupabase();
     const { data } = await sb.from('kal_events').select('*')
       .eq('workspace_id', _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID);
-    return (data||[]).map(r => ({
-      id: r.id, titel: r.titel, datum: r.datum,
-      zeit: r.zeit||'', typ: r.typ||'termin',
-      kontaktId: r.kontakt_id, notiz: r.notiz||''
-    }));
+    return (data||[]).map(r => {
+      const parsed = splitBis(r.notiz||'');
+      return {
+        id: r.id, titel: r.titel, datum: r.datum,
+        zeit: r.zeit||'', bis: parsed.bis, typ: r.typ||'termin',
+        kontaktId: r.kontakt_id, notiz: parsed.rest
+      };
+    });
   } catch(e) { console.warn(e); return null; }
 }
 
@@ -5313,10 +5405,11 @@ function getAllKalEvents() {
 
   // Custom events
   (DB.kalEvents||[]).forEach(e => {
+    const parsed = splitBis(e.notiz||'');
     const ev = {
       id: e.id, datum: e.datum, titel: e.titel,
-      zeit: e.zeit||'', bis: e.bis||'',
-      typ: e.typ||'termin', notiz: e.notiz||'',
+      zeit: e.zeit||'', bis: e.bis||parsed.bis,
+      typ: e.typ||'termin', notiz: parsed.rest,
       kontaktId: e.kontaktId||null,
       color: getKalEventColor(e.typ),
       source: 'custom'
@@ -5335,7 +5428,7 @@ function getAllKalEvents() {
   });
 
   // Fällige Rechnungen
-  (DB.rechnungen||[]).filter(r=>r.status!=='bezahlt'&&r.faellig).forEach(r => {
+  (DB.rechnungen||[]).filter(r=>isOpenRechnung(r)&&r.faellig).forEach(r => {
     const c = DB.contacts.find(x=>x.id===r.kundeId);
     const ev = {
       id:'rg_'+r.id, datum:r.faellig,
@@ -5484,7 +5577,7 @@ function renderKalWeek() {
       ${dayEvents.map(e=>`
         <div onclick="event.stopPropagation();kalEventClick('${e.id}','${esc(e.source)}')"
           style="font-size:11px;font-weight:600;color:#fff;background:${esc(e.color)};border-radius:3px;padding:4px 7px;margin-bottom:4px;cursor:pointer;line-height:1.4">
-          ${e.zeit?`<span style="opacity:.8;font-size:10px">${esc(e.zeit)}</span><br>`:''}${esc(e.titel)}
+          ${(e.zeit||e.bis)?`<span style="opacity:.8;font-size:10px">${esc([e.zeit,e.bis].filter(Boolean).join('–'))}</span><br>`:''}${esc(e.titel)}
         </div>`).join('')}
       ${!dayEvents.length?`<div style="font-size:11px;color:var(--border);text-align:center;padding-top:20px">–</div>`:''}
     </div>`;
@@ -5514,7 +5607,7 @@ function renderKalUpcoming() {
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.titel)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:2px">
-          ${isToday?'<strong style="color:var(--orange)">Heute</strong>':fmtDate(e.datum)}${e.zeit?' · '+esc(e.zeit):''}
+          ${isToday?'<strong style="color:var(--orange)">Heute</strong>':fmtDate(e.datum)}${(e.zeit||e.bis)?' · '+esc([e.zeit,e.bis].filter(Boolean).join('–')):''}
           ${c?` · ${esc(c.firma)}`:''}
         </div>
       </div>
@@ -5533,7 +5626,8 @@ function kalEventClick(id, source) {
     const e = _kalEventMap[id];
     if(!e) return;
     const c = e.kontaktId ? DB.contacts.find(x=>x.id===e.kontaktId) : null;
-    const lines = [e.titel, fmtDate(e.datum)+(e.zeit?' · '+e.zeit:''), c?'Kontakt: '+c.firma:'', e.notiz||''].filter(Boolean);
+    const zeit = [e.zeit, e.bis].filter(Boolean).join('–');
+    const lines = [e.titel, fmtDate(e.datum)+(zeit?' · '+zeit:''), c?'Kontakt: '+c.firma:'', e.notiz||''].filter(Boolean);
     alert(lines.join('\n'));
   }
 }
@@ -5549,16 +5643,12 @@ function openKalEventModal(id, prefillDate) {
   document.getElementById('kal-modal-title').textContent = id ? 'Termin bearbeiten' : 'Neuer Termin';
   document.getElementById('ke-titel').value = e?.titel||'';
   document.getElementById('ke-datum').value = e?.datum||prefillDate||today();
+  const parsedBis = splitBis(e?.notiz||'');
   document.getElementById('ke-zeit').value = e?.zeit||'';
-  document.getElementById('ke-bis').value = e?.bis||'';
-  // Explicitly reset typ to default first, then set correct value
-  const typSelect = document.getElementById('kal-typ');
-  typSelect.value = 'termin'; // reset
-  const typVal = e?.typ||'termin';
-  const optExists = Array.from(typSelect.options).some(o=>o.value===typVal);
-  typSelect.value = optExists ? typVal : 'termin';
+  document.getElementById('ke-bis').value = e?.bis||parsedBis.bis||'';
+  setSelectValue('kal-typ', e?.typ, 'termin');
   document.getElementById('ke-kontakt').value = e?.kontaktId||'';
-  document.getElementById('ke-notiz').value = e?.notiz||'';
+  document.getElementById('ke-notiz').value = parsedBis.rest;
   document.getElementById('ke-reminder').checked = e?.reminder||false;
   document.getElementById('kal-delete-btn').style.display = id ? 'block' : 'none';
   document.getElementById('kal-event-modal').classList.add('open');
@@ -5611,13 +5701,14 @@ function saveKalEvent() {
   const titel = document.getElementById('ke-titel').value.trim();
   const datum = document.getElementById('ke-datum').value;
   if(!titel||!datum) { alert('Bitte Titel und Datum ausfüllen.'); return; }
+  const bis = document.getElementById('ke-bis').value;
   const obj = {
     id: editId||uid(), titel, datum,
     zeit: document.getElementById('ke-zeit').value,
-    bis: document.getElementById('ke-bis').value,
+    bis,
     typ: document.getElementById('kal-typ').value,
     kontaktId: document.getElementById('ke-kontakt').value||null,
-    notiz: document.getElementById('ke-notiz').value,
+    notiz: splitBis(document.getElementById('ke-notiz').value).rest,
     reminder: document.getElementById('ke-reminder').checked
   };
   if(editId) { const i=DB.kalEvents.findIndex(x=>x.id===editId); if(i>-1) DB.kalEvents[i]=obj; }
@@ -5680,9 +5771,8 @@ function openRetainerModal(id) {
   document.getElementById('ret-betrag').value = r?.betrag||'';
   document.getElementById('ret-start').value = r?.start||today();
   document.getElementById('ret-leistungen').value = r?.leistungen||'';
-  document.getElementById('ret-status').value = r?.status||'aktiv';
-  const abt = document.getElementById('ret-abrechnungstag');
-  if(abt) abt.value = r?.abrechnungstag||'1';
+  setSelectValue('ret-status', r?.status, 'aktiv');
+  setSelectValue('ret-abrechnungstag', r?.abrechnungstag, '1');
   document.getElementById('ret-next').value = r?.next||addDays(today(),30);
   document.getElementById('retainer-modal').classList.add('open');
 }
@@ -5814,12 +5904,14 @@ function openKanbanTaskModal(id) {
   populateKundenSelect('kt-kontakt');
   const kt = id ? DB.kanban.find(x=>x.id===id) : null;
   document.getElementById('kanban-modal-title').textContent = id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe';
+  const bot = splitBot(kt?.notiz||'');
   document.getElementById('kt-text').value = kt?.text||'';
   document.getElementById('kt-kontakt').value = kt?.kontaktId||'';
-  document.getElementById('kt-col').value = kt?.col||'todo';
-  document.getElementById('kt-prio').value = kt?.prio||'normal';
+  setSelectValue('kt-col', ['todo','doing','done'].includes(kt?.col) ? kt.col : 'todo', 'todo');
+  setSelectValue('kt-prio', kt?.prio, 'normal');
+  setSelectValue('kt-bot', bot.bot, '');
   document.getElementById('kt-datum').value = kt?.datum||'';
-  document.getElementById('kt-notiz').value = kt?.notiz||'';
+  document.getElementById('kt-notiz').value = bot.rest;
   document.getElementById('kanban-modal').classList.add('open');
 }
 
@@ -5832,7 +5924,7 @@ function saveKanbanTask() {
     col: document.getElementById('kt-col').value,
     prio: document.getElementById('kt-prio').value,
     datum: document.getElementById('kt-datum').value,
-    notiz: document.getElementById('kt-notiz').value,
+    notiz: joinBot(document.getElementById('kt-bot').value, document.getElementById('kt-notiz').value),
     createdAt: editId ? DB.kanban.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
   };
   if(editId) { const i=DB.kanban.findIndex(x=>x.id===editId); if(i>-1) DB.kanban[i]=obj; }
@@ -5884,8 +5976,10 @@ function renderKanban() {
         ${tasks.length?tasks.map(t=>{
           const c=t.kontaktId?DB.contacts.find(x=>x.id===t.kontaktId):null;
           const overdue=t.datum&&t.datum<today()&&t.col!=='done';
+          const zugewiesen=botLabel(splitBot(t.notiz).bot);
           return `<div style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:4px;padding:10px 12px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
             <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:4px">${esc(t.text)}</div>
+            ${zugewiesen?`<div style="font-size:10px;color:var(--blue);margin-bottom:3px">Zugewiesen an ${esc(zugewiesen)}</div>`:''}
             ${c?`<div style="font-size:10px;color:var(--muted)">👤 ${esc(c.firma)}</div>`:''}
             ${t.datum?`<div style="font-size:10px;color:${overdue?'var(--red)':'var(--muted)'};margin-top:3px">${overdue?'⚠ ':' '}${fmtDate(t.datum)}</div>`:''}
             <div style="display:flex;gap:5px;margin-top:7px">
@@ -6060,7 +6154,7 @@ function renderDashCalEvents(){
       <div style="width:4px;align-self:stretch;border-radius:2px;background:${esc(e.color)};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(e.titel)}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px">${isToday?'<strong style="color:var(--orange)">Heute</strong>':'Morgen'}${e.zeit?' · '+esc(e.zeit):''}${c?' · '+esc(c.firma):''}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${isToday?'<strong style="color:var(--orange)">Heute</strong>':'Morgen'}${(e.zeit||e.bis)?' · '+esc([e.zeit,e.bis].filter(Boolean).join('–')):''}${c?' · '+esc(c.firma):''}</div>
       </div>
     </div>`;
   }).join('');
@@ -6073,11 +6167,12 @@ function renderAngeboteSummary(){
   const el=document.getElementById('angebote-summary');
   if(!el) return;
   const all=DB.angebote;
+  const sumBrutto = pred => fmtEur(all.filter(pred).reduce((s,a)=>s+sumPositions(a.positions).brutto,0));
   const stats=[
-    {label:'Gesamt',val:all.length,sub:fmtEur(all.reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--blue)',icon:'📋'},
-    {label:'Offen / Entwurf',val:all.filter(a=>a.status==='entwurf'||a.status==='gesendet').length,sub:fmtEur(all.filter(a=>a.status==='entwurf'||a.status==='gesendet').reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--orange)',icon:'📤'},
-    {label:'Akzeptiert',val:all.filter(a=>a.status==='akzeptiert').length,sub:fmtEur(all.filter(a=>a.status==='akzeptiert').reduce((s,a)=>s+sumPositions(a.positions).brutto,0)),color:'var(--green)',icon:'✅'},
-    {label:'Abgelehnt',val:all.filter(a=>a.status==='abgelehnt').length,sub:'',color:'var(--red)',icon:'✗'},
+    {label:'Entwurf',val:all.filter(a=>a.status==='entwurf').length,sub:sumBrutto(a=>a.status==='entwurf'),color:'var(--muted)',icon:'✏'},
+    {label:'Gesendet',val:all.filter(a=>a.status==='gesendet').length,sub:sumBrutto(a=>a.status==='gesendet'),color:'var(--orange)',icon:'📤'},
+    {label:'Akzeptiert',val:all.filter(a=>a.status==='akzeptiert').length,sub:sumBrutto(a=>a.status==='akzeptiert'),color:'var(--green)',icon:'✅'},
+    {label:'Abgelehnt',val:all.filter(a=>a.status==='abgelehnt').length,sub:sumBrutto(a=>a.status==='abgelehnt'),color:'var(--red)',icon:'✗'},
   ];
   el.innerHTML=stats.map(s=>`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${esc(s.color)};box-shadow:var(--shadow)">
     <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${esc(s.icon)} ${esc(s.label)}</div>
@@ -6088,11 +6183,12 @@ function renderRechnungenSummary(){
   const el=document.getElementById('rechnungen-summary');
   if(!el) return;
   const all=DB.rechnungen;
-  const ueber=all.filter(r=>r.status!=='bezahlt'&&r.faellig&&new Date(r.faellig)<new Date());
+  const ueber=all.filter(r=>(r.status==='ueberfaellig') || (r.status==='offen-rg' && r.faellig && new Date(r.faellig)<new Date()));
+  const sumRg = pred => fmtEur(all.filter(pred).reduce((s,r)=>s+sumPositions(r.positions).brutto,0));
   const stats=[
-    {label:'Gesamt',val:all.length,sub:fmtEur(all.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--blue)',icon:'🧾'},
-    {label:'Offen',val:all.filter(r=>r.status==='offen-rg').length,sub:fmtEur(all.filter(r=>r.status==='offen-rg').reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--orange)',icon:'⏳'},
-    {label:'Bezahlt',val:all.filter(r=>r.status==='bezahlt').length,sub:fmtEur(all.filter(r=>r.status==='bezahlt').reduce((s,r)=>s+sumPositions(r.positions).brutto,0)),color:'var(--green)',icon:'✅'},
+    {label:'Entwurf',val:all.filter(r=>r.status==='entwurf').length,sub:sumRg(r=>r.status==='entwurf'),color:'var(--muted)',icon:'✏'},
+    {label:'Offen',val:all.filter(r=>r.status==='offen-rg').length,sub:sumRg(r=>r.status==='offen-rg'),color:'var(--orange)',icon:'⏳'},
+    {label:'Bezahlt',val:all.filter(r=>r.status==='bezahlt').length,sub:sumRg(r=>r.status==='bezahlt'),color:'var(--green)',icon:'✅'},
     {label:'Überfällig',val:ueber.length,sub:ueber.length?fmtEur(ueber.reduce((s,r)=>s+sumPositions(r.positions).brutto,0)):'',color:'var(--red)',icon:'🔴'},
   ];
   el.innerHTML=stats.map(s=>`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px 16px;border-top:3px solid ${esc(s.color)};box-shadow:var(--shadow)">
@@ -6113,7 +6209,7 @@ function exportMonatsbericht(){
   const inMonth=d=>d&&d>=moStart&&d<=moEnd;
   const rgsMonth=DB.rechnungen.filter(r=>inMonth(r.datum));
   const bezahlt=rgsMonth.filter(r=>r.status==='bezahlt');
-  const offene=DB.rechnungen.filter(r=>r.status!=='bezahlt');
+  const offene=DB.rechnungen.filter(isOpenRechnung);
   const mrr=(DB.retainer||[]).filter(r=>r.status==='aktiv').reduce((s,r)=>s+parseFloat(r.betrag||0),0);
   const angebotsumme=DB.angebote.filter(a=>inMonth(a.datum)).reduce((s,a)=>s+sumPositions(a.positions).brutto,0);
   const upcoming=(getAllKalEvents()||[]).filter(e=>e.datum>=today()).sort((a,b)=>a.datum.localeCompare(b.datum)).slice(0,5);
@@ -6889,7 +6985,7 @@ function renderContactDetail(cid) {
   const angebote = DB.angebote.filter(a => a.kundeId === cid);
   const rechnungen = DB.rechnungen.filter(r => r.kundeId === cid);
   const bezahlt = rechnungen.filter(r => r.status === 'bezahlt').reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
-  const offen = rechnungen.filter(r => r.status !== 'bezahlt').reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
+  const offen = rechnungen.filter(isOpenRechnung).reduce((s,r) => s+sumPositions(r.positions).brutto, 0);
   const noteIcons = {anruf:'📞', email:'✉', termin:'📅', notiz:'📝', angebot:'📋'};
   const noteLabels = {anruf:'Anruf', email:'E-Mail', termin:'Termin', notiz:'Notiz', angebot:'Angebot'};
 
@@ -6965,13 +7061,21 @@ function renderContactDetail(cid) {
         <div style="color:var(--muted);font-size:12px">Noch keine Rechnungen.</div>
       </div>`}
 
+      <!-- Interne Notizen (angehängte Gesprächsnotizen) -->
+      <div class="dash-card">
+        <h3 style="margin-bottom:10px">📝 Interne Notizen</h3>
+        ${c.notes
+          ? `<div style="font-size:12px;color:var(--ink);white-space:pre-wrap;line-height:1.55">${esc(c.notes)}</div>`
+          : `<div style="color:var(--muted);font-size:12px">Noch keine internen Notizen.</div>`}
+      </div>
+
       <!-- Timeline / Notizen -->
       <div class="dash-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <h3>📋 Aktivitäts-Timeline</h3>
           <button class="btn-yellow btn-sm" onclick="openNotizModal('${c.id}')">+ Notiz</button>
         </div>
-        ${c.notizen.length ? c.notizen.sort((a,b) => b.datum.localeCompare(a.datum)).map(n => `
+        ${c.notizen.length ? c.notizen.slice().sort((a,b) => String(b.datum||'').localeCompare(String(a.datum||''))).map(n => `
           <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
             <div style="font-size:18px;flex-shrink:0">${noteIcons[n.typ]||'📝'}</div>
             <div style="flex:1">
@@ -7228,11 +7332,11 @@ function openAusgabeModal(id) {
   editId = id || null;
   const a = id ? DB.ausgaben.find(x=>x.id===id) : null;
   document.getElementById('ausgabe-modal-title').textContent = id ? 'Ausgabe bearbeiten' : 'Neue Ausgabe';
-  document.getElementById('ag-typ').value = a?.typ || 'ausgabe';
+  setSelectValue('ag-typ', a?.typ, 'ausgabe');
   document.getElementById('ag-datum').value = a?.datum || today();
   document.getElementById('ag-desc').value = a?.desc || '';
-  document.getElementById('ag-kat').value = a?.kat || 'software';
-  document.getElementById('ag-mwst').value = a?.mwstPct || 19;
+  setSelectValue('ag-kat', a?.kat, 'software');
+  setSelectValue('ag-mwst', (a && a.mwstPct!=null && a.mwstPct!=='') ? a.mwstPct : 19, '19');
   document.getElementById('ag-netto').value = a?.netto || '';
   document.getElementById('ag-mwst-betrag').value = a?.mwstBetrag || '';
   document.getElementById('ag-brutto').value = a?.brutto || '';
@@ -7504,7 +7608,7 @@ function openROIEintragModal(id) {
   const r = id ? DB.roi.find(x=>x.id===id) : null;
   populateKundenSelect('roi-m-kunde');
   document.getElementById('roi-m-kunde').value = r?.kundeId||'';
-  document.getElementById('roi-m-kanal').value = r?.kanal||'google';
+  setSelectValue('roi-m-kanal', r?.kanal, 'google');
   document.getElementById('roi-m-monat').value = r?.monat||new Date().getMonth()+1;
   document.getElementById('roi-m-jahr').value = r?.jahr||new Date().getFullYear();
   document.getElementById('roi-m-budget').value = r?.budget||'';
@@ -7629,7 +7733,7 @@ function renderROI() {
     const c = DB.contacts.find(x=>x.id===r.kundeId);
     const roasC = r.roas>=3?'var(--green)':r.roas>=1?'var(--orange)':'var(--red)';
     const roiC = r.roi>=0?'var(--green)':'var(--red)';
-    const kanalMap = {google:'🔵 Google',meta:'🟣 Meta',beide:'🔵🟣 Beide',sonstige:'Sonstige'};
+    const kanalMap = {google:'🔵 Google',meta:'🟣 Meta',instagram:'📸 Instagram',seo:'🔍 SEO',beide:'🔵🟣 Beide',sonstige:'Sonstige',sonstiges:'Sonstiges'};
     return `<tr>
       <td style="font-weight:600">${MONAT_LABELS[r.monat-1]} ${esc(r.jahr)}</td>
       <td>${esc(c?.firma||'?')}</td>
@@ -8682,7 +8786,7 @@ async function migrateFromDrive() {
             titel: e.titel||'Termin', datum: e.datum||null,
             zeit: e.zeit||null, typ: e.typ||'termin',
             kontakt_id: isUUID(e.kontaktId) ? e.kontaktId : null,
-            notiz: e.notiz||null
+            notiz: joinBis(e.notiz, e.bis)||null
           });
           success++;
         } catch(e2) { errors++; }
@@ -10047,7 +10151,8 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
       const media = a.type==='video' ? `<video src="${esc(u)}#t=0.5" muted preload="metadata"></video><span>▶ ${esc(fmtSize(a.size))}</span>` : `<img src="${esc(u)}" loading="lazy" alt="${esc(a.filename)}"><span>${i+1}</span>`;
       return `<div class="sm-thumb" title="${esc(a.filename)}" onclick="smPreview('${esc(p.id)}',${i})">${media}</div>`;
     }).join('');
-    const statusSel = `<select onchange="smSetStatus('${esc(p.id)}',this.value)" style="font-size:11px;padding:2px 4px">${STATUS.map(s=>`<option ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
+    const statusOpts = (p.status && !STATUS.includes(p.status) ? [p.status, ...STATUS] : STATUS);
+    const statusSel = `<select onchange="smSetStatus('${esc(p.id)}',this.value)" style="font-size:11px;padding:2px 4px">${statusOpts.map(s=>`<option value="${esc(s)}" ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
     return `<div class="sm-card">
       <div class="sm-head"><span class="sm-date">${esc(fmtD(p.datum))}${p.uhrzeit?' · '+esc(p.uhrzeit):''}</span>
         <span class="sm-pill fmt" title="${esc(p.format_detail||'')}">${esc(p.format||'–')}</span>
