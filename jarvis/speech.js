@@ -2,6 +2,8 @@
 // createElevenLabsSpeech spricht Satz für Satz über jarvis-tts und fällt bei Fehlern darauf zurück.
 
 const SENTENCE_CAP = 1400;
+// Zusätzliches Tempo nur für die ElevenLabs-Wiedergabe. 1 = Dateitempo.
+export const ELEVEN_PLAYBACK_RATE = 1.1;
 
 export function pullSentences(buffer, flush) {
   const ready = [];
@@ -191,6 +193,8 @@ export function createElevenLabsSpeech(opts = {}) {
       levelData = new Uint8Array(an.fftSize);
       analyserNode = an;
       src.buffer = buffer;
+      src.playbackRate.value = ELEVEN_PLAYBACK_RATE;
+      src.preservesPitch = true;
       src.connect(an);
       an.connect(ctx.destination);
       let settled = false;

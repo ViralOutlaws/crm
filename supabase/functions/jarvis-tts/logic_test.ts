@@ -28,15 +28,16 @@ Deno.test("Stimme aus der Umgebung, sonst der Standard", () => {
   eq(resolveVoice("kurz"), DEFAULT_VOICE, "kurz");
 });
 
-Deno.test("Tempo 0.7 bis 1.2, sonst 1.15", () => {
+Deno.test("Tempo wird auf 0.7 bis 1.2 geklemmt", () => {
   eq(resolveSpeed(undefined), DEFAULT_SPEED, "default");
+  eq(DEFAULT_SPEED, 1.2, "standard");
   eq(resolveSpeed(""), DEFAULT_SPEED, "leer");
   eq(resolveSpeed("1.15"), 1.15, "punkt");
   eq(resolveSpeed("1,15"), 1.15, "komma");
   eq(resolveSpeed("0.7"), 0.7, "min");
   eq(resolveSpeed("1.2"), 1.2, "max");
-  eq(resolveSpeed("0.69"), DEFAULT_SPEED, "zu langsam");
-  eq(resolveSpeed("1.21"), DEFAULT_SPEED, "zu schnell");
+  eq(resolveSpeed("0.69"), 0.7, "zu langsam");
+  eq(resolveSpeed("1.21"), 1.2, "zu schnell");
   eq(resolveSpeed("schnell"), DEFAULT_SPEED, "text");
 });
 

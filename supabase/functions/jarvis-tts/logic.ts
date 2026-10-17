@@ -3,7 +3,7 @@
 export const DEFAULT_MODEL = "eleven_multilingual_v2";
 export const FAST_MODEL = "eleven_flash_v2_5";
 export const DEFAULT_VOICE = "amAPTcyESqCO9CgYuf64";
-export const DEFAULT_SPEED = 1.15;
+export const DEFAULT_SPEED = 1.2;
 export const MIN_SPEED = 0.7;
 export const MAX_SPEED = 1.2;
 export const MAX_TEXT = 1500;
@@ -29,8 +29,9 @@ export function resolveSpeed(raw: string | undefined): number {
   const v = String(raw ?? "").trim().replace(",", ".");
   if (!v) return DEFAULT_SPEED;
   const n = Number(v);
-  if (!Number.isFinite(n) || n < MIN_SPEED || n > MAX_SPEED) return DEFAULT_SPEED;
-  return Math.round(n * 100) / 100;
+  if (!Number.isFinite(n)) return DEFAULT_SPEED;
+  const clamped = Math.min(MAX_SPEED, Math.max(MIN_SPEED, n));
+  return Math.round(clamped * 100) / 100;
 }
 
 export function prepareText(input: unknown, max = MAX_TEXT): string {
