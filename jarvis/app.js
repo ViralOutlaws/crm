@@ -25,10 +25,13 @@ import {
   fnUrl,
   getSupabase,
   ttsUrl,
+  botsView,
+  demoTask,
   loadArea,
   loadBriefing,
   loadCustomer,
   loadSide,
+  loadTask,
 } from "./data.js";
 
 const $ = (s) => document.querySelector(s);
@@ -101,20 +104,20 @@ function renderSide(data) {
   $("#todayDate").textContent = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
   const items = (d.today || []).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
   $("#todayList").innerHTML = items.length ? items.map((e) => e.type === "ev"
-    ? `<div class="row"><span class="time">${esc(e.t)}</span><div><span>${esc(e.x)}</span></div></div>`
-    : `<div class="row"><span class="chk"></span><div><span>${esc(e.x)}</span><div class="sub">${esc(e.t)}</div></div>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
+    ? `<button type="button" class="row tap" data-open="kalender"><span class="time">${esc(e.t)}</span><span>${esc(e.x)}</span></button>`
+    : `<div class="row tap" role="button" tabindex="0" data-open="task" data-id="${esc(e.id || "")}" data-title="${esc(e.x)}" data-status="${esc(e.status || "todo")}"><button type="button" class="chk" aria-pressed="${e.status === "done" ? "true" : "false"}" aria-label="${e.status === "done" ? "Wieder öffnen" : "Erledigen"}: ${esc(e.x)}" ${e.id ? "" : "disabled"}></button><span class="row-hit"><span>${esc(e.x)}</span><span class="sub">${esc(e.t)}</span></span>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
     : `<div class="empty">${DEMO ? "Keine Beispieltermine." : "Heute nichts geladen."}</div>`;
   const keys = [["lead", "Lead"], ["erstgespraech", "Erstgespr."], ["angebot", "Angebot"], ["gewonnen", "Gewonnen"]];
   const counts = d.counts || {};
   const mx = Math.max(1, ...keys.map(([k]) => counts[k] || 0));
-  $("#pipeMini").innerHTML = keys.map(([k, label]) => `<div class="stage ${k === "gewonnen" ? "win" : ""}"><b>${counts[k] || 0}</b><span>${label}</span><i style="width:${((counts[k] || 0) / mx) * 100}%"></i></div>`).join("");
+  $("#pipeMini").innerHTML = keys.map(([k, label]) => `<button type="button" class="stage tap ${k === "gewonnen" ? "win" : ""}" data-open="pipeline" data-stage="${esc(k)}" aria-label="Pipeline ${esc(label)}"><b>${counts[k] || 0}</b><span>${label}</span><i style="width:${((counts[k] || 0) / mx) * 100}%"></i></button>`).join("");
   $("#pipeVol").textContent = eur(d.volume || 0);
   $("#pipeTag").textContent = DEMO ? "Beispiel" : "Live";
   $("#invTag").textContent = DEMO ? "Beispiel" : "Live";
   const invoices = d.invoices || [];
-  $("#invMini").innerHTML = invoices.length ? invoices.map((i) => `<div class="inv ${i.over ? "over" : ""}"><div>${esc(i.k)}<span class="nr">${esc(i.nr)}</span></div><div class="amt">${eur(i.b)}<small>${i.over ? "überfällig" : "offen"}</small></div></div>`).join("") : `<div class="empty">${DEMO ? "Keine offenen Beispielrechnungen." : "Keine offenen Rechnungen."}</div>`;
+  $("#invMini").innerHTML = invoices.length ? invoices.map((i) => `<button type="button" class="inv tap ${i.over ? "over" : ""}" data-open="rechnungen"><span>${esc(i.k)}<span class="nr">${esc(i.nr)}</span></span><span class="amt">${eur(i.b)}<small>${i.over ? "überfällig" : "offen"}</small></span></button>`).join("") : `<div class="empty">${DEMO ? "Keine offenen Beispielrechnungen." : "Keine offenen Rechnungen."}</div>`;
   $("#invSum").textContent = eur(invoices.reduce((s, i) => s + (Number(i.b) || 0), 0));
-  $("#botList").innerHTML = BOTS.map((b) => `<div class="bot idle" id="bot-${b.id}"><div class="av">${b.letter}</div><div><div class="nm">${b.name}</div><div class="rl">${esc(b.role)}</div></div><span class="st">Bereit</span></div>`).join("");
+  $("#botList").innerHTML = BOTS.map((b) => `<button type="button" class="bot idle tap" id="bot-${b.id}" data-open="bots"><span class="av">${b.letter}</span><span><span class="nm">${b.name}</span><span class="rl">${esc(b.role)}</span></span><span class="st">Bereit</span></button>`).join("");
   $("#footMode").textContent = DEMO ? "◆ Beispieldaten · keine Verbindung zum CRM" : "◆ Live · Daten unter deiner Anmeldung";
   const mode = $("#hMode");
   if (mode) mode.textContent = DEMO ? "Demo" : "Live";
@@ -244,8 +247,19 @@ function openView(view, areaId) {
     btn.onclick = () => openArea(currentArea, JSON.parse(btn.getAttribute("data-filter")));
   });
   el.querySelectorAll("tr.click, .lc.click").forEach((row) => {
-    row.onclick = () => { if (row.dataset.id) openCustomer(row.dataset.id); };
+    row.onclick = () => {
+      if (!row.dataset.id) return;
+      if (row.dataset.open === "task") openTask(row.dataset.id);
+      else openCustomer(row.dataset.id);
+    };
+    row.onkeydown = (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      row.click();
+    };
   });
+  const form = el.querySelector(".task-form");
+  if (form && view.task) wireTaskForm(form, view.task);
   holoLayer.appendChild(el);
   holoLayer.classList.add("has");
   holoCount();
@@ -257,6 +271,7 @@ function renderBody(view) {
   const kpis = kpiHtml(view.kpis);
   const filters = (view.filters || []).map((f) => `<button type="button" data-filter="${esc(JSON.stringify(f.filter))}">${esc(f.label)}</button>`).join("");
   const bar = filters ? `<div class="filters">${filters}</div>` : "";
+  if (view.task) return spoken + taskHtml(view.task);
   if (view.customer) return spoken + kpis + dossierHtml(view.customer);
   if (view.lanes) return spoken + kpis + boardHtml(view);
   if (view.posts) return spoken + kpis + bar + postsHtml(view.posts);
@@ -277,7 +292,7 @@ function tableHtml(view) {
   const body = rows.map((r) => {
     const tds = cols.map((c) => `<td class="${c.align === "r" ? "r mono" : ""}">${esc(r.cells?.[c.key] ?? "")}</td>`).join("");
     const badge = r.badge ? `<td><span class="badge ${esc(r.badge.tone || "e")}">${esc(r.badge.text)}</span></td>` : "<td></td>";
-    const click = r.open === "customer" && r.id ? ` class="click" data-id="${esc(r.id)}"` : "";
+    const click = r.id && (r.open === "customer" || r.open === "task") ? ` class="click" tabindex="0" data-id="${esc(r.id)}" data-open="${esc(r.open)}"` : "";
     return `<tr${click}>${tds}${badge}</tr>`;
   }).join("");
   return `<table class="ht"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -323,6 +338,133 @@ function dossierHtml(c) {
       ${list("Termine", (c.termine || []).map((a) => ({ a: a.datum, b: a.titel, c: a.zeit || "" })))}
     </div></div>`;
 }
+
+function taskStatusPlan(task, next) {
+  const title = task.x || task.titel || "Aufgabe";
+  return {
+    kind: "aufgabe_status",
+    tool: "set_aufgaben_status",
+    table: "aufgaben",
+    action: "update",
+    bot: null,
+    summary: next === "done" ? `Aufgabe erledigen: ${title}` : `Aufgabe wieder öffnen: ${title}`,
+    lines: ["Anzahl: 1", next === "done" ? "Status: Erledigt" : "Status: Offen", title],
+    data: { ids: [task.id], titles: [title], count: 1, scope: "single", confirm: true, status: next },
+  };
+}
+
+function askTaskToggle(task, anchor) {
+  if (!task?.id) {
+    toast("Aufgabe", "Diese Zeile hat keine ID.", "!");
+    return;
+  }
+  document.querySelectorAll(".inline-confirm").forEach((n) => n.remove());
+  const next = task.status === "done" ? "todo" : "done";
+  const box = document.createElement("div");
+  box.className = "inline-confirm";
+  box.setAttribute("role", "group");
+  box.innerHTML = `<span>${esc(next === "done" ? "Erledigen" : "Wieder öffnen")}: ${esc(task.x || task.titel)}</span><button type="button" class="yes">Ja</button><button type="button" class="no">Nein</button>`;
+  anchor.insertAdjacentElement("afterend", box);
+  box.querySelector(".no").onclick = () => box.remove();
+  box.querySelector(".yes").onclick = () => confirmPlan(taskStatusPlan(task, next), box);
+  box.querySelector(".yes").focus();
+}
+
+function taskHtml(t) {
+  const prios = ["hoch", "normal", "niedrig", "mittel"];
+  const opts = prios.map((p) => `<option value="${p}"${p === (t.prioritaet || "normal") ? " selected" : ""}>${p}</option>`).join("");
+  const stand = t.status === "done" ? "erledigt" : t.status === "doing" ? "in Arbeit" : "offen";
+  return `<form class="task-form" data-id="${esc(t.id)}">
+    <label>Titel<input name="titel" value="${esc(t.titel)}" maxlength="300" required></label>
+    <label>Fällig<input name="faellig" type="date" value="${esc(t.faellig || "")}"></label>
+    <label>Priorität<select name="prioritaet">${opts}</select></label>
+    <label>Beschreibung<textarea name="beschreibung" maxlength="5000">${esc(t.beschreibung || "")}</textarea></label>
+    <p class="task-stand">Status: ${esc(stand)}</p>
+    <div class="acts"><button type="submit">Änderung bestätigen</button><button type="button" class="ghost" data-toggle>${t.status === "done" ? "Wieder öffnen" : "Erledigen"}</button></div>
+  </form>`;
+}
+
+function wireTaskForm(form, task) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const titel = form.titel.value.trim();
+    if (!titel) return;
+    const faellig = form.faellig.value;
+    const prioritaet = form.prioritaet.value;
+    const beschreibung = form.beschreibung.value.trim();
+    const patch = { titel, prioritaet, faellig: faellig || null };
+    if (beschreibung) patch.beschreibung = beschreibung;
+    showConfirm({
+      kind: "crm_update",
+      tool: "crm_update",
+      table: "aufgaben",
+      action: "update",
+      bot: null,
+      summary: `Aufgabe ändern: ${titel}`,
+      lines: [`Titel: ${titel}`, `Fällig: ${faellig || "—"}`, `Priorität: ${prioritaet}`],
+      data: { table: "aufgaben", ids: [task.id], titles: [titel], count: 1, scope: "single", confirm: true, patch },
+    });
+  });
+  form.querySelector("[data-toggle]").addEventListener("click", () => askTaskToggle({ id: task.id, x: task.titel, status: task.status }, form));
+}
+
+async function openTask(id) {
+  if (!id) return openArea("aufgaben", { due: "today" });
+  const cut = speechCut;
+  beginReply();
+  setMode("think");
+  try {
+    const view = DEMO ? demoTask(id) : await loadTask(sb, id);
+    openView(view, "aufgaben");
+    if (cut !== speechCut) return;
+    await say(view.spoken || "Hier ist die Aufgabe.");
+  } catch (e) {
+    if (cut !== speechCut) return;
+    await say(e.message || "Die Aufgabe ist nicht lesbar.");
+  }
+}
+
+async function openBots() {
+  const cut = speechCut;
+  beginReply();
+  setMode("think");
+  const view = botsView();
+  openView(view, "aufgaben");
+  if (cut !== speechCut) return;
+  await say(view.spoken);
+}
+
+function openDash(el) {
+  const kind = el.dataset.open;
+  if (kind === "aufgaben") return openArea("aufgaben", el.dataset.due ? { due: el.dataset.due } : null);
+  if (kind === "pipeline") return openArea("pipeline", el.dataset.stage ? { status: el.dataset.stage } : null);
+  if (kind === "rechnungen") return openArea("rechnungen");
+  if (kind === "bots") return openBots();
+  if (kind === "kalender") return openArea("kalender");
+  if (kind === "task") return openTask(el.dataset.id);
+}
+
+$("#app").addEventListener("click", (e) => {
+  const chk = e.target.closest(".chk");
+  if (chk) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = chk.closest("[data-open='task']");
+    if (!row) return;
+    askTaskToggle({ id: row.dataset.id, x: row.dataset.title, status: row.dataset.status || "todo" }, row);
+    return;
+  }
+  const open = e.target.closest("[data-open]");
+  if (!open || !open.closest("#app")) return;
+  openDash(open);
+});
+$("#app").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const open = e.target.closest("[data-open]");
+  if (!open || !open.closest("#app") || open.tagName === "BUTTON" || open.tagName === "A") return;
+  e.preventDefault();
+  openDash(open);
+});
 
 function closeEl(h, instant) {
   if (!h || h.classList.contains("closing")) return;
@@ -379,6 +521,10 @@ async function confirmPlan(plan, el) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "Speichern fehlgeschlagen.");
     el.remove();
+    if (sb) {
+      const side = await loadSide(sb).catch(() => null);
+      if (side) renderSide(side);
+    }
     if (body.bot) activateBot(body.bot, body.summary || plan.summary);
     await say(body.log_warning ? `${body.summary}. ${body.log_warning}` : `${body.summary || "Gespeichert"}.`);
     if (body.panel) openArea(panelToArea(body.panel)).catch(() => {});
@@ -407,7 +553,7 @@ async function openArea(id, filter) {
     if (id === "social" && filter?.view === "month" && DEMO) view.title = "Social · Monat";
     openView(view, id);
     if (cut !== speechCut) return;
-    const n = view.posts ? view.posts.length : (view.rows ? view.rows.length : null);
+    const n = view.posts ? view.posts.length : view.lanes ? Object.values(view.lanes).reduce((s, a) => s + a.length, 0) : (view.rows ? view.rows.length : null);
     const line = view.spoken || (n == null ? `${view.title} ist offen.` : `${view.title}: ${n} Einträge.`);
     await say(line);
   } catch (e) {

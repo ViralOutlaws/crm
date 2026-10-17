@@ -104,9 +104,11 @@ function base(title, crm, rows, columns, kpis, filters = []) {
   return { title, meta: "CRM", crm, wide: true, rows, columns, kpis, filters, note: "" };
 }
 
+const STAGE_LABEL = { lead: "Lead", erstgespraech: "Erstgespräch", angebot: "Angebot", gewonnen: "Gewonnen", verloren: "Verloren" };
+
 export function filterRows(view, filter = {}) {
   if (!filter || !Object.keys(filter).length) return view;
-  const rows = (view.rows || []).filter((r) => {
+  let rows = (view.rows || []).filter((r) => {
     if (filter.only === "overdue" && !r.overdue) return false;
     if (filter.only === "drafts" && r.flags?.status !== "entwurf" && r.flags?.status !== "Idee") return false;
     if (filter.only === "open" && r.flags?.closed) return false;
@@ -115,7 +117,15 @@ export function filterRows(view, filter = {}) {
     if (filter.query && !String(r.search || "").includes(String(filter.query).toLowerCase())) return false;
     return true;
   });
-  return { ...view, rows, note: "Filter aktiv." };
+  if (filter.due === "today") rows = rows.filter((r) => r.overdue || r.flags?.today);
+  const next = { ...view, rows, note: "Filter aktiv." };
+  if (view.lanes && filter.status) {
+    const label = STAGE_LABEL[filter.status] || filter.status;
+    next.lanes = { [filter.status]: view.lanes[filter.status] || [] };
+    next.title = `Pipeline · ${label}`;
+    next.wide = false;
+  }
+  return next;
 }
 
 function nettoOf(positions) {
@@ -189,7 +199,7 @@ export async function loadArea(sb, area, filter = {}, userId) {
   const today = berlinToday();
   if (!AREAS.some((a) => a.id === area)) throw new Error("Unbekannter Bereich.");
   if (area === "contacts") return filterRows(await contactsView(sb, filter, today), filter);
-  if (area === "pipeline") return pipelineView(sb);
+  if (area === "pipeline") return filterRows(await pipelineView(sb), filter);
   if (area === "angebote") return filterRows(await docsView(sb, "angebote", today), filter);
   if (area === "rechnungen") return filterRows(await docsView(sb, "rechnungen", today), filter);
   if (area === "retainer") return filterRows(await retainerView(sb), filter);
@@ -350,13 +360,18 @@ function katalog(source, fromSettings) {
 async function aufgabenView(sb, today) {
   const { data, error } = await sb.from("aufgaben").select("id, titel, status, prioritaet, faellig, beschreibung").limit(200);
   throwDb(error);
-  const rows = (data || []).map((t) => ({
-    overdue: !!(t.faellig && t.faellig < today && t.status !== "done"),
-    flags: { status: t.status, closed: t.status === "done" },
-    search: String(t.titel || "").toLowerCase(),
-    cells: { titel: t.titel || "", faellig: t.faellig || "", prio: t.prioritaet || "", bot: botFromText(t.beschreibung) },
-    badge: { text: t.status === "done" ? "Erledigt" : t.faellig && t.faellig < today ? "Überfällig" : "Offen", tone: t.status === "done" ? "f" : t.faellig && t.faellig < today ? "o" : "w" },
-  }));
+  const rows = (data || []).map((t) => {
+    const overdue = !!(t.faellig && t.faellig < today && t.status !== "done");
+    return {
+      id: t.id,
+      open: "task",
+      overdue,
+      flags: { status: t.status, closed: t.status === "done", today: overdue || t.faellig === today },
+      search: String(t.titel || "").toLowerCase(),
+      cells: { titel: t.titel || "", faellig: t.faellig || "", prio: t.prioritaet || "", bot: botFromText(t.beschreibung) },
+      badge: { text: t.status === "done" ? "Erledigt" : overdue ? "Überfällig" : "Offen", tone: t.status === "done" ? "f" : overdue ? "o" : "w" },
+    };
+  });
   return base("Aufgaben", "kanban", rows, [
     { key: "titel", label: "Aufgabe" }, { key: "faellig", label: "Fällig" }, { key: "prio", label: "Priorität" }, { key: "bot", label: "Bot" },
   ], [
@@ -604,13 +619,13 @@ export async function loadSide(sb) {
   const today = berlinToday();
   const [ev, tasks, contacts, inv] = await Promise.all([
     sb.from("kal_events").select("titel, zeit").eq("datum", today).limit(8),
-    sb.from("aufgaben").select("titel, status, prioritaet, faellig").neq("status", "done").limit(8),
+    sb.from("aufgaben").select("id, titel, status, prioritaet, faellig").neq("status", "done").limit(8),
     sb.from("contacts").select("status, deal_wert, archiviert").limit(500),
     sb.from("rechnungen").select("nr, kunde_id, status, faellig, positions, archiviert").limit(80),
   ]);
   const events = (ev.data || []).map((e) => ({ t: e.zeit || "–", x: e.titel || "Termin", type: "ev" }));
   const taskRows = (tasks.data || []).filter((t) => t.faellig && t.faellig <= today).slice(0, 5).map((t) => ({
-    t: t.faellig, x: t.titel, type: "task", prio: t.prioritaet === "hoch", overdue: t.faellig < today,
+    t: t.faellig, x: t.titel, type: "task", id: t.id, status: t.status || "todo", prio: t.prioritaet === "hoch", overdue: t.faellig < today,
   }));
   const counts = { lead: 0, erstgespraech: 0, angebot: 0, gewonnen: 0, verloren: 0 };
   let volume = 0;
@@ -695,12 +710,7 @@ function demoViews() {
   ], [
     { key: "paket", label: "Paket" }, { key: "kunde", label: "Kunde" }, { key: "betrag", label: "Monat", align: "r" }, { key: "status", label: "Status" }, { key: "naechste", label: "Nächste Rechnung" },
   ], [{ label: "Aktiv", value: "1" }, { label: "MRR", value: eur(850), tone: "gold" }], [{ label: "nur aktive", filter: { status: "aktiv" } }]);
-  const aufgaben = base("Aufgaben", "kanban", [
-    task("Angebot Beispiel-Café fertigstellen", "2026-10-15", "hoch", "saley", true),
-    task("KW-Posts prüfen", "2026-10-17", "normal", "marky", false),
-    task("Backup Website", "2026-10-17", "niedrig", "webby", false),
-    task("Landingpage skizzieren", "2026-10-21", "normal", "developy", false),
-  ], [
+  const aufgaben = base("Aufgaben", "kanban", DEMO_TASKS.map(taskRow), [
     { key: "titel", label: "Aufgabe" }, { key: "faellig", label: "Fällig" }, { key: "prio", label: "Priorität" }, { key: "bot", label: "Bot" },
   ], [{ label: "Offen", value: "4" }, { label: "Überfällig", value: "1", tone: "red" }], [{ label: "nur überfällige", filter: { only: "overdue" } }]);
   const wiedervorlagen = base("Wiedervorlagen", "dashboard", [
@@ -780,14 +790,55 @@ function docCols(offer) {
   ];
 }
 
-function task(titel, faellig, prio, bot, overdue) {
+const DEMO_TASKS = [
+  { id: "a1000000-0000-4000-8000-000000000001", titel: "Angebot Beispiel-Café fertigstellen", faellig: "2026-10-15", prioritaet: "hoch", bot: "saley", status: "todo", beschreibung: "Zuständig: Saley (Vertrieb).\nAngebot schicken." },
+  { id: "a1000000-0000-4000-8000-000000000002", titel: "KW-Posts prüfen", faellig: "2026-10-17", prioritaet: "normal", bot: "marky", status: "todo", beschreibung: "Zuständig: Marky (Marketing / Social)." },
+  { id: "a1000000-0000-4000-8000-000000000003", titel: "Backup Website", faellig: "2026-10-17", prioritaet: "niedrig", bot: "webby", status: "todo", beschreibung: "Zuständig: Webby (Websites)." },
+  { id: "a1000000-0000-4000-8000-000000000004", titel: "Landingpage skizzieren", faellig: "2026-10-21", prioritaet: "normal", bot: "developy", status: "todo", beschreibung: "Zuständig: Developy (Software)." },
+];
+
+function taskRow(t) {
+  const overdue = t.faellig < "2026-10-17" && t.status !== "done";
   return {
+    id: t.id,
+    open: "task",
     overdue,
-    flags: { status: "todo", closed: false },
-    search: titel.toLowerCase(),
-    cells: { titel, faellig, prio, bot },
+    flags: { status: t.status, closed: t.status === "done", today: overdue || t.faellig === "2026-10-17" },
+    search: t.titel.toLowerCase(),
+    cells: { titel: t.titel, faellig: t.faellig, prio: t.prioritaet, bot: t.bot },
     badge: { text: overdue ? "Überfällig" : "Offen", tone: overdue ? "o" : "w" },
   };
+}
+
+function taskDetail(t) {
+  return {
+    title: "Aufgabe",
+    meta: t.titel,
+    crm: "aufgaben",
+    spoken: `${t.titel}, ${t.status === "done" ? "erledigt" : "offen"}${t.faellig ? `, fällig ${t.faellig}` : ""}.`,
+    task: t,
+  };
+}
+
+export function demoTask(id) {
+  const hit = DEMO_TASKS.find((t) => t.id === id);
+  if (!hit) throw new Error("Die Aufgabe ist nicht in den Beispieldaten.");
+  return taskDetail(hit);
+}
+
+export async function loadTask(sb, id) {
+  const { data, error } = await sb.from("aufgaben").select("id, titel, status, prioritaet, faellig, beschreibung").eq("id", id).maybeSingle();
+  throwDb(error);
+  if (!data) throw new Error("Die Aufgabe ist nicht mehr da.");
+  return taskDetail({
+    id: data.id,
+    titel: data.titel || "Ohne Titel",
+    status: data.status || "todo",
+    prioritaet: data.prioritaet || "normal",
+    faellig: data.faellig || "",
+    beschreibung: data.beschreibung || "",
+    bot: botFromText(data.beschreibung),
+  });
 }
 
 function post(datum, uhrzeit, format, hook, caption, tags, status, gradient) {
@@ -808,8 +859,9 @@ export function demoSide() {
     today: [
       { t: "09:30", x: "Erstgespräch Beispiel-Café", type: "ev" },
       { t: "11:00", x: "Content-Shooting Musterfirma", type: "ev" },
-      { t: "14:00", x: "Angebot Fitness-Studio Muster", type: "task", prio: true },
-      { t: "15:30", x: "KW-Posts prüfen", type: "task" },
+      ...DEMO_TASKS.filter((t) => t.faellig <= "2026-10-17").map((t) => ({
+        t: t.faellig, x: t.titel, type: "task", id: t.id, status: t.status, prio: t.prioritaet === "hoch",
+      })),
     ],
     counts: { lead: 2, erstgespraech: 1, angebot: 1, gewonnen: 2, verloren: 0 },
     volume: 9300,
@@ -937,3 +989,24 @@ export const BOTS = [
   { id: "cashy", name: "Cashy", role: "Finanzen", letter: "C" },
   { id: "developy", name: "Developy", role: "Software", letter: "D" },
 ];
+
+export function botsView() {
+  return {
+    title: "Bots",
+    meta: "Netzwerk",
+    crm: "aufgaben",
+    spoken: "Fünf Bots. Ein Auftrag wird eine Aufgabe und landet erst nach deiner Bestätigung.",
+    rows: BOTS.map((b) => ({
+      search: b.name.toLowerCase(),
+      cells: { name: b.name, rolle: b.role, stand: "Bereit" },
+      badge: { text: "Bereit", tone: "f" },
+    })),
+    columns: [
+      { key: "name", label: "Bot" },
+      { key: "rolle", label: "Rolle" },
+      { key: "stand", label: "Stand" },
+    ],
+    kpis: [{ label: "Bots", value: String(BOTS.length) }],
+    note: "Zuständig steht in der Aufgabe als erste Zeile. Es gibt keine eigene Bot-Tabelle.",
+  };
+}

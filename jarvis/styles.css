@@ -78,15 +78,26 @@ header{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-
 .ready .panel{opacity:1;transform:none}
 .panel::before{content:"";position:absolute;top:0;left:0;width:40px;height:2px;background:var(--gold);box-shadow:0 0 10px var(--gold)}
 .panel::after{content:"";position:absolute;right:0;bottom:0;width:60px;height:1px;background:linear-gradient(90deg,transparent,var(--cyan))}
-.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;width:100%}
+button.ph,button.sumline,button.row,button.inv,button.bot,button.stage{font:inherit;color:inherit;background:none;text-align:left;cursor:pointer}
+button.ph,button.sumline{border:0;padding:0}
+button.stage{text-align:center;width:100%}
+button.row,button.inv,button.bot{width:100%}
+.tap{cursor:pointer;transition:background .15s,border-color .15s,transform .12s}
+.tap:hover,.stage:hover{background:rgba(253,173,0,.1);border-color:var(--gold)}
+.tap:active{transform:translateY(1px)}
+.tap:focus-visible,.stage:focus-visible,.click:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
 .ph h3{font-family:'Bebas Neue';font-weight:400;font-size:20px;letter-spacing:.18em;color:var(--gold)}
 .tag{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--cyan);border:1px solid rgba(54,226,255,.35);padding:2px 6px;text-transform:uppercase}
 .row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid rgba(253,173,0,.08);font-size:13px}
 .row:first-of-type{border-top:0}
 .time{font-family:var(--mono);font-size:11px;color:var(--gold);min-width:42px}
 .row .sub{color:var(--mut);font-size:11px}
-.chk{width:12px;height:12px;border:1px solid var(--gold);flex:none;position:relative}
-.chk.done::after{content:"";position:absolute;inset:2px;background:var(--gold)}
+.row-hit{display:flex;flex-direction:column;min-width:0;flex:1;text-align:left}
+.chk{width:32px;height:32px;border:0;background:transparent;flex:none;display:grid;place-items:center;padding:0;cursor:pointer}
+.chk::before{content:"";width:14px;height:14px;border:1px solid var(--gold)}
+.chk[aria-pressed="true"]::before,.chk.done::after{background:var(--gold)}
+.chk:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 .row.done span{color:var(--mut);text-decoration:line-through}
 .prio{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.1em}
 .pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -96,15 +107,16 @@ header{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-
 .stage i{position:absolute;left:0;bottom:0;height:2px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
 .stage.win b{color:var(--green)}
 .stage.win i{background:var(--green);box-shadow:0 0 8px var(--green)}
-.inv{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(253,173,0,.08);font-size:13px}
+.inv{display:flex;align-items:center;gap:8px;padding:7px 0;border:0;border-top:1px solid rgba(253,173,0,.08);font-size:13px;width:100%}
 .inv:first-of-type{border-top:0}
 .inv .nr{font-family:var(--mono);font-size:10px;color:var(--mut);display:block}
 .inv .amt{margin-left:auto;font-family:var(--mono);font-size:12px;text-align:right}
 .inv .amt small{display:block;font-size:9px;color:var(--mut)}
 .inv.over .amt small{color:var(--red)}
-.sumline{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(253,173,0,.25);font-family:var(--mono);font-size:11px;color:var(--mut)}
+.sumline{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:8px;padding-top:8px;border:0;border-top:1px dashed rgba(253,173,0,.25);font-family:var(--mono);font-size:11px;color:var(--mut)}
 .sumline b{color:var(--gold);font-weight:500}
-.bot{display:flex;align-items:center;gap:11px;padding:8px 8px;margin:0 -8px;border-top:1px solid rgba(253,173,0,.08);transition:background .4s}
+.bot{display:flex;align-items:center;gap:11px;padding:8px 8px;margin:0 -8px;border:0;border-top:1px solid rgba(253,173,0,.08);transition:background .4s;text-align:left}
+.bot .nm,.bot .rl{display:block}
 .bot:first-of-type{border-top:0}
 .av{width:30px;height:30px;border-radius:50%;border:1px solid rgba(253,173,0,.4);display:grid;place-items:center;font-family:'Bebas Neue';font-size:16px;color:var(--gold);position:relative;flex:none}
 .bot .nm{font-weight:600;font-size:13px}
@@ -364,6 +376,20 @@ a:hover{text-decoration:underline}
 .confirm.danger h4{color:var(--red)}
 .confirm.danger .yes{background:var(--red);color:#fff;border-color:var(--red)}
 .confirm.danger .no{color:var(--red);border-color:var(--red)}
+.inline-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%;margin:4px 0 8px;padding:8px;border:1px solid var(--gold);background:rgba(20,15,4,.94);font-size:13px}
+.inline-confirm span{flex:1 1 140px;min-width:0}
+.inline-confirm button{min-height:36px;padding:0 12px;border:1px solid var(--gold);cursor:pointer}
+.inline-confirm .yes{background:var(--gold);color:#000;font-weight:600}
+.inline-confirm .no{background:transparent;color:var(--gold)}
+.task-form{display:flex;flex-direction:column;gap:10px;max-width:100%}
+.task-form label{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.task-form input,.task-form select,.task-form textarea{width:100%;min-height:44px;font:16px/1.4 Inter,system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--txt);background:rgba(0,0,0,.4);border:1px solid rgba(253,173,0,.35);padding:8px 10px}
+.task-form textarea{min-height:96px}
+.task-form input:focus,.task-form select:focus,.task-form textarea:focus{border-color:var(--gold);outline:none}
+.task-stand{font-family:var(--mono);font-size:12px;color:var(--cyan)}
+.task-form .acts{display:flex;flex-wrap:wrap;gap:8px}
+.task-form .acts button{min-height:44px;padding:0 14px;border:1px solid var(--gold);background:var(--gold);color:#000;font-weight:600;cursor:pointer}
+.task-form .acts .ghost{background:transparent;color:var(--gold)}
 
 #launcher{position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(46px,env(safe-area-inset-bottom));z-index:35;display:none;max-width:calc(100% - 16px);padding:10px;background:rgba(10,9,6,.88);border:1px solid rgba(253,173,0,.4);backdrop-filter:blur(10px);overscroll-behavior:contain}
 #launcher.open{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}

@@ -66,13 +66,13 @@
   <div class="main">
     <aside class="col">
       <section class="panel">
-        <div class="ph"><h3>Heute</h3><span class="tag" id="todayDate">—</span></div>
+        <button type="button" class="ph tap" data-open="aufgaben" data-due="today"><h3>Heute</h3><span class="tag" id="todayDate">—</span></button>
         <div id="todayList"></div>
       </section>
       <section class="panel">
-        <div class="ph"><h3>Pipeline</h3><span class="tag" id="pipeTag">—</span></div>
+        <button type="button" class="ph tap" data-open="pipeline"><h3>Pipeline</h3><span class="tag" id="pipeTag">—</span></button>
         <div class="pipe" id="pipeMini"></div>
-        <div class="sumline"><span>Volumen offen</span><b id="pipeVol">—</b></div>
+        <button type="button" class="sumline tap" data-open="pipeline"><span>Volumen offen</span><b id="pipeVol">—</b></button>
       </section>
     </aside>
 
@@ -101,12 +101,12 @@
 
     <aside class="col">
       <section class="panel">
-        <div class="ph"><h3>Offene Rechnungen</h3><span class="tag" id="invTag">—</span></div>
+        <button type="button" class="ph tap" data-open="rechnungen"><h3>Offene Rechnungen</h3><span class="tag" id="invTag">—</span></button>
         <div id="invMini"></div>
-        <div class="sumline"><span>Summe offen</span><b id="invSum">—</b></div>
+        <button type="button" class="sumline tap" data-open="rechnungen"><span>Summe offen</span><b id="invSum">—</b></button>
       </section>
       <section class="panel">
-        <div class="ph"><h3>Bot-Status</h3><span class="tag">Netzwerk</span></div>
+        <button type="button" class="ph tap" data-open="bots"><h3>Bot-Status</h3><span class="tag">Netzwerk</span></button>
         <div id="botList"></div>
       </section>
     </aside>
