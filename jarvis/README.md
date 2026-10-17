@@ -23,9 +23,17 @@ Beide Funktionen stehen in `supabase/config.toml` mit `verify_jwt = false`, weil
 
 ## Stimme
 
-Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). ElevenLabs bekommt `voice_settings.speed` 1.2, sofern `ELEVENLABS_SPEED` nichts anderes setzt (geklemmt auf 0.7 bis 1.2). Die Datei spielt der Browser zusätzlich mit `playbackRate` 1.2 und `preservesPitch` (`ELEVEN_PLAYBACK_RATE` in `jarvis/speech.js`, dort änderbar). Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter, dann ohne dieses Tempo. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
+Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). ElevenLabs bekommt `voice_settings.speed` 1.2, sofern `ELEVENLABS_SPEED` nichts anderes setzt (geklemmt auf 0.7 bis 1.2). Die Datei spielt der Browser mit `playbackRate` 1.0 und `preservesPitch` (`ELEVEN_PLAYBACK_RATE` in `jarvis/speech.js`, dort änderbar). Ein höheres Wiedergabetempo klingt bei dieser Stimme verzerrt; das Tempo kommt vom Server. Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
 
 Ein lokales `localStorage.jarvis_fn` auf `http://localhost` oder `http://127.0.0.1` … `/jarvis-chat` lenkt die Stimme auf dasselbe Ziel mit `/jarvis-tts`.
+
+## Freisprechen
+
+Der Kopfhörer neben dem Mikrofon schaltet dauerhaftes Zuhören ein. Nach der ersten Mikrofonfreigabe ist es an und bleibt in `localStorage` unter `jarvis_handsfree` (`1` an, `0` aus). Die Web Speech API läuft auf `de-DE`, `continuous`, und startet nach `end` oder einem harmlosen Fehler neu. Ein finales Ergebnis plus etwa 1,2 Sekunden Ruhe (`SILENCE_MS` in `jarvis/listen.js`) sendet den Satz. Tippt man dabei auf das Mikrofon, geht ein angefangener Satz sofort raus. Ist Freisprechen aus, bleibt die Taste das Antippen zum Sprechen.
+
+Während Jarvis spricht oder eine Antwort holt, ist die Erkennung aus, damit die Lautsprecher nicht als Frage zurückkommen. Danach geht das Mikrofon wieder an. „Stopp“, „Stop“ oder „Halt“ als eigener Satz bricht die Ausgabe ab und geht nicht ans Modell. Mitsprechen während der Antwort ist aus: die Erkennung würde Jarvis selbst hören. Die Mikrofontaste bricht die Ausgabe ab und hört danach wieder zu.
+
+iPhone und iPad sowie Browser ohne Web Speech API bleiben beim Tippen auf das Mikrofon. Dort steht ein Hinweis unter der Eingabe. Chrome schickt die Erkennung an Google; die Demo ruft dabei weder Supabase noch ElevenLabs auf und öffnet das Mikrofon nicht von selbst.
 
 ## Lokal testen
 
@@ -74,7 +82,7 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v2`) gilt nur für `/jarvis/`.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v3`) gilt nur für `/jarvis/`.
 
 ## Folgepunkte
 

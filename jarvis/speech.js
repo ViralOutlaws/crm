@@ -3,7 +3,8 @@
 
 const SENTENCE_CAP = 1400;
 // Zusätzliches Tempo nur für die ElevenLabs-Wiedergabe. 1 = Dateitempo.
-export const ELEVEN_PLAYBACK_RATE = 1.2;
+// 1.2 klingt bei dieser Stimme verzerrt, deshalb Dateitempo. Hier später änderbar.
+export const ELEVEN_PLAYBACK_RATE = 1.0;
 
 export function pullSentences(buffer, flush) {
   const ready = [];

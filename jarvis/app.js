@@ -1,3 +1,12 @@
+import {
+  HANDSFREE_KEY,
+  createUtterance,
+  handsFreeHint,
+  handsFreePref,
+  handsFreeSupport,
+  isStopCommand,
+  prefAfterGrant,
+} from "./listen.js";
 import { createElevenLabsSpeech } from "./speech.js";
 import {
   AREAS,
@@ -46,6 +55,12 @@ if (INSTANT) {
   $("#muteWave").style.display = "none";
 }
 addEventListener("pointerdown", () => speech.unlock(), { once: true });
+addEventListener("pointerdown", (e) => {
+  if (!handsPending) return;
+  if (e.target?.closest?.("#hands")) return;
+  handsPending = false;
+  armHandsFree();
+});
 
 const S = { mode: "idle", amp: 0, target: 0, mic: 0, speakEnd: 0, impulse: 0, listening: false };
 let speakToken = 0;
@@ -70,6 +85,10 @@ function setMode(m, sub) {
   $("#coreState").textContent = map[0];
   $("#coreSub").textContent = sub || map[1];
   $("#hState").textContent = map[2];
+  const wrap = $("#coreWrap");
+  if (wrap) wrap.dataset.mode = m;
+  document.body.dataset.phase = m;
+  if (typeof paintListen === "function") paintListen();
 }
 
 function tickClock() {
@@ -177,11 +196,19 @@ function typeWrite(text, tok) {
 }
 
 function endSpeak() {
-  if (S.mode === "speak") setMode(S.listening ? "listen" : "idle");
+  if (S.mode !== "speak") return;
+  finishReply(speakEpoch);
 }
 
 async function say(text) {
+  const cut = speechCut;
+  const gen = beginReply();
+  speakEpoch = gen;
   const tok = ++speakToken;
+  if (cut !== speechCut) {
+    finishReply(gen);
+    return;
+  }
   setMode("speak");
   S.speakEnd = performance.now() + Math.max(1200, String(text).length * 55);
   speech.speak(text, {
@@ -370,32 +397,42 @@ function panelToArea(panel) {
 /* ---------- Bereiche ---------- */
 async function openArea(id, filter) {
   currentFilter = filter || null;
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoView(id, filter) : await loadArea(sb, id, filter || {}, userId);
     if (id === "social" && filter?.view === "month" && DEMO) view.title = "Social · Monat";
     openView(view, id);
+    if (cut !== speechCut) return;
     const n = view.posts ? view.posts.length : (view.rows ? view.rows.length : null);
     const line = view.spoken || (n == null ? `${view.title} ist offen.` : `${view.title}: ${n} Einträge.`);
     await say(line);
   } catch (e) {
+    if (cut !== speechCut) return;
     openView({ title: AREAS.find((a) => a.id === id)?.label || "Bereich", crm: id, note: e.message || "Nicht lesbar.", rows: [], columns: [], kpis: [] }, id);
     await say(e.message || "Der Bereich ist gerade nicht lesbar.");
   }
 }
 
 async function openCustomer(idOrQuery) {
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoCustomer(idOrQuery) : await loadCustomer(sb, idOrQuery);
     openView(view, "contacts");
+    if (cut !== speechCut) return;
     await say(view.spoken || view.note || "Hier ist die Akte.");
   } catch (e) {
+    if (cut !== speechCut) return;
     await say(e.message || "Die Akte ist nicht lesbar.");
   }
 }
 
 async function openBriefing(manual) {
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoBriefing() : await loadBriefing(sb);
@@ -403,8 +440,10 @@ async function openBriefing(manual) {
     if (!DEMO && !manual) {
       try { localStorage.setItem("jarvis_briefing_day", berlinToday()); } catch { /* ignore */ }
     }
+    if (cut !== speechCut) return;
     await say(view.spoken);
   } catch (e) {
+    if (cut !== speechCut) return;
     await say(e.message || "Das Briefing ist gerade nicht lesbar.");
   }
 }
@@ -479,15 +518,26 @@ function engine(raw) {
 async function ask(text) {
   text = String(text || "").trim();
   if (!text) return;
+  if (isStopCommand(text)) {
+    $("#inp").value = "";
+    interruptSpeech();
+    toast("Jarvis", "Alles klar.", "J");
+    return;
+  }
+  const cut = speechCut;
+  $("#inp").value = "";
+  beginReply();
   userMsg(text);
   speakToken += 1;
   speech.cancel();
   if (!DEMO) {
     history.push({ role: "user", content: text });
-    await liveAsk();
+    await liveAsk(cut);
     return;
   }
+  if (cut !== speechCut) return;
   const r = engine(text);
+  if (cut !== speechCut) return;
   if (r.menu) toggleMenu(true);
   if (r.bot) activateBot(r.bot[0], r.bot[1]);
   if (r.card) showConfirm(demoMeeting());
@@ -504,7 +554,9 @@ async function ask(text) {
   if (r.say) await say(r.say);
 }
 
-async function liveAsk() {
+async function liveAsk(cut) {
+  const gen = beginReply();
+  speakEpoch = gen;
   setMode("think");
   const el = document.createElement("div");
   el.className = "msg j";
@@ -521,6 +573,7 @@ async function liveAsk() {
       },
       body: JSON.stringify({ messages: history.slice(-12) }),
     });
+    if (cut !== speechCut) return;
     if (!res.ok || !res.body) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || "Jarvis ist nicht erreichbar.");
@@ -529,17 +582,20 @@ async function liveAsk() {
     const dec = new TextDecoder();
     let buf = "";
     let full = "";
-    const voiced = !speech.isMuted();
+    const voiced = !speech.isMuted() && cut === speechCut;
     const voice = voiced ? speech.openStream({
       onstart() {
+        if (cut !== speechCut) return;
         setMode("speak");
         S.speakEnd = performance.now() + 120000;
       },
       onboundary() { S.impulse = 1; },
       onend() {
+        if (speakEpoch !== gen) return;
         S.speakEnd = 0;
+        if (cut !== speechCut) return;
         if (S.mode === "speak") endSpeak();
-        else if (S.mode === "think") setMode("idle");
+        else finishReply(gen);
       },
       onfallback() { toast("Stimme", "ElevenLabs nicht erreichbar. Ich nutze die Browserstimme.", "i"); },
     }) : null;
@@ -559,7 +615,7 @@ async function liveAsk() {
           full += data.text;
           sp.textContent = full;
           $("#log").scrollTop = 1e9;
-          voice?.push(data.text);
+          if (cut === speechCut) voice?.push(data.text);
         } else if (ev === "confirm") showConfirm(data);
         else if (ev === "ui" && data.data) openView(data.data, panelToArea(data.panel));
         else if (ev === "bot" && data.id) activateBot(data.id, data.task || "Auftrag");
@@ -567,12 +623,14 @@ async function liveAsk() {
       }
     }
     if (full) history.push({ role: "assistant", content: full });
+    if (cut !== speechCut) return;
     if (voice) voice.close();
-    else setMode("idle");
+    else finishReply(gen);
   } catch (e) {
     speech.cancel();
     sp.textContent = e.message || "Jarvis ist gerade nicht erreichbar.";
-    setMode("idle");
+    S.speakEnd = 0;
+    if (cut === speechCut) finishReply(gen);
   }
 }
 
@@ -597,18 +655,82 @@ $("#mute").onclick = () => {
 };
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const listenSupport = handsFreeSupport(window);
+const utterance = createUtterance();
+let epoch = 0;
+let speakEpoch = 0;
+let speechCut = 0;
+let armed = false;
+let handsPending = false;
+let ptt = false;
+let armGen = 0;
 let rec = null;
+let activeTicket = 0;
 let micStream = null;
 let analyser = null;
-$("#mic").onclick = async () => {
-  if (S.listening) return stopMic();
-  speech.cancel();
-  S.listening = true;
-  $("#mic").classList.add("on");
-  setMode("listen");
-  $("#hMic").textContent = "An";
+
+function storedHands() {
+  try { return localStorage.getItem(HANDSFREE_KEY); } catch { return null; }
+}
+function handsOn() {
+  return handsFreePref(storedHands()) === true;
+}
+function writeHands(on) {
+  try { localStorage.setItem(HANDSFREE_KEY, on ? "1" : "0"); } catch { /* privat */ }
+}
+function noteGrant() {
+  if (!listenSupport.ok) return;
+  const raw = storedHands();
+  if (prefAfterGrant(raw) !== "1" || raw === "1") return;
+  writeHands(true);
+  armed = true;
+  toast("Freisprechen", "Ist an. Eine kurze Pause sendet den Satz. Der Kopfhörer schaltet es aus.", "i");
+  paintListen();
+}
+
+function paintListen() {
+  const on = handsOn() && listenSupport.ok;
+  const hands = $("#hands");
+  const hint = $("#listenHint");
+  const hintText = handsFreeHint(listenSupport.reason);
+  if (hands) {
+    hands.classList.toggle("on", on);
+    hands.setAttribute("aria-pressed", on ? "true" : "false");
+    hands.setAttribute("aria-disabled", listenSupport.ok ? "false" : "true");
+    hands.title = listenSupport.ok ? (on ? "Freisprechen aus" : "Freisprechen an") : hintText;
+  }
+  if (hint) {
+    hint.textContent = hintText;
+    hint.hidden = !hintText;
+  }
+  const micOn = ptt || (on && armed && S.mode === "listen");
+  $("#mic").classList.toggle("on", micOn);
+  $("#mic").setAttribute("aria-pressed", micOn ? "true" : "false");
+  $("#mic").title = on ? "Satz jetzt senden" : "Sprechen";
+  $("#hMic").textContent = ptt ? "An" : (on && armed && S.mode === "listen" ? "Dauer" : "Aus");
+  S.listening = micOn;
+}
+
+function haltRecognition() {
+  activeTicket += 1;
+  const current = rec;
+  rec = null;
+  try { current && current.abort(); } catch { /* ignore */ }
+}
+
+function closeMicMeter() {
+  if (micStream) micStream.getTracks().forEach((t) => t.stop());
+  micStream = null;
+  if (analyser?._ac) analyser._ac.close().catch(() => {});
+  analyser = null;
+  S.mic = 0;
+}
+
+async function openMicMeter() {
+  if (micStream) return true;
+  if (!navigator.mediaDevices?.getUserMedia) return false;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const ac = new (window.AudioContext || window.webkitAudioContext)();
     const src = ac.createMediaStreamSource(micStream);
     analyser = ac.createAnalyser();
@@ -616,46 +738,237 @@ $("#mic").onclick = async () => {
     analyser._data = new Uint8Array(analyser.fftSize);
     src.connect(analyser);
     analyser._ac = ac;
+    return true;
   } catch {
-    toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
-    stopMic();
+    return false;
+  }
+}
+
+function beginReply() {
+  epoch += 1;
+  utterance.reset();
+  haltRecognition();
+  return epoch;
+}
+
+function finishReply(gen) {
+  if (gen !== epoch) return;
+  if (speech.isSpeaking()) return;
+  epoch += 1;
+  if (ptt) return;
+  if (armed && handsOn() && listenSupport.ok) {
+    setMode("listen", "FREISPRECHEN");
+    armHandsFree({ quiet: true }).then((ok) => {
+      if (ok || rec || ptt || !handsOn() || !armed) return;
+      handsPending = true;
+      if (S.mode === "listen") setMode("idle");
+    });
     return;
   }
+  setMode("idle");
+}
+
+function interruptSpeech() {
+  speechCut += 1;
+  speech.cancel();
+  speakToken += 1;
+  S.speakEnd = 0;
+  utterance.reset();
+  finishReply(epoch);
+}
+
+function heardText(results) {
+  let finalText = "";
+  let interimText = "";
+  const list = results || [];
+  for (let i = 0; i < list.length; i++) {
+    const result = list[i];
+    const t = String(result[0]?.transcript || "").trim();
+    if (!t) continue;
+    if (result.isFinal) finalText = finalText ? `${finalText} ${t}` : t;
+    else interimText = interimText ? `${interimText} ${t}` : t;
+  }
+  return { finalText, interimText };
+}
+
+function startContinuous(ticket, seenEpoch) {
+  if (!SR || ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return false;
+  let session;
+  try { session = new SR(); } catch { return false; }
+  let recError = "";
+  rec = session;
+  session.lang = "de-DE";
+  session.continuous = true;
+  session.interimResults = true;
+  session.onresult = (e) => {
+    if (ticket !== activeTicket || epoch !== seenEpoch || ptt) return;
+    const heard = heardText(e.results);
+    utterance.sync(heard.finalText, heard.interimText, (text) => {
+      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
+      ask(text);
+    });
+    const field = $("#inp");
+    if (field) field.value = utterance.preview();
+  };
+  session.onerror = (ev) => { recError = ev?.error || "error"; };
+  session.onend = () => {
+    if (rec === session) rec = null;
+    if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return;
+    if (recError === "not-allowed" || recError === "service-not-allowed") {
+      armed = false;
+      handsPending = true;
+      paintListen();
+      if (S.mode === "listen") setMode("idle");
+      toast("Mikrofon", "Kein Zugriff. Tippe nochmal auf den Kopfhörer.", "!");
+      return;
+    }
+    if (recError === "audio-capture" && micStream) closeMicMeter();
+    recError = "";
+    setTimeout(() => {
+      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
+      startContinuous(ticket, seenEpoch);
+    }, 280);
+  };
+  try {
+    session.start();
+    return true;
+  } catch {
+    if (rec === session) rec = null;
+    return false;
+  }
+}
+
+function armHandsFree(opts = {}) {
+  if (!listenSupport.ok || !handsOn()) return Promise.resolve(false);
+  const quiet = !!opts.quiet;
+  const mine = ++armGen;
+  armed = true;
+  handsPending = false;
+  return (async () => {
+    haltRecognition();
+    const ticket = activeTicket;
+    const seenEpoch = epoch;
+    const metered = await openMicMeter();
+    if (mine !== armGen || ticket !== activeTicket || seenEpoch !== epoch || !armed || !handsOn() || ptt) return false;
+    if (!metered && quiet) return false;
+    if (metered) noteGrant();
+    const started = startContinuous(ticket, seenEpoch);
+    if (mine !== armGen || !started) return false;
+    noteGrant();
+    if (S.mode !== "think" && S.mode !== "speak") setMode("listen", "FREISPRECHEN");
+    else paintListen();
+    return true;
+  })();
+}
+
+function bootHandsFree() {
+  paintListen();
+  if (!listenSupport.ok || !handsOn()) return;
+  armHandsFree({ quiet: true }).then((ok) => {
+    if (!ok && handsOn() && armed && !rec && !ptt) handsPending = true;
+  });
+}
+
+async function startPtt() {
+  if (ptt) return;
+  ptt = true;
+  utterance.reset();
+  haltRecognition();
+  setMode("listen", "SPRECHEN SIE JETZT");
+  const metered = await openMicMeter();
+  if (!ptt) return;
+  if (!metered) {
+    toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
+    stopPtt();
+    return;
+  }
+  noteGrant();
   if (!SR) {
     toast("Spracherkennung", "In diesem Browser nicht verfügbar.", "i");
-    setTimeout(() => { if (S.listening) stopMic(); }, 4000);
+    setTimeout(() => { if (ptt) stopPtt(); }, 4000);
     return;
   }
-  rec = new SR();
-  rec.lang = "de-DE";
-  rec.interimResults = true;
-  rec.onresult = (e) => {
-    const r = [...e.results].map((x) => x[0].transcript).join("");
-    $("#inp").value = r;
+  let session;
+  try { session = new SR(); } catch { stopPtt(); return; }
+  rec = session;
+  session.lang = "de-DE";
+  session.interimResults = true;
+  session.continuous = false;
+  session.onresult = (e) => {
+    if (!ptt || rec !== session) return;
+    let said = "";
+    for (let i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
+    said = said.trim();
+    $("#inp").value = said;
     if (e.results[e.results.length - 1].isFinal) {
-      $("#inp").value = "";
-      stopMic();
-      ask(r);
+      stopPtt({ keepMode: true });
+      ask(said);
     }
   };
-  rec.onerror = () => {};
-  rec.onend = () => { if (S.listening) stopMic(); };
-  try { rec.start(); } catch { /* ignore */ }
+  session.onerror = () => {};
+  session.onend = () => { if (ptt && rec === session) stopPtt(); };
+  try { session.start(); } catch { /* ignore */ }
+}
+
+function stopPtt(opts = {}) {
+  const was = ptt;
+  ptt = false;
+  if (was) haltRecognition();
+  if (!(armed && handsOn() && listenSupport.ok)) closeMicMeter();
+  if (was && !opts.keepMode && S.mode === "listen") setMode("idle");
+  else paintListen();
+}
+
+$("#hands").onclick = async () => {
+  speech.unlock?.();
+  if (!listenSupport.ok) {
+    toast("Freisprechen", handsFreeHint(listenSupport.reason), "i");
+    return;
+  }
+  if (handsOn()) {
+    writeHands(false);
+    armed = false;
+    handsPending = false;
+    utterance.reset();
+    if (!ptt) {
+      haltRecognition();
+      closeMicMeter();
+      if (S.mode === "listen") setMode("idle");
+    }
+    paintListen();
+    return;
+  }
+  writeHands(true);
+  const ok = await armHandsFree();
+  if (!ok && handsOn()) toast("Mikrofon", "Kein Zugriff. Bitte die Freigabe erlauben und nochmal tippen.", "!");
 };
 
-function stopMic() {
-  S.listening = false;
-  $("#mic").classList.remove("on");
-  $("#hMic").textContent = "Aus";
-  try { rec && rec.abort(); } catch { /* ignore */ }
-  rec = null;
-  if (micStream) micStream.getTracks().forEach((t) => t.stop());
-  micStream = null;
-  if (analyser?._ac) analyser._ac.close().catch(() => {});
-  analyser = null;
-  S.mic = 0;
-  if (S.mode === "listen") setMode("idle");
-}
+$("#mic").onclick = async () => {
+  speech.unlock?.();
+  if (handsOn() && listenSupport.ok) {
+    if (S.mode === "speak" || S.mode === "think" || speech.isSpeaking()) {
+      interruptSpeech();
+      return;
+    }
+    const pending = utterance.flushNow();
+    if (pending) {
+      ask(pending);
+      return;
+    }
+    if (!rec) {
+      const ok = await armHandsFree();
+      if (!ok) toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
+    }
+    return;
+  }
+  if (ptt) {
+    const pending = $("#inp").value.trim();
+    stopPtt({ keepMode: !!pending });
+    if (pending) ask(pending);
+    return;
+  }
+  await startPtt();
+};
 
 /* ---------- Canvas ---------- */
 const sc = $("#stars");
@@ -867,6 +1180,7 @@ sizeCore();
 addEventListener("resize", () => { initStars(); sizeCore(); });
 if (window.ResizeObserver) new ResizeObserver(sizeCore).observe(cv);
 setMode("idle");
+bootHandsFree();
 requestAnimationFrame(loop);
 if (params.has("noboot")) finishBoot();
 else runBoot();

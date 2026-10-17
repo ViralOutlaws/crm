@@ -75,7 +75,7 @@
         <canvas id="core" aria-label="Jarvis Kern"></canvas>
         <div class="hudtxt hl">Kern-Status <em id="hState">Bereit</em><br>Signal <em id="hAmp">00%</em><br>Modus <em id="hMode">—</em></div>
         <div class="hudtxt hr">Sprache <em>de-DE</em><br>Mikrofon <em id="hMic">Aus</em><br>Holo-Panels <em id="hHolo">0</em></div>
-        <div class="coreLbl"><b id="coreState">BEREIT</b><span id="coreSub">WIE KANN ICH HELFEN?</span></div>
+        <div class="coreLbl" aria-live="polite"><b id="coreState">BEREIT</b><span id="coreSub">WIE KANN ICH HELFEN?</span></div>
       </div>
       <div class="chat">
         <div id="log" aria-live="polite"></div>
@@ -85,9 +85,11 @@
           <span class="pr">&gt;_</span>
           <input id="inp" placeholder="Frag Jarvis … z. B. „Briefing“ oder „Pipeline“" aria-label="Nachricht an Jarvis">
           <button type="button" class="ib" id="mute" title="Sprachausgabe an/aus" aria-label="Sprachausgabe an oder aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="muteWave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+          <button type="button" class="ib" id="hands" title="Freisprechen" aria-label="Freisprechen an oder aus" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="7" rx="1"/><rect x="17" y="13" width="4" height="7" rx="1"/></svg></button>
           <button type="button" class="ib" id="mic" title="Sprechen" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
           <button type="submit" class="ib" id="send" title="Senden" aria-label="Senden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
         </form>
+        <p id="listenHint" class="listen-hint" hidden></p>
       </div>
     </section>
 
