@@ -31,6 +31,7 @@ import {
   columnsFromSnapshot,
   CRM_MATCH_LIMIT,
   parseCrmSelector,
+  loggedChange,
   planCrmChange,
   planCrmInsert,
   planCrmUndo,
@@ -788,6 +789,8 @@ async function executeAufgabeChange(
         titel: row.titel ?? null,
         from: row.status ?? null,
         to: status,
+        before: row,
+        after: { ...row, status, updated_at: now },
       });
       if (w) warning = w;
     }
@@ -822,6 +825,8 @@ async function executeAufgabeChange(
       kind: plan.kind,
       titel: row.titel ?? null,
       row,
+      before: row,
+      after: null,
     });
     if (w) warning = w;
   }
@@ -988,14 +993,15 @@ async function executeUndo(sb: SupabaseClient, ws: string, userId: string, plan:
   let warning: string | null = null;
   const entries = [...loaded.entries].reverse();
   for (const entry of entries) {
+    const change = loggedChange(entry);
     const snap = (entry.summary.before ?? entry.summary.row) as Record<string, unknown> | undefined;
-    if (entry.action === "insert") {
+    if (change === "insert") {
       if (!entry.recordId) throw new Error("Die letzte Anlage hat keine ID im Protokoll.");
       const current = await loadRows(sb, table, [String(entry.recordId)]);
       if (!current.length) throw new Error("Die angelegte Zeile ist nicht mehr da.");
       const del = await sb.from(table).delete().eq("id", entry.recordId).select("id");
       if (del.error) throw new Error(dbErr(del.error.message));
-      const w = await logRow(sb, ws, userId, table, String(entry.recordId), "delete", {
+      const w = await logRow(sb, ws, userId, table, String(entry.recordId), "restore", {
         tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, current[0]), table, before: current[0], after: null,
       });
       if (w) warning = w;
@@ -1005,12 +1011,12 @@ async function executeUndo(sb: SupabaseClient, ws: string, userId: string, plan:
     if (snap.workspace_id && String(snap.workspace_id) !== ws) throw new Error("Die Zeile gehört zu einem anderen Bereich.");
     const columns = columnsFromSnapshot(table, snap);
     const id = String(snap.id ?? entry.recordId ?? "");
-    if (entry.action === "delete") {
+    if (change === "delete") {
       const next: Record<string, unknown> = { ...columns, id, workspace_id: ws };
       if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
       const ins = await sb.from(table).insert(next).select("*").single();
       if (ins.error) throw new Error(dbErr(ins.error.message));
-      const w = await logRow(sb, ws, userId, table, id, "insert", {
+      const w = await logRow(sb, ws, userId, table, id, "restore", {
         tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, ins.data as Record<string, unknown>), table, before: null, after: ins.data,
       });
       if (w) warning = w;
@@ -1022,7 +1028,7 @@ async function executeUndo(sb: SupabaseClient, ws: string, userId: string, plan:
     if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
     const upd = await sb.from(table).update(next).eq("id", id).select("*").single();
     if (upd.error) throw new Error(dbErr(upd.error.message));
-    const w = await logRow(sb, ws, userId, table, id, "update", {
+    const w = await logRow(sb, ws, userId, table, id, "restore", {
       tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, current[0]), table, before: current[0], after: upd.data,
     });
     if (w) warning = w;
@@ -1108,7 +1114,7 @@ async function logRow(
   userId: string,
   table: string,
   recordId: string,
-  action: "insert" | "update" | "delete",
+  action: "insert" | "update" | "delete" | "restore",
   summary: Record<string, unknown>,
 ): Promise<string | null> {
   const { error } = await sb.from("jarvis_actions").insert({
@@ -1121,10 +1127,18 @@ async function logRow(
   });
   if (!error) return null;
   const msg = `${error.code ?? ""} ${error.message ?? ""}`;
-  if (action === "delete" && /23514|check constraint|action_check/i.test(msg)) {
-    return "Gelöscht, aber das Protokoll akzeptiert action „delete“ noch nicht. Migration 20261017220000_jarvis_actions_delete anwenden.";
+  const file = "20261017230000_jarvis_actions_restore";
+  const verb = action === "delete" ? "Gelöscht" : action === "restore" ? "Wiederhergestellt" : "Gespeichert";
+  if (/23514|check constraint|action_check|table_chk/i.test(msg)) {
+    if (/table_chk|table_name/i.test(msg)) {
+      return `${verb}, aber das Protokoll kennt die Tabelle „${table}“ noch nicht. Migration ${file} anwenden.`;
+    }
+    if (action === "delete" || action === "restore") {
+      return `${verb}, aber das Protokoll akzeptiert action „${action}“ noch nicht. Migration ${file} anwenden.`;
+    }
   }
   if (action === "delete") return "Gelöscht, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
+  if (action === "restore") return "Wiederhergestellt, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
   return "Gespeichert, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
 }
 

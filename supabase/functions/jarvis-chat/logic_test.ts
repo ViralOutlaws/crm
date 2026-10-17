@@ -312,6 +312,42 @@ Deno.test("CRM-Werkzeuge prüfen Spalten, Status und Löschbestätigung", () => 
   if (undo.kind !== "crm_undo" || undo.action !== "insert" || undo.danger) throw new Error(JSON.stringify(undo));
   const undoAgain = revalidate(undo, ctx);
   if (undoAgain.data.batch !== a || undoAgain.action !== "insert") throw new Error(JSON.stringify(undoAgain));
+
+  const restoredDelete = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Reel schneiden", before: { id: b, titel: "Reel schneiden" }, after: null },
+  }]);
+  if (restoredDelete.action !== "insert" || restoredDelete.danger) throw new Error(JSON.stringify(restoredDelete));
+
+  const restoredInsert = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Neu", before: null, after: { id: b, titel: "Neu" } },
+  }]);
+  if (restoredInsert.action !== "delete" || !restoredInsert.danger) throw new Error(JSON.stringify(restoredInsert));
+
+  const restoredUpdate = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: {
+      titel: "Alt",
+      before: { id: b, titel: "Alt", status: "todo" },
+      after: { id: b, titel: "Alt", status: "done" },
+    },
+  }]);
+  if (restoredUpdate.action !== "update" || restoredUpdate.danger) throw new Error(JSON.stringify(restoredUpdate));
+
+  let bare = false;
+  try {
+    planCrmUndo(a, [{ action: "restore", table: "aufgaben", recordId: b, summary: { titel: "Leer" } }]);
+  } catch (e) {
+    bare = e instanceof Error && e.message.includes("nicht rückgängig");
+  }
+  if (!bare) throw new Error("restore ohne Snapshot");
 });
 
 Deno.test("Wiedervorlage ist nie erledigt, Kontakt braucht Firma, Woche startet Montag", () => {

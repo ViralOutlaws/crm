@@ -402,6 +402,19 @@ export type UndoEntry = {
   summary: Record<string, unknown>;
 };
 
+export function loggedChange(entry: UndoEntry): "insert" | "update" | "delete" {
+  if (entry.action === "insert" || entry.action === "update" || entry.action === "delete") return entry.action;
+  if (entry.action === "restore") {
+    const before = snapshotOf(entry.summary);
+    const after = entry.summary.after;
+    const hasAfter = !!after && typeof after === "object" && !Array.isArray(after);
+    if (before && !hasAfter) return "delete";
+    if (hasAfter && !before) return "insert";
+    if (before && hasAfter) return "update";
+  }
+  throw new Error("Diese Protokollzeile kann ich nicht rückgängig machen.");
+}
+
 export function planCrmUndo(batch: string, entries: UndoEntry[]): CrmPlan {
   if (!UUID.test(batch)) throw new Error("Die Änderung ist nicht mehr nachvollziehbar.");
   if (!entries.length) throw new Error("Es gibt keine protokollierte Änderung zum Rückgängigmachen.");
@@ -411,14 +424,13 @@ export function planCrmUndo(batch: string, entries: UndoEntry[]): CrmPlan {
   const table = [...tables][0];
   if (!TABLES[table]) throw new Error("Diese Tabelle kann ich nicht rückgängig machen.");
   const inverses = entries.map((e) => {
-    if (e.action === "insert") {
+    const change = loggedChange(e);
+    if (change === "insert") {
       if (!e.recordId || !UUID.test(e.recordId)) throw new Error("Die letzte Anlage hat keine ID im Protokoll.");
       return "delete" as const;
     }
-    if (e.action !== "update" && e.action !== "delete") throw new Error("Diese Protokollzeile kann ich nicht rückgängig machen.");
-    const snap = snapshotOf(e.summary);
-    if (!snap) throw new Error("Im Protokoll fehlt der vorherige Stand. Rückgängig ist dafür nicht möglich.");
-    return e.action === "delete" ? "insert" as const : "update" as const;
+    if (!snapshotOf(e.summary)) throw new Error("Im Protokoll fehlt der vorherige Stand. Rückgängig ist dafür nicht möglich.");
+    return change === "delete" ? "insert" as const : "update" as const;
   });
   const inverse = inverses.every((a) => a === "delete") ? "delete" : inverses.every((a) => a === "insert") ? "insert" : "update";
   const titles = entries.map((e) => clip(e.summary.titel, 180) || rowTitle(table, snapshotOf(e.summary) || {}) );

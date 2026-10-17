@@ -51,17 +51,24 @@ Die Funktion lokal gegen die gehostete API zu legen, geht über ein localhost-Pr
 
 Erlaubt sind `https://crm.viraloutlaws.de` sowie `http://localhost` und `http://127.0.0.1` mit beliebigem Port. Andere Browser-Origins bekommen 403. Aufrufe ohne Origin (curl) sind erlaubt.
 
-## Migration
+## Go-live
 
-`supabase/migrations/20261017190000_jarvis_actions.sql` legt das Protokoll `jarvis_actions` an. `supabase/migrations/20261017220000_jarvis_actions_delete.sql` erweitert den Check um `action = delete`, damit gelöschte Aufgaben mit der kompletten Zeile im Protokoll stehen. Beide nicht automatisch gegen die Live-Datenbank ausführen. Ohne die zweite Migration schlägt nur der Logeintrag fehl, die Löschung bleibt, und die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion erhalten und die Antwort enthält ebenfalls `log_warning`.
+Nicht automatisch gegen die Live-Datenbank ausführen. Reihenfolge:
 
-Anlegen, Ändern, Löschen und Rückgängig stecken in `jarvis-chat`. Dafür die Funktion neu deployen: `supabase functions deploy jarvis-chat` (ohne `--no-verify-jwt`). Ohne diesen Redeploy kennt die laufende Funktion die Werkzeuge nicht.
+1. `supabase/migrations/20261017190000_jarvis_actions.sql`, falls `jarvis_actions` noch fehlt. Der erste Check erlaubt nur `insert` und `update`.
+2. `supabase/migrations/20261017220000_jarvis_actions_delete.sql` ist optional. Sie erweitert den Check nur um `delete`. Die nächste Datei ersetzt diesen Check, egal ob Schritt 2 schon lief.
+3. `supabase/migrations/20261017230000_jarvis_actions_restore.sql`. Sie setzt den Action-Check auf `insert`, `update`, `delete` und `restore`, nimmt `pakete` und `ziele` in den Tabellen-Check auf und setzt die Insert-Policy neu (`user_id = auth.uid()` und `workspace_id = get_my_workspace_id()`). Kein Update- und kein Delete-Recht auf dem Protokoll. Bestehende Zeilen bleiben gültig.
+4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`. Ohne diesen Redeploy kennt die laufende Funktion Anlegen, Ändern, Löschen und Rückgängig nicht.
+
+`jarvis-tts` braucht für diese Änderung keinen Redeploy. Der Service-Worker-Cache bleibt `jarvis-v3`.
+
+Ohne Schritt 3 schlägt nur der Logeintrag für Löschen und Rückgängig fehl. Die CRM-Änderung bleibt, die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion ebenfalls erhalten und die Antwort enthält `log_warning`.
 
 Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migration nötig. Diese Spalten sind freier Text ohne CHECK.
 
 ## Bestätigung
 
-Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Mehrere Zeilen zeigen Anzahl und eine Vorschau. Löschen ist rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Zeilen löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. „Rückgängig“ macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig. Dafür liegt bei jedem Löschen und Ändern der vorherige Zeilenstand in `jarvis_actions`. E-Mails, Mahnungen und Datei-Uploads gibt es nicht. `settings`, `integration_secrets`, Profile und Workspaces fasst Jarvis nicht an. Was nicht geht, sagt er in einem Satz, statt ersatzweise ein Panel zu öffnen.
+Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Mehrere Zeilen zeigen Anzahl und eine Vorschau. Löschen ist rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Zeilen löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. „Rückgängig“ macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig. Jede Aktion landet in `jarvis_actions` mit dem vollen Zeilenstand: Löschen in `summary.before` (Aufgaben zusätzlich in `summary.row`), Ändern in `before` und `after`, Anlegen in `after`. Rückgängig schreibt `action = restore` und ebenfalls den vollen Stand, damit ein zweites Rückgängig denselben Weg zurückgeht. E-Mails, Mahnungen und Datei-Uploads gibt es nicht. `settings`, `integration_secrets`, Profile und Workspaces fasst Jarvis nicht an. Was nicht geht, sagt er in einem Satz, statt ersatzweise ein Panel zu öffnen.
 
 ## Status
 
