@@ -2843,7 +2843,8 @@ async function initSupabaseAuth() {
       if(ls) ls.style.display = 'none';
       // Load all data from Supabase
       await loadAllFromSupabase();
-      showPage('dashboard');
+      // Nur wenn Jarvis mit ?page=… verlinkt. Sonst unverändert das Dashboard.
+      showPage((function(){ try { const p=new URLSearchParams(location.search).get('page'); const ok=['dashboard','kalender','contacts','pipeline','angebote','rechnungen','kanban','ziele','roi','reporting','konfigurator','ausgaben','social']; return ok.indexOf(p)>=0?p:'dashboard'; } catch(e){ return 'dashboard'; } })());
       // Init realtime
       await initRealtime();
       return true;

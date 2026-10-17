@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<script>if(/[?&]noboot(?:[=&]|$)/.test(location.search))document.documentElement.classList.add("noboot");</script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080808">
+<meta name="description" content="Jarvis, Sprach- und Chat-Assistent für Viral Outlaws">
+<title>Jarvis · Viral Outlaws</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="grid"></div><div class="vignette"></div><div class="scan"></div>
+
+<div id="boot" role="dialog" aria-label="Systemstart">
+  <div class="bootc"><i></i><i></i><i></i><i></i></div>
+  <div class="bootT"><h2>JARVIS</h2><p>VIRAL OUTLAWS · AGENTUR-KI</p><div class="bootBar"><span id="bootBar"></span></div></div>
+  <div id="bootLog"></div>
+  <button id="skip" type="button">ÜBERSPRINGEN ▸</button>
+</div>
+
+<div id="login" hidden>
+  <form class="login-card" id="loginForm">
+    <h2>JARVIS</h2>
+    <p>Dieselbe Anmeldung wie im CRM.</p>
+    <label for="email">E-Mail</label>
+    <input id="email" name="email" type="email" autocomplete="username" required>
+    <label for="password">Passwort</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <div class="err" id="loginErr" role="alert"></div>
+    <div class="login-acts">
+      <button type="submit">Anmelden</button>
+      <button type="button" class="ghost" id="demoBtn">Demo</button>
+    </div>
+  </form>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand"><div class="logo" aria-hidden="true"></div><div><h1>J.A.R.V.I.S.</h1><small>VIRAL OUTLAWS · COMMAND INTERFACE</small></div></div>
+    <div class="head-actions">
+      <button type="button" id="areasBtn">Bereiche</button>
+      <a href="/">Zum CRM</a>
+      <button type="button" id="logout" hidden>Abmelden</button>
+    </div>
+    <div class="hstat">
+      <div class="ok hide-s">Systeme<b id="crmLinkStat">—</b></div>
+      <div class="hide-s">Bots<b id="botCount">5 / 5</b></div>
+      <div id="clock">--:--<b>--:--</b></div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="col">
+      <section class="panel">
+        <div class="ph"><h3>Heute</h3><span class="tag" id="todayDate">—</span></div>
+        <div id="todayList"></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><h3>Pipeline</h3><span class="tag" id="pipeTag">—</span></div>
+        <div class="pipe" id="pipeMini"></div>
+        <div class="sumline"><span>Volumen offen</span><b id="pipeVol">—</b></div>
+      </section>
+    </aside>
+
+    <section class="center">
+      <div id="coreWrap">
+        <canvas id="core" aria-label="Jarvis Kern"></canvas>
+        <div class="hudtxt hl">Kern-Status <em id="hState">Bereit</em><br>Signal <em id="hAmp">00%</em><br>Modus <em id="hMode">—</em></div>
+        <div class="hudtxt hr">Sprache <em>de-DE</em><br>Mikrofon <em id="hMic">Aus</em><br>Holo-Panels <em id="hHolo">0</em></div>
+        <div class="coreLbl"><b id="coreState">BEREIT</b><span id="coreSub">WIE KANN ICH HELFEN?</span></div>
+      </div>
+      <div class="chat">
+        <div id="log" aria-live="polite"></div>
+        <div id="confirms"></div>
+        <div class="chips" id="chips"></div>
+        <form class="bar" id="form" autocomplete="off">
+          <span class="pr">&gt;_</span>
+          <input id="inp" placeholder="Frag Jarvis … z. B. „Briefing“ oder „Pipeline“" aria-label="Nachricht an Jarvis">
+          <button type="button" class="ib" id="mute" title="Sprachausgabe an/aus" aria-label="Sprachausgabe an oder aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="muteWave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+          <button type="button" class="ib" id="mic" title="Sprechen" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button type="submit" class="ib" id="send" title="Senden" aria-label="Senden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+        </form>
+      </div>
+    </section>
+
+    <aside class="col">
+      <section class="panel">
+        <div class="ph"><h3>Offene Rechnungen</h3><span class="tag" id="invTag">—</span></div>
+        <div id="invMini"></div>
+        <div class="sumline"><span>Summe offen</span><b id="invSum">—</b></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><h3>Bot-Status</h3><span class="tag">Netzwerk</span></div>
+        <div id="botList"></div>
+      </section>
+    </aside>
+  </div>
+
+  <footer><span id="footMode"></span><span>Viral Outlaws · Jarvis</span></footer>
+</div>
+
+<nav id="launcher" aria-label="CRM-Bereiche"></nav>
+<div id="holoLayer"></div>
+<div id="toasts"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
