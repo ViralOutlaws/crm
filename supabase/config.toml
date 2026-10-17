@@ -7,3 +7,7 @@ verify_jwt = false
 # Jarvis prüft das Nutzer-JWT selbst (RLS) und muss OPTIONS/CORS ohne Gateway-JWT beantworten.
 [functions.jarvis-chat]
 verify_jwt = false
+
+# Stimme: gleicher Grund. Der Schlüssel ELEVENLABS_API_KEY bleibt nur hier.
+[functions.jarvis-tts]
+verify_jwt = false

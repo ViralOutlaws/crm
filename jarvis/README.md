@@ -2,17 +2,30 @@
 
 Sprach- und Chat-Oberfläche für den Alltag im CRM. Das alte CRM bleibt unter `/` als Backup erreichbar. Jarvis liegt unter `/jarvis/` und nutzt dieselbe Supabase-Anmeldung.
 
-## Deploy der Funktion
+## Deploy der Funktionen
 
 ```bash
 supabase functions deploy jarvis-chat
+supabase functions deploy jarvis-tts
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 supabase secrets set JARVIS_MODEL=claude-sonnet-5-5
+supabase secrets set ELEVENLABS_API_KEY=...
+supabase secrets set ELEVENLABS_VOICE_ID=amAPTcyESqCO9CgYuf64
+supabase secrets set ELEVENLABS_MODEL=eleven_multilingual_v2
+supabase secrets set ELEVENLABS_SPEED=1.2
 ```
 
-`JARVIS_MODEL` ist optional. Ohne das Secret nimmt die Funktion `claude-sonnet-5-5`. Der Schlüssel bleibt nur serverseitig.
+`JARVIS_MODEL` ist optional. Ohne das Secret nimmt `jarvis-chat` `claude-sonnet-5-5`.
 
-In `supabase/config.toml` steht `verify_jwt = false`, weil die Funktion das Nutzer-JWT selbst prüft und OPTIONS für CORS beantworten muss. Daten liest und schreibt sie mit dem JWT der angemeldeten Person, also unter RLS. Die Service-Role wird nicht verwendet.
+`ELEVENLABS_API_KEY` ist für die Stimme Pflicht. `ELEVENLABS_VOICE_ID` ist optional und steht sonst auf `amAPTcyESqCO9CgYuf64`. `ELEVENLABS_MODEL` ist optional: Standard `eleven_multilingual_v2`, schnellere Alternative `eleven_flash_v2_5`. Andere Werte werden ignoriert. `ELEVENLABS_SPEED` ist optional und setzt `voice_settings.speed`. Der Standard ist 1.2. Zahlen werden auf 0.7 bis 1.2 geklemmt, ungültige Angaben bleiben bei 1.2. Der ElevenLabs-Schlüssel bleibt nur serverseitig.
+
+Beide Funktionen stehen in `supabase/config.toml` mit `verify_jwt = false`, weil sie das Nutzer-JWT selbst prüfen und OPTIONS für CORS beantworten müssen. Beim Deploy kein `--no-verify-jwt` setzen. `jarvis-chat` liest und schreibt mit dem JWT der angemeldeten Person, also unter RLS. Die Service-Role wird nicht verwendet. `jarvis-tts` prüft nur die Anmeldung und streamt `audio/mpeg`.
+
+## Stimme
+
+Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). ElevenLabs bekommt `voice_settings.speed` 1.2, sofern `ELEVENLABS_SPEED` nichts anderes setzt (geklemmt auf 0.7 bis 1.2). Die Datei spielt der Browser zusätzlich mit `playbackRate` 1.2 und `preservesPitch` (`ELEVEN_PLAYBACK_RATE` in `jarvis/speech.js`, dort änderbar). Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter, dann ohne dieses Tempo. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
+
+Ein lokales `localStorage.jarvis_fn` auf `http://localhost` oder `http://127.0.0.1` … `/jarvis-chat` lenkt die Stimme auf dasselbe Ziel mit `/jarvis-tts`.
 
 ## Lokal testen
 
@@ -61,8 +74,8 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v1`) gilt nur für `/jarvis/`.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v2`) gilt nur für `/jarvis/`.
 
 ## Folgepunkte
 
-Aufgaben abhaken, Löschen, Rechnungen als bezahlt oder versendet markieren, Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Ziele und Paketpreise bearbeiten, Retainer-Rechnungen erzeugen, ElevenLabs, Posts veröffentlichen, Nutzer und Auswertungen. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest die Tabelle trotzdem.
+Aufgaben abhaken, Löschen, Rechnungen als bezahlt oder versendet markieren, Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Ziele und Paketpreise bearbeiten, Retainer-Rechnungen erzeugen, Posts veröffentlichen, Nutzer und Auswertungen. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest die Tabelle trotzdem.
