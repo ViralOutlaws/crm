@@ -1,6 +1,8 @@
 import {
   anthropicTools,
   botFromText,
+  parseAufgabeSelector,
+  planAufgabeChange,
   planFromTool,
   revalidate,
   sumNetto,
@@ -16,7 +18,7 @@ Deno.test("Systemprompt ist deutsch, cached und spricht als wir", () => {
     throw new Error("system cache_control fehlt");
   }
   const text = blocks[0].text;
-  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee"]) {
+  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee", "delete_aufgaben", "set_aufgaben_status", "nicht ersatzweise ein Panel"]) {
     if (!text.includes(part)) throw new Error(`Prompt ohne ${part}`);
   }
   if (!blocks[1].text.includes("Kim")) throw new Error("Name fehlt");
@@ -147,6 +149,81 @@ Deno.test("Gespräch hängt eine Notiz an und bündelt Aufgaben plus Wiedervorla
   if (again.data.neue_notiz !== plan.data.neue_notiz) throw new Error("revalidate");
   const ret = planFromTool("create_retainer", { paket: "Social", betrag: 500 }, ctx);
   if (ret.data.status !== "pausiert" || ret.table !== "retainer") throw new Error(JSON.stringify(ret.data));
+});
+
+Deno.test("Aufgaben löschen und erledigen laufen über die Karte", () => {
+  const a = "11111111-1111-4111-8111-111111111111";
+  const b = "22222222-2222-4222-8222-222222222222";
+  let all = false;
+  try {
+    parseAufgabeSelector({ all: true }, "delete");
+  } catch (e) {
+    all = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!all) throw new Error("alle ohne confirm");
+
+  const confirmed = parseAufgabeSelector({ all: true, confirm: true }, "delete");
+  const plan = planAufgabeChange(confirmed, [
+    { id: a, titel: "Angebot nachfassen", status: "todo" },
+    { id: b, titel: "Reel schneiden", status: "doing" },
+  ], { op: "delete" });
+  if (!plan.danger || plan.action !== "delete" || plan.kind !== "aufgabe_delete" || plan.tool !== "delete_aufgaben") {
+    throw new Error(JSON.stringify(plan));
+  }
+  if (plan.data.count !== 2) throw new Error("count");
+  if (!plan.lines.includes("Anzahl: 2") || !plan.lines.includes("Angebot nachfassen") || !plan.lines.includes("Reel schneiden")) {
+    throw new Error(plan.lines.join("|"));
+  }
+
+  let bulk = false;
+  try {
+    planAufgabeChange(parseAufgabeSelector({ query: "Angebot" }, "delete"), [
+      { id: a, titel: "Angebot A" },
+      { id: b, titel: "Angebot B" },
+    ], { op: "delete" });
+  } catch (e) {
+    bulk = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!bulk) throw new Error("mehrere ohne confirm");
+
+  const single = planAufgabeChange(
+    parseAufgabeSelector({ id: a }, "delete"),
+    [{ id: a, titel: "Nur eine", status: "todo" }],
+    { op: "delete" },
+  );
+  if (!single.danger || single.data.count !== 1 || single.data.confirm !== false) throw new Error(JSON.stringify(single.data));
+
+  let done = false;
+  try {
+    planAufgabeChange(
+      parseAufgabeSelector({ query: "Backup" }, "status"),
+      [{ id: a, titel: "Backup", status: "done" }],
+      { op: "status", status: "done" },
+    );
+  } catch (e) {
+    done = e instanceof Error && e.message.includes("erledigt");
+  }
+  if (!done) throw new Error("schon erledigt");
+
+  const statusPlan = planAufgabeChange(
+    parseAufgabeSelector({ ids: [a, b] }, "status"),
+    [{ id: a, titel: "Offen", status: "todo" }, { id: b, titel: "Fertig", status: "done" }],
+    { op: "status", status: "done" },
+  );
+  if (statusPlan.danger || statusPlan.action !== "update" || statusPlan.data.count !== 1 || statusPlan.data.status !== "done") {
+    throw new Error(JSON.stringify(statusPlan));
+  }
+
+  const again = revalidate(plan, ctx);
+  if (!again.danger || again.action !== "delete" || again.data.count !== 2) throw new Error(JSON.stringify(again));
+  const titles = again.data.titles as string[];
+  if (titles[0] !== "Angebot nachfassen" || titles[1] !== "Reel schneiden") throw new Error(titles.join("|"));
+
+  const statusAgain = revalidate(statusPlan, ctx);
+  if (statusAgain.danger || statusAgain.data.status !== "done" || statusAgain.action !== "update") {
+    throw new Error(JSON.stringify(statusAgain));
+  }
+  if ((statusAgain.data.ids as string[]).length !== 1) throw new Error("frozen filter");
 });
 
 Deno.test("Wiedervorlage ist nie erledigt, Kontakt braucht Firma, Woche startet Montag", () => {

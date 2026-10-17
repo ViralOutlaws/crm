@@ -53,17 +53,20 @@ Erlaubt sind `https://crm.viraloutlaws.de` sowie `http://localhost` und `http://
 
 ## Migration
 
-`supabase/migrations/20261017190000_jarvis_actions.sql` legt das Protokoll `jarvis_actions` an. Nicht automatisch gegen die Live-Datenbank ausführen. Solange die Tabelle fehlt, bleibt die CRM-Schreibaktion erhalten und die Antwort enthält `log_warning`.
+`supabase/migrations/20261017190000_jarvis_actions.sql` legt das Protokoll `jarvis_actions` an. `supabase/migrations/20261017220000_jarvis_actions_delete.sql` erweitert den Check um `action = delete`, damit gelöschte Aufgaben mit der kompletten Zeile im Protokoll stehen. Beide nicht automatisch gegen die Live-Datenbank ausführen. Ohne die zweite Migration schlägt nur der Logeintrag fehl, die Löschung bleibt, und die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion erhalten und die Antwort enthält ebenfalls `log_warning`.
+
+Aufgaben erledigen, wieder öffnen und löschen stecken in `jarvis-chat`. Dafür die Funktion neu deployen: `supabase functions deploy jarvis-chat` (ohne `--no-verify-jwt`).
 
 Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migration nötig. Diese Spalten sind freier Text ohne CHECK.
 
 ## Bestätigung
 
-Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Löschen, E-Mail-Versand und die Status Bezahlt oder Versendet gibt es nicht.
+Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Aufgaben löschen zeigt dieselbe Karte in Rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Aufgaben löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. Eine einzelne Aufgabe braucht dieses Extra nicht, die Karte aber schon. E-Mail-Versand und die Status Bezahlt oder Versendet gibt es nicht. Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer werden nicht gelöscht. Was nicht geht, sagt Jarvis in einem Satz, statt ersatzweise ein Panel zu öffnen.
 
 ## Status
 
-- Aufgaben, die Jarvis anlegt, haben immer `todo`, damit sie im Kanban sichtbar sind.
+- Aufgaben, die Jarvis anlegt, haben immer `todo`, damit sie im Kanban sichtbar sind. Erledigen setzt `done`, Wieder-Öffnen setzt `todo`. Löschen entfernt die Zeile und schreibt sie vollständig nach `jarvis_actions.summary.row`.
+- Eine Löschkarte nennt die Anzahl und bis zu zwölf Titel. Höchstens 300 Aufgaben pro Aufruf. Die bestätigten IDs werden gelöscht oder geändert, nicht eine neue „alle“-Suche.
 - Angebote und Rechnungen entstehen als `entwurf`. Das CRM kennt diesen Status in Dropdown, Filter und Badge. Speichern im CRM lässt den Entwurf stehen. Entwürfe zählen nicht als gesendete Angebote und nicht als offene oder überfällige Forderungen.
 - Social-Entwürfe sind Status `Idee`. `Veröffentlicht` ändert Jarvis nicht. Format und Säule nutzen dieselben Werte wie der Redaktionsplan.
 - Bot-Aufträge sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte. Im CRM steht dasselbe im Feld „Zugewiesen an Bot“ und auf der Karte.
@@ -86,4 +89,4 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Folgepunkte
 
-Aufgaben abhaken, Löschen, Rechnungen als bezahlt oder versendet markieren, Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Ziele und Paketpreise bearbeiten, Retainer-Rechnungen erzeugen, Posts veröffentlichen, Nutzer und Auswertungen. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest die Tabelle trotzdem.
+Löschen außerhalb von Aufgaben, Rechnungen als bezahlt oder versendet markieren, Mahnungen und E-Mails, Social-Dateien hochladen (Anzeige der Vorschaubilder ist da), Ziele und Paketpreise bearbeiten, Retainer-Rechnungen erzeugen, Posts veröffentlichen, Nutzer und Auswertungen. Die CRM-Navigation kennt Ausgaben, eine eigene Seitenhülle ist dort nicht vorhanden; Jarvis liest die Tabelle trotzdem.

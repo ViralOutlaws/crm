@@ -343,13 +343,15 @@ function closeHolo() {
 holoLayer.addEventListener("click", (e) => { if (e.target === holoLayer) closeHolo(); });
 
 function showConfirm(plan) {
+  const danger = !!plan.danger;
   const el = document.createElement("article");
-  el.className = "confirm";
+  el.className = danger ? "confirm danger" : "confirm";
+  const yes = danger ? "Endgültig löschen" : "Bestätigen";
   el.innerHTML = `<h4>${esc(plan.summary || "Bitte bestätigen")}</h4><ul>${(plan.lines || []).map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
-    <div class="acts"><button type="button" class="yes">Bestätigen</button><button type="button" class="no">Abbrechen</button></div>`;
+    <div class="acts"><button type="button" class="yes">${yes}</button><button type="button" class="no">Abbrechen</button></div>`;
   el.querySelector(".no").onclick = () => {
     el.remove();
-    say("Abgebrochen. Es wurde nichts gespeichert.");
+    say(danger ? "Abgebrochen. Es wurde nichts gelöscht." : "Abgebrochen. Es wurde nichts gespeichert.");
   };
   el.querySelector(".yes").onclick = () => confirmPlan(plan, el);
   $("#confirms").appendChild(el);
@@ -495,6 +497,35 @@ function engine(raw) {
   if (create && has(q, "rechnung")) return { say: "Rechnung als Entwurf. Sie gilt nicht als offene Forderung und wird nicht versendet.", cardPlan: { kind: "rechnung", tool: "create_rechnung", summary: "Rechnung anlegen", bot: "cashy", lines: ["Kunde: Musterfirma GmbH", "Status: Entwurf"], data: { status: "entwurf" } } };
   if (create && has(q, "retainer")) return { say: "Retainer bleibt pausiert, bis du ihn ausdrücklich aktivierst.", cardPlan: { kind: "retainer", tool: "create_retainer", summary: "Retainer anlegen", lines: ["Paket: Social Betreuung", "Betrag: 850,00 € / Monat", "Status: pausiert"], data: { status: "pausiert" } } };
   if (has(q, "marky", "reel", "posts erstellen")) return { say: "Aufgabe an Marky. Sie landet erst nach deiner Bestätigung im Kanban.", bot: ["marky", "Posts erstellen"], cardPlan: { kind: "aufgabe", tool: "route_to_bot", bot: "marky", summary: "Aufgabe an Marky", lines: ["Aufgabe: 3 Reels schneiden", "Zuständig: Marky", "Status: Offen"], data: { status: "todo" } } };
+  if (has(q, "lösch", "loesch")) {
+    if (has(q, "aufgabe", "kanban")) {
+      return {
+        say: "Ich lösche Aufgaben nur nach deiner Bestätigung. Die Karte nennt Anzahl und Titel. Im Demo wird nichts gelöscht.",
+        cardPlan: {
+          kind: "aufgabe_delete",
+          tool: "delete_aufgaben",
+          danger: true,
+          summary: "Alle 3 Aufgaben löschen",
+          lines: ["Anzahl: 3", "Endgültig löschen.", "Angebot nachfassen", "Reel schneiden", "Rechnung prüfen"],
+          data: { count: 3, scope: "all", confirm: true },
+        },
+      };
+    }
+    return { say: "Löschen geht hier nur bei Aufgaben. Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer lösche ich nicht." };
+  }
+  if (has(q, "aufgabe", "kanban") && has(q, "erledig", "abhake", "abhaken", "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt")) {
+    const reopen = has(q, "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt");
+    return {
+      say: reopen ? "Ich öffne die Aufgabe wieder, sobald du bestätigst." : "Ich markiere die Aufgabe als erledigt, sobald du bestätigst.",
+      cardPlan: {
+        kind: "aufgabe_status",
+        tool: "set_aufgaben_status",
+        summary: reopen ? "Aufgabe wieder öffnen: Angebot nachfassen" : "Aufgabe erledigen: Angebot nachfassen",
+        lines: ["Anzahl: 1", reopen ? "Status: Offen" : "Status: Erledigt", "Angebot nachfassen"],
+        data: { status: reopen ? "todo" : "done", count: 1 },
+      },
+    };
+  }
   if (has(q, "social", "content", "instagram", "posts")) return { area: "social", say: "Hier ist der Social-Plan. Entwürfe haben den Status Idee." };
   if (has(q, "rechnung", "rechnungen")) return { area: "rechnungen", say: "Hier sind die Rechnungen." };
   if (has(q, "angebot")) return { area: "angebote", say: "Hier sind die Angebote." };

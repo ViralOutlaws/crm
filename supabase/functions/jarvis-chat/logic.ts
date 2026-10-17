@@ -30,10 +30,11 @@ export type Plan = {
   kind: string;
   tool: string;
   table: string;
-  action: "insert" | "update";
+  action: "insert" | "update" | "delete";
   summary: string;
   lines: string[];
   bot: string | null;
+  danger?: boolean;
   data: Record<string, unknown>;
 };
 
@@ -52,6 +53,8 @@ export const WRITE_TOOLS = new Set([
   "create_retainer",
   "create_ausgabe",
   "create_roi",
+  "set_aufgaben_status",
+  "delete_aufgaben",
 ]);
 
 export function isWriteTool(name: string): boolean {
@@ -92,6 +95,9 @@ export function openPanelFor(tool: string): string | null {
       return "ausgaben";
     case "create_roi":
       return "roi";
+    case "set_aufgaben_status":
+    case "delete_aufgaben":
+      return "aufgaben";
     default:
       return null;
   }
@@ -139,7 +145,11 @@ Du erfindest niemals Zahlen, Namen, Beträge, Termine, Status oder Zitate. Nur w
 Wenn ein Werkzeug nichts liefert, ein Feld leer ist oder eine Abfrage scheitert, sagst du ausdrücklich, dass die Daten fehlen.
 Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Bestätigung vor und antworten mit awaiting_confirmation.
 Solange das so ist, sagst du nicht, etwas sei angelegt, gespeichert oder erledigt. Bitte um Bestätigung.
-Du versendest keine E-Mails, keine Mahnungen und keine Angebote. Du markierst Rechnungen nicht als offen, versendet oder bezahlt und löschst nichts.
+Du versendest keine E-Mails, keine Mahnungen und keine Angebote. Du markierst Rechnungen nicht als offen, versendet oder bezahlt.
+Aufgaben erledigst oder öffnest du mit set_aufgaben_status (done oder todo), eine oder mehrere, immer über die Bestätigungskarte.
+Aufgaben löschst du nur mit delete_aufgaben. Die Karte nennt Anzahl und Titel. Eine einzelne genannte Aufgabe braucht das Feld confirm nicht. Mehrere oder alle löschst du nur, wenn Kim das ausdrücklich sagt, und dann setzt du confirm auf true. Ohne dieses Werkzeug behauptest du nie, etwas sei gelöscht.
+Kontakte, Angebote, Rechnungen, Termine, Wiedervorlagen, Posts und Retainer löschst du nicht.
+Wenn eine Aktion nicht unterstützt ist oder ein Werkzeug einen Fehler meldet, sagst du das in einem klaren Satz. Du öffnest dann nicht ersatzweise ein Panel.
 Angebote und Rechnungen legst du nur als Entwurf an. Social-Media-Posts nur als Entwurf; im CRM heißt dieser Status „Idee“.
 Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy (Finanzen) oder Developy (Software) werden Aufgaben im CRM, erst nach Kims Bestätigung.
 Beträge aus dem CRM sind netto, sofern das Werkzeug nicht ausdrücklich brutto nennt.
@@ -256,7 +266,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_aufgabe",
-    description: "Legt eine Aufgabe im Kanban an, Status immer Offen. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erst nach Bestätigung. Kein Erledigen, kein Löschen.",
+    description: "Legt eine Aufgabe im Kanban an, Status immer Offen. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erst nach Bestätigung. Erledigen geht über set_aufgaben_status, Löschen über delete_aufgaben.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -492,6 +502,39 @@ const EXTRA_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    name: "set_aufgaben_status",
+    description: "Markiert Aufgaben als erledigt (done) oder wieder offen (todo), eine oder mehrere. Filter: id, ids, query (Titel), only (open|done|doing|overdue), all. Erst die Bestätigungskarte, nichts ist vorher gespeichert. Kein Löschen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["status"],
+      properties: {
+        status: { type: "string", description: "done (erledigt) oder todo (offen)" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string", description: "Teil des Titels" },
+        only: { type: "string", description: "open | done | doing | overdue" },
+        all: { type: "boolean", description: "Alle Aufgaben in diesem Statuswechsel, nur wenn Kim alle meint" },
+      },
+    },
+  },
+  {
+    name: "delete_aufgaben",
+    description: "Löscht Aufgaben endgültig, eine, einen Filter oder alle. Die Karte listet Anzahl und Titel. confirm muss true sein, wenn es mehrere oder alle sind und Kim das ausdrücklich gesagt hat. Ohne confirm bei Menge oder alle lehnt das Werkzeug ab. Nicht für Kontakte, Rechnungen oder andere Tabellen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string", description: "Teil des Titels" },
+        only: { type: "string", description: "open | done | doing | overdue" },
+        all: { type: "boolean", description: "Wirklich jede Aufgabe. Nur mit confirm true." },
+        confirm: { type: "boolean", description: "true nur bei ausdrücklichem Mehrfach- oder Alle-Löschen" },
+      },
+    },
+  },
 ];
 
 export function anthropicTools(): ToolDef[] {
@@ -576,6 +619,10 @@ export function revalidate(input: unknown, ctx: Ctx): Plan {
       return planAusgabe(data);
     case "roi":
       return planRoi(data);
+    case "aufgabe_status":
+      return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "status", status: normAufgabeStatus(data.status) }, true);
+    case "aufgabe_delete":
+      return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "delete" }, true);
     case "social_insert":
     case "social_update": {
       const copy = { ...data };
@@ -876,6 +923,148 @@ function planAufgabe(o: Record<string, unknown>, tool: string): Plan {
     bot,
     data: { titel, beschreibung, status: "todo", prioritaet, faellig, kontakt_id },
   };
+}
+
+export const AUFGABE_MATCH_LIMIT = 300;
+
+export type AufgabeScope = "single" | "bulk" | "all";
+
+export type AufgabeSelector = {
+  id: string | null;
+  ids: string[];
+  query: string | null;
+  only: "open" | "done" | "doing" | "overdue" | null;
+  all: boolean;
+  confirm: boolean;
+  scope: AufgabeScope;
+};
+
+export type AufgabeRow = { id: string; titel: string; status?: string | null };
+
+const AUFGABE_ONLY = new Set(["open", "done", "doing", "overdue"]);
+
+export function normAufgabeStatus(v: unknown): "done" | "todo" {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (["done", "erledigt", "complete", "completed", "abgehakt", "fertig"].includes(s)) return "done";
+  if (["todo", "offen", "open", "unerledigt"].includes(s)) return "todo";
+  throw new Error("Status muss erledigt (done) oder offen (todo) sein.");
+}
+
+function flag(v: unknown): boolean {
+  return v === true || String(v).toLowerCase() === "true";
+}
+
+export function parseAufgabeSelector(input: unknown, mode: "status" | "delete"): AufgabeSelector {
+  const o = asObj(input);
+  const id = optUuid(o, "id");
+  const rawIds = o.ids === undefined || o.ids === null ? [] : o.ids;
+  if (!Array.isArray(rawIds)) throw new Error("ids muss eine Liste sein.");
+  const ids = [...new Set(rawIds.map((item) => {
+    const s = String(item ?? "").trim();
+    if (!UUID.test(s)) throw new Error("Eine Aufgaben-ID ist ungültig.");
+    return s;
+  }))];
+  if (id && !ids.includes(id)) ids.unshift(id);
+  if (ids.length > AUFGABE_MATCH_LIMIT) throw new Error("Zu viele Aufgaben auf einmal.");
+  const query = clip(o.query, 80);
+  let only: AufgabeSelector["only"] = null;
+  if (o.only !== undefined && o.only !== null && String(o.only).trim() !== "") {
+    const s = String(o.only).toLowerCase().trim();
+    if (!AUFGABE_ONLY.has(s)) throw new Error("Filter only muss open, done, doing oder overdue sein.");
+    only = s as AufgabeSelector["only"];
+  }
+  const all = flag(o.all);
+  const confirm = flag(o.confirm);
+  if (all && (ids.length > 0 || query || only)) throw new Error("Entweder alle Aufgaben oder ein Filter, nicht beides.");
+  if (!all && !ids.length && !query && !only) throw new Error("Welche Aufgaben? Nenne einen Titel, eine ID oder einen Filter.");
+  const scope: AufgabeScope = all ? "all" : !query && !only && ids.length === 1 ? "single" : "bulk";
+  if (mode === "delete" && scope === "all" && !confirm) {
+    throw new Error("Alle Aufgaben lösche ich nur, wenn Kim das ausdrücklich sagt. Dann confirm auf true setzen.");
+  }
+  return { id: ids[0] ?? null, ids, query, only, all, confirm, scope };
+}
+
+export function planAufgabeChange(
+  selector: AufgabeSelector,
+  rows: AufgabeRow[],
+  change: { op: "status"; status: "done" | "todo" } | { op: "delete" },
+  frozen = false,
+): Plan {
+  const seen = new Set<string>();
+  let list = rows.map((r) => {
+    const id = String(r.id ?? "").trim();
+    if (!UUID.test(id)) throw new Error("Aufgaben-ID ungültig.");
+    if (seen.has(id)) throw new Error("Dieselbe Aufgabe steht doppelt in der Liste.");
+    seen.add(id);
+    return { id, titel: clip(r.titel, 300) || "Ohne Titel", status: r.status == null ? null : String(r.status) };
+  });
+  if (!frozen && change.op === "status") list = list.filter((r) => r.status !== change.status);
+  if (!list.length) {
+    throw new Error(change.op === "delete"
+      ? "Keine passende Aufgabe gefunden."
+      : change.status === "done"
+      ? "Keine offene Aufgabe dafür. Sie ist vielleicht schon erledigt."
+      : "Keine erledigte Aufgabe dafür. Sie ist vielleicht schon offen.");
+  }
+  if (list.length > AUFGABE_MATCH_LIMIT) throw new Error("Zu viele Aufgaben. Bitte enger filtern.");
+  const many = selector.scope === "all" || list.length > 1;
+  if (!frozen && change.op === "delete" && many && !selector.confirm) {
+    throw new Error(`Das träfe ${list.length} Aufgaben. Mehrere oder alle lösche ich nur, wenn Kim das ausdrücklich sagt. Dann confirm auf true setzen.`);
+  }
+  const titles = list.map((r) => r.titel);
+  const shown = titles.slice(0, 12);
+  const lines = [
+    `Anzahl: ${list.length}`,
+    change.op === "delete" ? "Endgültig löschen." : change.status === "done" ? "Status: Erledigt" : "Status: Offen",
+    ...shown,
+  ];
+  if (titles.length > shown.length) lines.push(`… und ${titles.length - shown.length} weitere`);
+  const scope: AufgabeScope = selector.scope === "all" ? "all" : list.length === 1 ? "single" : "bulk";
+  const one = list.length === 1;
+  let summary: string;
+  if (change.op === "delete") {
+    summary = scope === "all" ? `Alle ${list.length} Aufgaben löschen` : one ? `Aufgabe löschen: ${titles[0]}` : `${list.length} Aufgaben löschen`;
+  } else if (change.status === "done") {
+    summary = one ? `Aufgabe erledigen: ${titles[0]}` : `${list.length} Aufgaben erledigen`;
+  } else {
+    summary = one ? `Aufgabe wieder öffnen: ${titles[0]}` : `${list.length} Aufgaben wieder öffnen`;
+  }
+  return {
+    kind: change.op === "delete" ? "aufgabe_delete" : "aufgabe_status",
+    tool: change.op === "delete" ? "delete_aufgaben" : "set_aufgaben_status",
+    table: "aufgaben",
+    action: change.op === "delete" ? "delete" : "update",
+    summary,
+    lines,
+    bot: null,
+    ...(change.op === "delete" ? { danger: true } : {}),
+    data: {
+      ids: list.map((r) => r.id),
+      titles,
+      count: list.length,
+      scope,
+      confirm: selector.confirm || frozen,
+      ...(change.op === "status" ? { status: change.status } : {}),
+    },
+  };
+}
+
+function selectorFromPlan(data: Record<string, unknown>): AufgabeSelector {
+  const ids = Array.isArray(data.ids) ? data.ids.map((id) => String(id)) : [];
+  const scope: AufgabeScope = data.scope === "all" || data.scope === "bulk" || data.scope === "single"
+    ? data.scope
+    : ids.length > 1 ? "bulk" : "single";
+  return { id: ids[0] ?? null, ids, query: null, only: null, all: scope === "all", confirm: true, scope };
+}
+
+function rowsFromPlan(data: Record<string, unknown>): AufgabeRow[] {
+  const ids = data.ids;
+  const titles = data.titles;
+  if (!Array.isArray(ids) || !Array.isArray(titles) || !ids.length || ids.length !== titles.length) {
+    throw new Error("Die Aufgabenliste ist unvollständig.");
+  }
+  if (Number(data.count) !== ids.length) throw new Error("Die Anzahl passt nicht zur Liste.");
+  return ids.map((id, i) => ({ id: String(id), titel: String(titles[i] ?? "") }));
 }
 
 function planRoute(o: Record<string, unknown>): Plan {

@@ -323,6 +323,10 @@ a:hover{text-decoration:underline}
 .confirm button{min-height:44px;min-width:120px;cursor:pointer;border:1px solid var(--gold)}
 .confirm .yes{background:var(--gold);color:#000;font-weight:600}
 .confirm .no{background:transparent;color:var(--gold)}
+.confirm.danger{border-color:var(--red);box-shadow:0 0 24px rgba(255,77,94,.25)}
+.confirm.danger h4{color:var(--red)}
+.confirm.danger .yes{background:var(--red);color:#fff;border-color:var(--red)}
+.confirm.danger .no{color:var(--red);border-color:var(--red)}
 
 #launcher{position:fixed;left:18px;right:18px;bottom:46px;z-index:35;display:none;padding:10px;background:rgba(10,9,6,.88);border:1px solid rgba(253,173,0,.4);backdrop-filter:blur(10px)}
 #launcher.open{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}

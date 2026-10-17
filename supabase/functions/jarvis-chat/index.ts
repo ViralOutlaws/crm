@@ -1,16 +1,23 @@
 // Jarvis-Chat: prüft das Nutzer-JWT, liest und schreibt im CRM nur mit diesem JWT (RLS).
 // Schreibwerkzeuge werden nicht ausgeführt, sondern als Bestätigung an die Oberfläche gegeben.
-// Bestätigte Pläne prüft revalidate() erneut. Löschen, Mailversand und Bezahlt/Versendet gibt es nicht.
+// Bestätigte Pläne prüft revalidate() erneut. Aufgaben lassen sich danach erledigen, wieder öffnen oder löschen.
+// Andere Tabellen werden nicht gelöscht. Mailversand und Bezahlt/Versendet gibt es nicht.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { customerFile, fuzzyFind, morningBriefing, openArea } from "./areas.ts";
 import {
   anthropicTools,
   berlinToday,
   botFromText,
+  AUFGABE_MATCH_LIMIT,
   isWriteTool,
+  normAufgabeStatus,
   openPanelFor,
+  parseAufgabeSelector,
+  planAufgabeChange,
   planFromTool,
   revalidate,
+  type AufgabeRow,
+  type AufgabeSelector,
   socialUpdateAllowed,
   sumNetto,
   systemBlocks,
@@ -158,7 +165,9 @@ async function runChat(
             }
             input = prep.input;
           }
-          const plan = planFromTool(tool.name, input, ctx);
+          const plan = tool.name === "set_aufgaben_status" || tool.name === "delete_aufgaben"
+            ? await planAufgabenWrite(sb, tool.name, input, ctx)
+            : planFromTool(tool.name, input, ctx);
           send("confirm", plan);
           if (plan.bot) send("bot", { id: plan.bot, task: plan.summary, pending: true });
           results.push({
@@ -299,6 +308,9 @@ async function executeConfirm(
   ctx: Ctx,
 ): Promise<Record<string, unknown>> {
   const plan = revalidate({ kind: body.kind, tool: body.tool, bot: body.bot, data: body.data }, ctx);
+  if (plan.kind === "aufgabe_status" || plan.kind === "aufgabe_delete") {
+    return await executeAufgabeChange(sb, workspaceId, userId, plan);
+  }
   if (plan.kind === "meeting") {
     const written = await writeMeeting(sb, workspaceId, plan, ctx);
     let warning: string | null = null;
@@ -672,6 +684,152 @@ async function writeSocial(sb: SupabaseClient, ws: string, plan: Plan, ctx: Ctx)
   return String(found.data.id);
 }
 
+const AUFGABE_CHUNK = 80;
+
+async function planAufgabenWrite(sb: SupabaseClient, name: string, input: unknown, ctx: Ctx): Promise<Plan> {
+  const mode = name === "delete_aufgaben" ? "delete" : "status";
+  const selector = parseAufgabeSelector(input, mode);
+  const raw = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const change = mode === "delete"
+    ? { op: "delete" as const }
+    : { op: "status" as const, status: normAufgabeStatus(raw.status) };
+  const rows = await findAufgaben(sb, selector, ctx, change);
+  return planAufgabeChange(selector, rows, change);
+}
+
+async function findAufgaben(
+  sb: SupabaseClient,
+  selector: AufgabeSelector,
+  ctx: Ctx,
+  change: { op: "status"; status: "done" | "todo" } | { op: "delete" },
+): Promise<AufgabeRow[]> {
+  const run = async (ids?: string[]) => {
+    let q = sb.from("aufgaben").select("id, titel, status").order("titel", { ascending: true }).limit(AUFGABE_MATCH_LIMIT + 1);
+    if (ids) q = q.in("id", ids);
+    if (selector.query) {
+      const safe = likeSafe(selector.query);
+      if (!safe) throw new Error("Der Titelfilter ist leer.");
+      q = q.ilike("titel", `%${safe}%`);
+    }
+    if (change.op === "status") q = change.status === "done" ? q.neq("status", "done") : q.eq("status", "done");
+    if (selector.only === "open" || selector.only === "overdue") q = q.neq("status", "done");
+    else if (selector.only === "done") q = q.eq("status", "done");
+    else if (selector.only === "doing") q = q.eq("status", "doing");
+    if (selector.only === "overdue") q = q.not("faellig", "is", null).lt("faellig", ctx.today);
+    const { data, error } = await q;
+    if (error) throw new Error(dbErr(error.message));
+    return (data ?? []) as Array<{ id: string; titel: string | null; status: string | null }>;
+  };
+
+  let rows: Array<{ id: string; titel: string | null; status: string | null }> = [];
+  if (selector.ids.length) {
+    for (let i = 0; i < selector.ids.length; i += AUFGABE_CHUNK) {
+      rows.push(...await run(selector.ids.slice(i, i + AUFGABE_CHUNK)));
+      if (rows.length > AUFGABE_MATCH_LIMIT) break;
+    }
+  } else {
+    rows = await run();
+  }
+  if (rows.length > AUFGABE_MATCH_LIMIT) throw new Error("Mehr als 300 Aufgaben. Bitte enger filtern.");
+  return rows.map((r) => ({
+    id: String(r.id),
+    titel: String(r.titel ?? ""),
+    status: r.status == null ? null : String(r.status),
+  }));
+}
+
+async function executeAufgabeChange(
+  sb: SupabaseClient,
+  ws: string,
+  userId: string,
+  plan: Plan,
+): Promise<Record<string, unknown>> {
+  const ids = Array.isArray(plan.data.ids) ? plan.data.ids.map((id) => String(id)) : [];
+  const loaded = await loadAufgabenByIds(sb, ids);
+  const byId = new Map(loaded.map((row) => [String(row.id), row]));
+  if (ids.some((id) => !byId.has(id))) throw new Error("Keine Aufgabe gefunden oder kein Zugriff.");
+  const rows = ids.map((id) => byId.get(id)!);
+
+  if (plan.kind === "aufgabe_status") {
+    const status = plan.data.status === "todo" ? "todo" : "done";
+    const now = new Date().toISOString();
+    for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+      const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+      const { data, error } = await sb.from("aufgaben").update({ status, updated_at: now }).in("id", chunk).select("id");
+      if (error) throw new Error(dbErr(error.message));
+      if (!data || data.length !== chunk.length) throw new Error("Nicht alle Aufgaben ließen sich ändern.");
+    }
+    let warning: string | null = null;
+    for (const row of rows) {
+      const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "update", {
+        tool: plan.tool,
+        kind: plan.kind,
+        titel: row.titel ?? null,
+        from: row.status ?? null,
+        to: status,
+      });
+      if (w) warning = w;
+    }
+    const n = rows.length;
+    const summary = status === "done"
+      ? (n === 1 ? "Aufgabe erledigt" : `${n} Aufgaben erledigt`)
+      : (n === 1 ? "Aufgabe wieder geöffnet" : `${n} Aufgaben wieder geöffnet`);
+    return {
+      ok: true,
+      id: String(rows[0].id),
+      table: "aufgaben",
+      action: "update",
+      summary,
+      lines: plan.lines,
+      bot: null,
+      panel: "aufgaben",
+      logged: n,
+      log_warning: warning,
+    };
+  }
+
+  for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+    const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+    const { data, error } = await sb.from("aufgaben").delete().in("id", chunk).select("id");
+    if (error) throw new Error(dbErr(error.message));
+    if (!data || data.length !== chunk.length) throw new Error("Nicht alle Aufgaben ließen sich löschen.");
+  }
+  let warning: string | null = null;
+  for (const row of rows) {
+    const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "delete", {
+      tool: plan.tool,
+      kind: plan.kind,
+      titel: row.titel ?? null,
+      row,
+    });
+    if (w) warning = w;
+  }
+  const n = rows.length;
+  return {
+    ok: true,
+    id: String(rows[0].id),
+    table: "aufgaben",
+    action: "delete",
+    summary: n === 1 ? "Aufgabe gelöscht" : `${n} Aufgaben gelöscht`,
+    lines: plan.lines,
+    bot: null,
+    panel: "aufgaben",
+    logged: n,
+    log_warning: warning,
+  };
+}
+
+async function loadAufgabenByIds(sb: SupabaseClient, ids: string[]): Promise<Array<Record<string, unknown>>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+    const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+    const { data, error } = await sb.from("aufgaben").select("*").in("id", chunk);
+    if (error) throw new Error(dbErr(error.message));
+    for (const row of data ?? []) out.push(row as Record<string, unknown>);
+  }
+  return out;
+}
+
 function logAction(sb: SupabaseClient, ws: string, userId: string, plan: Plan, recordId: string): Promise<string | null> {
   return logRow(sb, ws, userId, plan.table, recordId, plan.action, {
     tool: plan.tool,
@@ -687,7 +845,7 @@ async function logRow(
   userId: string,
   table: string,
   recordId: string,
-  action: "insert" | "update",
+  action: "insert" | "update" | "delete",
   summary: Record<string, unknown>,
 ): Promise<string | null> {
   const { error } = await sb.from("jarvis_actions").insert({
@@ -699,6 +857,11 @@ async function logRow(
     summary,
   });
   if (!error) return null;
+  const msg = `${error.code ?? ""} ${error.message ?? ""}`;
+  if (action === "delete" && /23514|check constraint|action_check/i.test(msg)) {
+    return "Gelöscht, aber das Protokoll akzeptiert action „delete“ noch nicht. Migration 20261017220000_jarvis_actions_delete anwenden.";
+  }
+  if (action === "delete") return "Gelöscht, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
   return "Gespeichert, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
 }
 
