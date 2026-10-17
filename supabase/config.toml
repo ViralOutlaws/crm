@@ -3,3 +3,7 @@ verify_jwt = false
 
 [functions.social-post]
 verify_jwt = false
+
+# Jarvis prüft das Nutzer-JWT selbst (RLS) und muss OPTIONS/CORS ohne Gateway-JWT beantworten.
+[functions.jarvis-chat]
+verify_jwt = false
