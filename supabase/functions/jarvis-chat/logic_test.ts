@@ -4,11 +4,16 @@ import {
   briefingSpoken,
   deDate,
   greeting,
+  matchBot,
+  MAX_TOOL_ROUNDS,
+  normBot,
   parseAufgabeSelector,
   planAufgabeChange,
   planFromTool,
+  resolveDayPhrase,
   revalidate,
   speakDate,
+  upcomingDays,
   sumNetto,
   systemBlocks,
   weekRange,
@@ -54,6 +59,29 @@ Deno.test("Begrüßung folgt der Berliner Uhr und Daten sind deutsch", () => {
   const blocks = systemBlocks("2026-10-17", "Kim");
   if (!blocks[1].text.includes("Samstag, 17. Oktober")) throw new Error(blocks[1].text);
   if (blocks[1].text.includes("Heute ist 2026-10-17")) throw new Error(blocks[1].text);
+  if (blocks[1].cache_control) throw new Error("Tagesblock darf nicht cachen");
+  if (!blocks[1].text.includes("Dienstag, 20. Oktober = 2026-10-20")) throw new Error(blocks[1].text);
+  if (MAX_TOOL_ROUNDS !== 6) throw new Error("Runden");
+  const prompt = blocks[0].text;
+  for (const part of ["handeln", "antworten", "zeigen", "plaudern", "Lösche alle Aufgaben", "1.250 Euro", "list_tasks", "newest"]) {
+    if (!prompt.includes(part)) throw new Error(`Prompt ohne ${part}`);
+  }
+});
+
+Deno.test("nächsten Dienstag und Bot-Aliase", () => {
+  if (resolveDayPhrase("2026-10-17", "nächsten Dienstag") !== "2026-10-20") {
+    throw new Error(String(resolveDayPhrase("2026-10-17", "nächsten Dienstag")));
+  }
+  if (resolveDayPhrase("2026-10-20", "nächsten Dienstag") !== "2026-10-27") throw new Error("gleicher Wochentag");
+  if (resolveDayPhrase("2026-10-17", "morgen") !== "2026-10-18") throw new Error("morgen");
+  if (resolveDayPhrase("2026-10-17", "übermorgen") !== "2026-10-19") throw new Error("übermorgen");
+  if (resolveDayPhrase("2026-10-17", "gestern") !== "2026-10-16") throw new Error("gestern");
+  if (!upcomingDays("2026-10-17", 14).includes("2026-10-31")) throw new Error("14 Tage");
+  for (const [said, id] of [["Marki", "marky"], ["Markie", "marky"], ["Sally", "saley"], ["Sali", "saley"], ["Kashy", "cashy"], ["Cashi", "cashy"], ["Webbi", "webby"], ["Weby", "webby"], ["Developi", "developy"]] as const) {
+    if (normBot(said) !== id || matchBot(said) !== id) throw new Error(said);
+  }
+  const byBot = parseAufgabeSelector({ bot: "Marki" }, "status");
+  if (byBot.bot !== "marky" || byBot.scope !== "bulk") throw new Error(JSON.stringify(byBot));
 });
 
 Deno.test("Tools cachen am letzten Werkzeug", () => {

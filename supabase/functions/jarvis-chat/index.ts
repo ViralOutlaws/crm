@@ -8,6 +8,9 @@ import {
   anthropicTools,
   berlinToday,
   botFromText,
+  BOTS,
+  matchBot,
+  MAX_TOOL_ROUNDS,
   AUFGABE_MATCH_LIMIT,
   isWriteTool,
   normAufgabeStatus,
@@ -157,7 +160,7 @@ async function runChat(
   const tools = anthropicTools();
   const messages: ChatMsg[] = history.map((m) => ({ role: m.role, content: m.content }));
 
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const turn = await streamAnthropic(apiKey, model, system, messages, tools, (text) => send("delta", { text }));
     const toolUses = turn.content.filter((b) => b.type === "tool_use") as Array<{ type: "tool_use"; id: string; name: string; input: unknown }>;
     if (!toolUses.length || turn.stop !== "tool_use") return;
@@ -169,6 +172,17 @@ async function runChat(
       try {
         if (isWriteTool(tool.name)) {
           let input = tool.input;
+          const bound = await bindNamedCustomer(sb, tool.name, input);
+          if (bound.blocked) {
+            if (bound.ui) send("ui", bound.ui);
+            results.push({
+              type: "tool_result",
+              tool_use_id: tool.id,
+              content: JSON.stringify(bound.forModel),
+            });
+            continue;
+          }
+          input = bound.input;
           if (tool.name === "meeting_recap") {
             const prep = await prepareMeeting(sb, tool.input);
             if (prep.blocked) {
@@ -630,6 +644,156 @@ async function writeMeeting(sb: SupabaseClient, ws: string, plan: Plan, ctx: Ctx
   return { id, logs };
 }
 
+const CUSTOMER_FK: Record<string, "kunde_id" | "kontakt_id"> = {
+  create_angebot: "kunde_id",
+  create_rechnung: "kunde_id",
+  create_retainer: "kunde_id",
+  create_roi: "kunde_id",
+  create_aufgabe: "kontakt_id",
+  create_wiedervorlage: "kontakt_id",
+  create_kal_event: "kontakt_id",
+  route_to_bot: "kontakt_id",
+};
+
+const INSERT_FK: Record<string, "kunde_id" | "kontakt_id"> = {
+  angebote: "kunde_id",
+  rechnungen: "kunde_id",
+  retainer: "kunde_id",
+  roi_daten: "kunde_id",
+  aufgaben: "kontakt_id",
+  wiedervorlagen: "kontakt_id",
+  kal_events: "kontakt_id",
+};
+
+type Bind =
+  | { blocked: true; ui: { panel: string; data: unknown } | null; forModel: unknown }
+  | { blocked: false; input: unknown };
+
+function customerName(o: Record<string, unknown>): string {
+  for (const key of ["kunde", "kunde_name", "kontakt", "kontakt_name", "firma"]) {
+    const s = typeof o[key] === "string" ? o[key].trim() : "";
+    if (s && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return s;
+  }
+  return "";
+}
+
+function dropCustomerNames(o: Record<string, unknown>) {
+  for (const key of ["kunde", "kunde_name", "kontakt", "kontakt_name"]) delete o[key];
+}
+
+function manyContacts(rows: Array<{ id: string; firma: string | null; person: string | null }>) {
+  return {
+    panel: "contacts",
+    data: {
+      title: "Mehrere Treffer",
+      meta: "Bitte auswählen",
+      crm: "contacts",
+      wide: true,
+      columns: [{ key: "firma", label: "Firma" }, { key: "person", label: "Person" }],
+      rows: rows.map((r) => ({
+        id: r.id,
+        open: "customer",
+        cells: { firma: r.firma || "", person: r.person || "" },
+      })),
+      kpis: [{ label: "Treffer", value: String(rows.length) }],
+      note: "Mehrere Kontakte passen. Nicht raten.",
+    },
+  };
+}
+
+async function resolveOne(sb: SupabaseClient, name: string): Promise<Bind | { id: string }> {
+  const found = await fuzzyFind(sb, name);
+  if (found.kind === "none") {
+    return {
+      blocked: true,
+      ui: null,
+      forModel: { status: "not_saved", hinweis: `Kein Kontakt für „${name}“. Nichts gespeichert. Frag nach dem Namen, erfinde niemanden.` },
+    };
+  }
+  if (found.kind === "many") {
+    return {
+      blocked: true,
+      ui: manyContacts(found.rows),
+      forModel: { status: "not_saved", hinweis: "Mehrere Kontakte. Frag nach, welchen. Noch nichts gespeichert.", kandidaten: found.rows },
+    };
+  }
+  return { id: found.id };
+}
+
+async function bindNamedCustomer(sb: SupabaseClient, tool: string, input: unknown): Promise<Bind> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { blocked: false, input };
+  const o = { ...(input as Record<string, unknown>) };
+  if (tool === "crm_insert") {
+    const fk = INSERT_FK[String(o.table || "")];
+    if (!fk || !Array.isArray(o.rows)) return { blocked: false, input: o };
+    const rows = o.rows.map((row) => row && typeof row === "object" && !Array.isArray(row) ? { ...(row as Record<string, unknown>) } : row);
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      const rec = row as Record<string, unknown>;
+      if (rec[fk]) {
+        dropCustomerNames(rec);
+        continue;
+      }
+      const name = customerName(rec);
+      if (!name) continue;
+      const hit = await resolveOne(sb, name);
+      if ("blocked" in hit) return hit;
+      rec[fk] = hit.id;
+      dropCustomerNames(rec);
+      if (fk === "kunde_id") delete rec.firma;
+    }
+    return { blocked: false, input: { ...o, rows } };
+  }
+  const fk = CUSTOMER_FK[tool];
+  if (!fk || o[fk]) return { blocked: false, input };
+  const name = customerName(o);
+  if (!name) return { blocked: false, input };
+  const hit = await resolveOne(sb, name);
+  if ("blocked" in hit) return hit;
+  o[fk] = hit.id;
+  dropCustomerNames(o);
+  if (fk === "kunde_id") delete o.firma;
+  return { blocked: false, input: o };
+}
+
+async function listTasks(sb: SupabaseClient, o: Record<string, unknown>, ctx: Ctx) {
+  let q = sb.from("aufgaben").select("id, titel, beschreibung, status, prioritaet, faellig").limit(80);
+  const bot = o.bot ? matchBot(o.bot) : null;
+  if (o.bot && !bot) throw new Error("Bot muss Webby, Marky, Saley, Cashy oder Developy sein.");
+  if (bot) q = q.ilike("beschreibung", `%Zuständig: ${BOTS[bot].name}%`);
+  if (o.done === true || String(o.done).toLowerCase() === "true") q = q.eq("status", "done");
+  if (o.done === false || String(o.done).toLowerCase() === "false") q = q.neq("status", "done");
+  const { data, error } = await q;
+  if (error) throw new Error(dbErr(error.message));
+  let rows = data ?? [];
+  const due = String(o.due || "");
+  if (due === "overdue") rows = rows.filter((t) => t.faellig && t.faellig < ctx.today && t.status !== "done");
+  else if (due === "today") rows = rows.filter((t) => t.faellig && t.faellig <= ctx.today && t.status !== "done");
+  else if (due === "week") {
+    const range = weekRange(ctx.today);
+    rows = rows.filter((t) => t.faellig && t.faellig >= range.from && t.faellig <= range.to);
+  }
+  const query = likeSafe(o.query).toLowerCase();
+  if (query) {
+    rows = rows.filter((t) => `${t.titel || ""} ${t.beschreibung || ""}`.toLowerCase().includes(query));
+  }
+  const aufgaben = rows.slice(0, 25).map((t) => ({
+    id: t.id,
+    titel: t.titel,
+    status: t.status,
+    faellig: t.faellig,
+    bot: botFromText(t.beschreibung),
+  }));
+  return {
+    ui: null,
+    forModel: {
+      hinweis: aufgaben.length ? "Live aus dem CRM. IDs nicht vorlesen." : "Keine passenden Aufgaben.",
+      anzahl: rows.length,
+      aufgaben,
+    },
+  };
+}
+
 async function prepareMeeting(sb: SupabaseClient, input: unknown): Promise<
   | { blocked: true; ui: { panel: string; data: unknown } | null; forModel: unknown }
   | { blocked: false; input: Record<string, unknown> }
@@ -726,12 +890,15 @@ async function findAufgaben(
   change: { op: "status"; status: "done" | "todo" } | { op: "delete" },
 ): Promise<AufgabeRow[]> {
   const run = async (ids?: string[]) => {
-    let q = sb.from("aufgaben").select("id, titel, status").order("titel", { ascending: true }).limit(AUFGABE_MATCH_LIMIT + 1);
+    let q = sb.from("aufgaben").select("id, titel, status, beschreibung").order("titel", { ascending: true }).limit(AUFGABE_MATCH_LIMIT + 1);
     if (ids) q = q.in("id", ids);
+    if (selector.bot) q = q.ilike("beschreibung", `%Zuständig: ${BOTS[selector.bot].name}%`);
     if (selector.query) {
       const safe = likeSafe(selector.query);
       if (!safe) throw new Error("Der Titelfilter ist leer.");
-      q = q.ilike("titel", `%${safe}%`);
+      const asBot = matchBot(selector.query);
+      if (asBot) q = q.or(`titel.ilike.%${safe}%,beschreibung.ilike.%Zuständig: ${BOTS[asBot].name}%`);
+      else q = q.or(`titel.ilike.%${safe}%,beschreibung.ilike.%${safe}%`);
     }
     if (change.op === "status") q = change.status === "done" ? q.neq("status", "done") : q.eq("status", "done");
     if (selector.only === "open" || selector.only === "overdue") q = q.neq("status", "done");
@@ -1158,14 +1325,17 @@ function runRead(
   if (name === "open_area") return openArea(sb, userId, o, ctx);
   if (name === "morning_briefing") return morningBriefing(sb, userId, ctx);
   if (name === "customer_file") return customerFile(sb, o, ctx);
+  if (name === "list_tasks") return listTasks(sb, o, ctx);
   throw new Error("Unbekanntes Lesewerkzeug.");
 }
 
 async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
   const limit = Math.min(25, Math.max(1, Number(o.limit) || 12));
+  const newest = o.newest === true || String(o.newest).toLowerCase() === "true";
   let q = sb.from("contacts")
-    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert")
+    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert, created_at")
     .limit(limit);
+  if (newest) q = q.order("created_at", { ascending: false });
   const query = likeSafe(o.query);
   if (query) q = q.or(`firma.ilike.%${query}%,person.ilike.%${query}%,email.ilike.%${query}%,ort.ilike.%${query}%`);
   const st = typeof o.status === "string" ? o.status.toLowerCase() : "";
@@ -1190,7 +1360,9 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
   return {
     ui,
     forModel: {
-      hinweis: rows.length ? "Suchergebnis, nicht die ganze Pipeline." : "Keine passenden Kontakte.",
+      hinweis: rows.length
+        ? (newest ? "Neueste Kontakte, created_at absteigend. Nicht die ganze Pipeline." : "Suchergebnis, nicht die ganze Pipeline.")
+        : "Keine passenden Kontakte.",
       anzahl: rows.length,
       kontakte: rows.map((c) => ({
         id: c.id,
@@ -1202,6 +1374,7 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
         deal_wert_netto: c.deal_wert,
         naechster_schritt: c.naechster_schritt,
         naechster_schritt_text: c.naechster_schritt_text,
+        created_at: c.created_at || null,
       })),
     },
   };

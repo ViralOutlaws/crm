@@ -1,11 +1,17 @@
 import {
   HANDSFREE_KEY,
+  cleanTranscript,
   createUtterance,
+  createWakeGate,
   handsFreeHint,
   handsFreePref,
   handsFreeSupport,
+  historyExpired,
+  HISTORY_IDLE_MS,
   isStopCommand,
   prefAfterGrant,
+  voiceCardAction,
+  withEntityContext,
 } from "./listen.js";
 import { createElevenLabsSpeech } from "./speech.js";
 import {
@@ -72,6 +78,10 @@ let sb = null;
 let userId = null;
 let session = null;
 let history = [];
+let historyAt = 0;
+let entityNotes = [];
+let cardNote = "";
+const wake = createWakeGate();
 let currentArea = null;
 let currentFilter = null;
 const botTimers = {};
@@ -499,9 +509,15 @@ function showConfirm(plan) {
     <div class="acts"><button type="button" class="yes">${yes}</button><button type="button" class="no">Abbrechen</button></div>`;
   el.querySelector(".no").onclick = () => {
     el.remove();
+    cardNote = `Zuletzt abgebrochen, nichts gespeichert: ${plan.summary || "Karte"}`;
     say(danger ? "Abgebrochen. Es wurde nichts gelöscht." : "Abgebrochen. Es wurde nichts gespeichert.");
   };
-  el.querySelector(".yes").onclick = () => confirmPlan(plan, el);
+  el.querySelector(".yes").onclick = () => {
+    cardNote = `Karte bestätigt, Speichern läuft: ${plan.summary || "Karte"}`;
+    confirmPlan(plan, el);
+  };
+  cardNote = `Offene Karte, noch nicht gespeichert: ${plan.summary || "Karte"}${danger ? ". Löschen braucht das Wort löschen." : ""}`;
+  notePlanEntities(plan);
   $("#confirms").appendChild(el);
   return el;
 }
@@ -510,6 +526,7 @@ async function confirmPlan(plan, el) {
   el.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   if (DEMO) {
     el.remove();
+    cardNote = `Zuletzt bestätigt, im Demo nicht gespeichert: ${plan.summary || "Karte"}`;
     if (plan.bot) activateBot(plan.bot, plan.summary);
     await say("Im Demo-Modus wird nichts gespeichert. Die Karte zeigt nur, was Jarvis nach deiner Bestätigung schreiben würde.");
     return;
@@ -527,6 +544,7 @@ async function confirmPlan(plan, el) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "Speichern fehlgeschlagen.");
     el.remove();
+    cardNote = `Zuletzt bestätigt und gespeichert: ${body.summary || plan.summary || "Karte"}`;
     if (sb) {
       const side = await loadSide(sb).catch(() => null);
       if (side) renderSide(side);
@@ -735,9 +753,66 @@ function engine(raw) {
     : null };
 }
 
+function noteEntity(id, label, table) {
+  const key = String(id || "");
+  const name = String(label || "").trim();
+  if (!key || !name) return;
+  entityNotes = entityNotes.filter((n) => n.id !== key);
+  entityNotes.push({ id: key, label: name.slice(0, 80), table: table || "crm" });
+  if (entityNotes.length > 8) entityNotes.shift();
+}
+
+function notePlanEntities(plan) {
+  const data = plan?.data || {};
+  const ids = Array.isArray(data.ids) ? data.ids : [];
+  const titles = Array.isArray(data.titles) ? data.titles : [];
+  ids.forEach((id, i) => noteEntity(id, titles[i] || plan.summary, plan.table || "crm"));
+  if (data.kunde_id) noteEntity(data.kunde_id, plan.summary, "contacts");
+  if (data.kontakt_id) noteEntity(data.kontakt_id, plan.summary, "contacts");
+}
+
+function contextLine() {
+  const bits = [];
+  if (entityNotes.length) bits.push(entityNotes.map((n) => `${n.label} (${n.table} ${n.id})`).join("; "));
+  if (cardNote) bits.push(cardNote);
+  return bits.join(". ");
+}
+
+function rememberTurn() {
+  const now = Date.now();
+  if (historyExpired(historyAt, now, HISTORY_IDLE_MS)) {
+    history = [];
+    entityNotes = [];
+    cardNote = "";
+  }
+  historyAt = now;
+}
+
+function noteUi(data) {
+  const rows = data?.data?.rows;
+  if (!Array.isArray(rows)) return;
+  for (const row of rows.slice(0, 8)) {
+    const cells = row?.cells || {};
+    const label = cells.firma || cells.titel || cells.betreff || cells.nr || cells.text || "";
+    if (row?.id && label) noteEntity(row.id, label, data.panel || "crm");
+  }
+}
+
 async function ask(text) {
-  text = String(text || "").trim();
+  text = cleanTranscript(text);
   if (!text) return;
+  const card = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
+  if (card) {
+    const act = voiceCardAction(text, card.classList.contains("danger"));
+    if (act === "confirm") {
+      card.querySelector(".yes")?.click();
+      return;
+    }
+    if (act === "reject") {
+      card.querySelector(".no")?.click();
+      return;
+    }
+  }
   if (isStopCommand(text)) {
     $("#inp").value = "";
     interruptSpeech();
@@ -751,6 +826,7 @@ async function ask(text) {
   speakToken += 1;
   speech.cancel();
   if (!DEMO) {
+    rememberTurn();
     history.push({ role: "user", content: text });
     await liveAsk(cut);
     return;
@@ -791,7 +867,7 @@ async function liveAsk(cut) {
         apikey: SUPABASE_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages: history.slice(-12) }),
+      body: JSON.stringify({ messages: withEntityContext(history.slice(-12), contextLine()) }),
     });
     if (cut !== speechCut) return;
     if (!res.ok || !res.body) {
@@ -837,7 +913,10 @@ async function liveAsk(cut) {
           $("#log").scrollTop = 1e9;
           if (cut === speechCut) voice?.push(data.text);
         } else if (ev === "confirm") showConfirm(data);
-        else if (ev === "ui" && data.data) openView(data.data, panelToArea(data.panel));
+        else if (ev === "ui" && data.data) {
+          noteUi(data);
+          openView(data.data, panelToArea(data.panel));
+        }
         else if (ev === "bot" && data.id) activateBot(data.id, data.task || "Auftrag");
         else if (ev === "error") throw new Error(data.message || "Fehler");
       }
@@ -1025,10 +1104,18 @@ function startContinuous(ticket, seenEpoch) {
     const heard = heardText(e.results);
     utterance.sync(heard.finalText, heard.interimText, (text) => {
       if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
-      ask(text);
+      const cleaned = cleanTranscript(text);
+      const openCard = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
+      if (openCard && voiceCardAction(cleaned, openCard.classList.contains("danger"))) {
+        ask(cleaned);
+        return;
+      }
+      const gated = wake.accept(cleaned);
+      if (!gated.take) return;
+      ask(gated.text);
     });
     const field = $("#inp");
-    if (field) field.value = utterance.preview();
+    if (field) field.value = cleanTranscript(utterance.preview());
   };
   session.onerror = (ev) => { recError = ev?.error || "error"; };
   session.onend = () => {
@@ -1118,7 +1205,7 @@ async function startPtt() {
     if (!ptt || rec !== session) return;
     let said = "";
     for (let i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
-    said = said.trim();
+    said = cleanTranscript(said);
     $("#inp").value = said;
     if (e.results[e.results.length - 1].isFinal) {
       stopPtt({ keepMode: true });

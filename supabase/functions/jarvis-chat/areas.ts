@@ -15,9 +15,23 @@ export async function openArea(sb: SupabaseClient, userId: string, input: Record
   if (!AREAS.has(area)) throw new Error("Unbekannter Bereich. Möglich: " + [...AREAS].join(", "));
   const filter = pickFilter(input);
   const view = await buildArea(sb, userId, area, filter, ctx);
+  const rows = Array.isArray(view.rows) ? view.rows.slice(0, 25).map((r) => {
+    const row = r as { id?: string; cells?: Record<string, unknown>; badge?: { text?: string } };
+    return { id: row.id || null, cells: row.cells || {}, badge: row.badge?.text || "" };
+  }) : [];
+  const lanes = view.lanes && typeof view.lanes === "object"
+    ? Object.fromEntries(Object.entries(view.lanes as Record<string, unknown[]>).map(([k, arr]) => [k, (arr || []).slice(0, 8)]))
+    : undefined;
   return {
     ui: { panel: area === "social" ? "content_week" : area, data: view },
-    forModel: { hinweis: view.note || "Live aus dem CRM.", filter, anzahl: Array.isArray(view.rows) ? view.rows.length : undefined, kpis: view.kpis },
+    forModel: {
+      hinweis: (view.note || "Live aus dem CRM.") + " Die ersten Zeilen stehen in zeilen. Antworte daraus, erfinde keine weiteren.",
+      filter,
+      anzahl: Array.isArray(view.rows) ? view.rows.length : rows.length,
+      kpis: view.kpis,
+      zeilen: rows,
+      ...(lanes ? { spalten: lanes } : {}),
+    },
   };
 }
 

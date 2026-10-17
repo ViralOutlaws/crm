@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  cleanTranscript,
   createUtterance,
+  createWakeGate,
   handsFreeHint,
   handsFreePref,
   handsFreeSupport,
+  historyExpired,
+  HISTORY_IDLE_MS,
   isStopCommand,
   prefAfterGrant,
   SILENCE_MS,
+  voiceCardAction,
+  withEntityContext,
 } from "./listen.js";
 
 function clock() {
@@ -127,6 +133,44 @@ test("Freisprechen: iOS aus, ohne API aus, Chrome an", () => {
   }).ok, true);
   assert.match(handsFreeHint("ios"), /Mikrofon/);
   assert.equal(handsFreeHint(""), "");
+});
+
+test("Spracherkennung: Jarvis weg, Aliase glatt", () => {
+  assert.equal(cleanTranscript("  jarwis  zeig   Marki  "), "Jarvis zeig Marky");
+  assert.equal(cleanTranscript("Hey Jarvis, Sally soll das machen"), "Hey Jarvis, Saley soll das machen");
+  assert.equal(cleanTranscript("Kashy und Webbi und Developi"), "Cashy und Webby und Developy");
+});
+
+test("Freisprechen hört nur auf Jarvis, dann 15 Sekunden", () => {
+  let now = 1_000;
+  const gate = createWakeGate({ now: () => now, windowMs: 15000 });
+  assert.deepEqual(gate.accept("Pipeline bitte"), { take: false, text: "" });
+  assert.deepEqual(gate.accept("Jarvis, Pipeline bitte"), { take: true, text: "Pipeline bitte" });
+  now += 10000;
+  assert.deepEqual(gate.accept("und die Rechnungen"), { take: true, text: "und die Rechnungen" });
+  now += 15000;
+  assert.deepEqual(gate.accept("nochwas"), { take: false, text: "" });
+  assert.deepEqual(gate.accept("Hey Jarvis"), { take: false, text: "" });
+});
+
+test("Karte: bestätigen, abbrechen, Löschen nur mit löschen", () => {
+  assert.equal(voiceCardAction("bestätigen"), "confirm");
+  assert.equal(voiceCardAction("passt so"), "confirm");
+  assert.equal(voiceCardAction("ja, mach"), "confirm");
+  assert.equal(voiceCardAction("Jarvis, bestätigen"), "confirm");
+  assert.equal(voiceCardAction("abbrechen"), "reject");
+  assert.equal(voiceCardAction("nein"), "reject");
+  assert.equal(voiceCardAction("ja", true), null);
+  assert.equal(voiceCardAction("bestätigen", true), null);
+  assert.equal(voiceCardAction("löschen", true), "confirm");
+  assert.equal(voiceCardAction("ja, löschen", true), "confirm");
+  assert.equal(voiceCardAction("nein", true), "reject");
+  assert.equal(historyExpired(0, 10_000), false);
+  assert.equal(historyExpired(1_000, 1_000 + HISTORY_IDLE_MS - 1), false);
+  assert.equal(historyExpired(1_000, 1_000 + HISTORY_IDLE_MS), true);
+  const msgs = withEntityContext([{ role: "user", content: "Wer war das?" }], "Beispiel GmbH (contacts abc)");
+  assert.match(msgs[0].content, /Beispiel GmbH/);
+  assert.match(msgs[0].content, /nicht vorlesen/);
 });
 
 test("Speicher: erste Freigabe schaltet an, 0 bleibt", () => {
