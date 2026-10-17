@@ -13,6 +13,7 @@ import {
   BOTS,
   SUPABASE_KEY,
   berlinToday,
+  deDate,
   crmHref,
   demoBriefing,
   demoCustomer,
@@ -105,7 +106,7 @@ function renderSide(data) {
   const items = (d.today || []).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
   $("#todayList").innerHTML = items.length ? items.map((e) => e.type === "ev"
     ? `<button type="button" class="row tap" data-open="kalender"><span class="time">${esc(e.t)}</span><span>${esc(e.x)}</span></button>`
-    : `<div class="row tap" role="button" tabindex="0" data-open="task" data-id="${esc(e.id || "")}" data-title="${esc(e.x)}" data-status="${esc(e.status || "todo")}"><button type="button" class="chk" aria-pressed="${e.status === "done" ? "true" : "false"}" aria-label="${e.status === "done" ? "Wieder öffnen" : "Erledigen"}: ${esc(e.x)}" ${e.id ? "" : "disabled"}></button><span class="row-hit"><span>${esc(e.x)}</span><span class="sub">${esc(e.t)}</span></span>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
+    : `<div class="row tap" role="button" tabindex="0" data-open="task" data-id="${esc(e.id || "")}" data-title="${esc(e.x)}" data-status="${esc(e.status || "todo")}"><button type="button" class="chk" aria-pressed="${e.status === "done" ? "true" : "false"}" aria-label="${e.status === "done" ? "Wieder öffnen" : "Erledigen"}: ${esc(e.x)}" ${e.id ? "" : "disabled"}></button><span class="row-hit"><span>${esc(e.x)}</span><span class="sub">${esc(deDate(e.t))}</span></span>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
     : `<div class="empty">${DEMO ? "Keine Beispieltermine." : "Heute nichts geladen."}</div>`;
   const keys = [["lead", "Lead"], ["erstgespraech", "Erstgespr."], ["angebot", "Angebot"], ["gewonnen", "Gewonnen"]];
   const counts = d.counts || {};
@@ -290,7 +291,7 @@ function tableHtml(view) {
   if (!rows.length) return `<div class="empty">${view.note && !view.spoken ? esc(view.note) : "Keine Einträge."}</div>`;
   const head = cols.map((c) => `<th class="${c.align === "r" ? "r" : ""}">${esc(c.label)}</th>`).join("") + "<th></th>";
   const body = rows.map((r) => {
-    const tds = cols.map((c) => `<td class="${c.align === "r" ? "r mono" : ""}">${esc(r.cells?.[c.key] ?? "")}</td>`).join("");
+    const tds = cols.map((c) => `<td class="${c.align === "r" ? "r mono" : ""}">${esc(showDate(r.cells?.[c.key] ?? ""))}</td>`).join("");
     const badge = r.badge ? `<td><span class="badge ${esc(r.badge.tone || "e")}">${esc(r.badge.text)}</span></td>` : "<td></td>";
     const click = r.id && (r.open === "customer" || r.open === "task") ? ` class="click" tabindex="0" data-id="${esc(r.id)}" data-open="${esc(r.open)}"` : "";
     return `<tr${click}>${tds}${badge}</tr>`;
@@ -318,24 +319,24 @@ function agendaHtml(a) {
   const block = (title, rows) => `<h5 style="font-family:'Bebas Neue';letter-spacing:.12em;color:var(--gold);font-weight:400;margin:8px 0">${esc(title)}</h5>` + (rows.length
     ? `<table class="ht"><tbody>${rows.map((r) => `<tr><td>${esc(r.left)}</td><td class="r"><span class="badge ${esc(r.tone || "e")}">${esc(r.right)}</span></td></tr>`).join("")}</tbody></table>`
     : `<div class="empty">Nichts fällig.</div>`);
-  const tasks = (a.tasks || []).map((t) => ({ left: t.titel, right: t.overdue ? "Überfällig" : (t.faellig || "Offen"), tone: t.overdue ? "o" : "w" }));
-  const reminders = (a.reminders || []).map((t) => ({ left: t.text, right: t.datum || "", tone: "w" }));
+  const tasks = (a.tasks || []).map((t) => ({ left: t.titel, right: t.faellig ? (t.overdue ? `Überfällig · ${deDate(t.faellig)}` : deDate(t.faellig)) : "Offen", tone: t.overdue ? "o" : "w" }));
+  const reminders = (a.reminders || []).map((t) => ({ left: t.text, right: showDate(t.datum || ""), tone: "w" }));
   const invoices = (a.invoices || []).map((t) => ({ left: `${t.nr || ""} ${t.kunde || ""}`.trim(), right: eur(t.netto), tone: "o" }));
-  const steps = (a.nextSteps || []).map((t) => ({ left: t.firma, right: t.datum || "", tone: "w" }));
+  const steps = (a.nextSteps || []).map((t) => ({ left: t.firma, right: showDate(t.datum || ""), tone: "w" }));
   return `<div class="agenda"><div class="tl">${events}</div><div>${block("Aufgaben", tasks)}${block("Wiedervorlagen", reminders)}${block("Überfällige Rechnungen", invoices)}${block("Nächste Schritte", steps)}</div></div>`;
 }
 
 function dossierHtml(c) {
   const list = (title, rows) => `<h5>${esc(title)}</h5>` + (rows.length ? `<table class="ht"><tbody>${rows.map((r) => `<tr><td>${esc(r.a)}</td><td>${esc(r.b)}</td><td class="r mono">${esc(r.c || "")}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">Keine.</div>`);
   return `<div class="dossier"><div>
-      <div class="kv"><span>Firma</span><b>${esc(c.firma)}</b><span>Person</span><b>${esc(c.person)}</b><span>Phase</span><b>${esc(c.status)}</b><span>Quelle</span><b>${esc(c.quelle)}</b><span>Ort</span><b>${esc(c.ort)}</b><span>E-Mail</span><b>${esc(c.email)}</b><span>Deal</span><b>${c.deal_wert ? esc(eur(c.deal_wert)) : "—"}</b><span>Nächster Schritt</span><b>${esc(c.naechster_schritt || "—")} ${esc(c.naechster_schritt_text || "")}</b></div>
+      <div class="kv"><span>Firma</span><b>${esc(c.firma)}</b><span>Person</span><b>${esc(c.person)}</b><span>Phase</span><b>${esc(c.status)}</b><span>Quelle</span><b>${esc(c.quelle)}</b><span>Ort</span><b>${esc(c.ort)}</b><span>E-Mail</span><b>${esc(c.email)}</b><span>Deal</span><b>${c.deal_wert ? esc(eur(c.deal_wert)) : "—"}</b><span>Nächster Schritt</span><b>${esc(showDate(c.naechster_schritt || "—"))} ${esc(c.naechster_schritt_text || "")}</b></div>
       <h5>Notizen</h5><div class="noteblock">${esc(c.notes || "Keine internen Notizen.")}</div>
       ${(c.notizen || []).map((n) => `<div class="row"><span class="time">${esc(n.datum)}</span><div>${esc(n.text)}</div></div>`).join("")}
     </div><div>
       ${list("Angebote", (c.angebote || []).map((a) => ({ a: a.nr, b: a.betreff, c: eur(a.netto) })))}
       ${list("Rechnungen", (c.rechnungen || []).map((a) => ({ a: a.nr, b: a.status, c: eur(a.netto) })))}
-      ${list("Aufgaben", (c.aufgaben || []).map((a) => ({ a: a.titel, b: a.bot || a.status, c: a.faellig || "" })))}
-      ${list("Termine", (c.termine || []).map((a) => ({ a: a.datum, b: a.titel, c: a.zeit || "" })))}
+      ${list("Aufgaben", (c.aufgaben || []).map((a) => ({ a: a.titel, b: a.bot || a.status, c: showDate(a.faellig || "") })))}
+      ${list("Termine", (c.termine || []).map((a) => ({ a: showDate(a.datum), b: a.titel, c: a.zeit || "" })))}
     </div></div>`;
 }
 
@@ -401,7 +402,7 @@ function wireTaskForm(form, task) {
       action: "update",
       bot: null,
       summary: `Aufgabe ändern: ${titel}`,
-      lines: [`Titel: ${titel}`, `Fällig: ${faellig || "—"}`, `Priorität: ${prioritaet}`],
+      lines: [`Titel: ${titel}`, `Fällig: ${faellig ? deDate(faellig) : "—"}`, `Priorität: ${prioritaet}`],
       data: { table: "aufgaben", ids: [task.id], titles: [titel], count: 1, scope: "single", confirm: true, patch },
     });
   });
@@ -465,6 +466,11 @@ $("#app").addEventListener("keydown", (e) => {
   e.preventDefault();
   openDash(open);
 });
+
+function showDate(v) {
+  const s = String(v ?? "");
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? deDate(s) : s;
+}
 
 function closeEl(h, instant) {
   if (!h || h.classList.contains("closing")) return;

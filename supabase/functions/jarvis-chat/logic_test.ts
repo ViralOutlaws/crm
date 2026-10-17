@@ -1,10 +1,14 @@
 import {
   anthropicTools,
   botFromText,
+  briefingSpoken,
+  deDate,
+  greeting,
   parseAufgabeSelector,
   planAufgabeChange,
   planFromTool,
   revalidate,
+  speakDate,
   sumNetto,
   systemBlocks,
   weekRange,
@@ -23,6 +27,33 @@ Deno.test("Systemprompt ist deutsch, cached und spricht als wir", () => {
     if (!text.includes(part)) throw new Error(`Prompt ohne ${part}`);
   }
   if (!blocks[1].text.includes("Kim")) throw new Error("Name fehlt");
+});
+
+Deno.test("Begrüßung folgt der Berliner Uhr und Daten sind deutsch", () => {
+  const evening = new Date("2026-10-17T21:20:00Z");
+  const morning = new Date("2026-10-17T06:30:00Z");
+  const afternoon = new Date("2026-10-17T12:00:00Z");
+  const night = new Date("2026-10-17T22:30:00Z");
+  if (greeting(evening) !== "Guten Abend") throw new Error(greeting(evening));
+  if (greeting(morning) !== "Guten Morgen") throw new Error(greeting(morning));
+  if (greeting(afternoon) !== "Guten Tag") throw new Error(greeting(afternoon));
+  if (greeting(night) !== "Guten Abend") throw new Error(greeting(night));
+  if (speakDate("2026-10-17", evening) !== "Samstag, 17. Oktober") throw new Error(speakDate("2026-10-17", evening));
+  if (speakDate("2025-03-01", evening) !== "Samstag, 1. März 2025") throw new Error(speakDate("2025-03-01", evening));
+  if (deDate("2026-10-15") !== "15.10.2026") throw new Error(deDate("2026-10-15"));
+  const spoken = briefingSpoken({
+    date: "2026-10-17",
+    events: [{}, {}],
+    tasks: [{ overdue: true }, {}, {}],
+    overdueInvoices: [{}],
+    reminders: [{}],
+    nextSteps: [{}],
+  }, evening);
+  if (!spoken.startsWith("Guten Abend, heute ist Samstag, 17. Oktober.")) throw new Error(spoken);
+  if (spoken.includes("2026-10-17") || spoken.includes("Guten Morgen")) throw new Error(spoken);
+  const blocks = systemBlocks("2026-10-17", "Kim");
+  if (!blocks[1].text.includes("Samstag, 17. Oktober")) throw new Error(blocks[1].text);
+  if (blocks[1].text.includes("Heute ist 2026-10-17")) throw new Error(blocks[1].text);
 });
 
 Deno.test("Tools cachen am letzten Werkzeug", () => {

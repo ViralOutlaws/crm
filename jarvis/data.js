@@ -62,6 +62,58 @@ export function berlinToday(d = new Date()) {
   }).format(d);
 }
 
+const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+
+export function berlinHour(d = new Date()) {
+  return Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).format(d));
+}
+
+export function greeting(d = new Date()) {
+  const hour = berlinHour(d);
+  if (hour >= 5 && hour < 11) return "Guten Morgen";
+  if (hour >= 11 && hour < 18) return "Guten Tag";
+  return "Guten Abend";
+}
+
+export function speakDate(iso, now = new Date()) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso || "");
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const wd = WEEKDAYS[new Date(Date.UTC(y, month - 1, day)).getUTCDay()];
+  const spoken = `${wd}, ${day}. ${MONTHS[month - 1]}`;
+  return y === Number(berlinToday(now).slice(0, 4)) ? spoken : `${spoken} ${y}`;
+}
+
+export function deDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso ?? "");
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
+export function briefingSpoken(d, now = new Date()) {
+  const overdue = d.tasks.filter((t) => t.overdue).length;
+  const tasks = d.tasks.length === 0
+    ? "Heute ist keine Aufgabe fällig."
+    : `Bei den Aufgaben ${d.tasks.length === 1 ? "ist 1 fällig oder überfällig" : `sind ${d.tasks.length} fällig oder überfällig`}, davon ${overdue === 0 ? "keine überfällig" : overdue === 1 ? "1 überfällig" : `${overdue} überfällig`}.`;
+  const invoices = d.overdueInvoices.length === 0
+    ? "Keine Rechnung ist überfällig."
+    : d.overdueInvoices.length === 1
+    ? "1 Rechnung ist überfällig."
+    : `${d.overdueInvoices.length} Rechnungen sind überfällig.`;
+  const extra = (d.reminders.length || d.nextSteps.length)
+    ? `Dazu ${d.reminders.length === 1 ? "1 fällige Wiedervorlage" : `${d.reminders.length} fällige Wiedervorlagen`} und ${d.nextSteps.length === 1 ? "1 Kontakt" : `${d.nextSteps.length} Kontakte`} mit fälligem nächsten Schritt.`
+    : "Keine fällige Wiedervorlage und kein fälliger nächster Schritt.";
+  const termine = d.events.length === 1 ? "steht 1 Termin" : `stehen ${d.events.length} Termine`;
+  return `${greeting(now)}, heute ist ${speakDate(d.date, now)}. Im Kalender ${termine}. ${tasks} ${invoices} ${extra}`;
+}
+
 export function weekRange(today) {
   const [y, m, d] = today.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -368,7 +420,7 @@ async function aufgabenView(sb, today) {
       overdue,
       flags: { status: t.status, closed: t.status === "done", today: overdue || t.faellig === today },
       search: String(t.titel || "").toLowerCase(),
-      cells: { titel: t.titel || "", faellig: t.faellig || "", prio: t.prioritaet || "", bot: botFromText(t.beschreibung) },
+      cells: { titel: t.titel || "", faellig: deDate(t.faellig || ""), prio: t.prioritaet || "", bot: botFromText(t.beschreibung) },
       badge: { text: t.status === "done" ? "Erledigt" : overdue ? "Überfällig" : "Offen", tone: t.status === "done" ? "f" : overdue ? "o" : "w" },
     };
   });
@@ -509,18 +561,10 @@ export async function loadBriefing(sb) {
   const nextSteps = (contacts.data || []).filter((c) => !c.archiviert && c.naechster_schritt && c.naechster_schritt <= today).slice(0, 20).map((c) => ({
     firma: c.firma || c.person || "Ohne Namen", datum: c.naechster_schritt, text: c.naechster_schritt_text || "",
   }));
-  const overdue = taskRows.filter((t) => t.overdue).length;
-  const spoken = [
-    `Guten Morgen, heute am ${today} stehen ${events.length} Termine im Kalender.`,
-    taskRows.length ? `Bei den Aufgaben sind ${taskRows.length} fällig oder überfällig, davon ${overdue} überfällig.` : "Heute ist keine Aufgabe fällig.",
-    overdueInvoices.length ? `${overdueInvoices.length} Rechnungen sind überfällig.` : "Keine Rechnung ist überfällig.",
-    (reminders.length || nextSteps.length)
-      ? `Dazu ${reminders.length} fällige Wiedervorlagen und ${nextSteps.length} Kontakte mit fälligem nächsten Schritt.`
-      : "Keine fällige Wiedervorlage und kein fälliger nächster Schritt.",
-  ].join(" ");
+  const spoken = briefingSpoken({ date: today, events, tasks: taskRows, overdueInvoices, reminders, nextSteps });
   return {
     title: "Agenda · Heute",
-    meta: "Briefing · " + today,
+    meta: "Briefing · " + deDate(today),
     crm: "kalender",
     wide: true,
     spoken,
@@ -582,7 +626,7 @@ export async function loadCustomer(sb, queryOrId) {
   const openTasks = (tasks.data || []).filter((t) => t.status !== "done");
   const openInv = (invoices.data || []).filter((r) => r.status === "offen-rg" || r.status === "ueberfaellig");
   const phase = PHASE[c.status] || c.status || "Lead";
-  const step = c.naechster_schritt ? `nächster Schritt am ${c.naechster_schritt}` : "ein nächster Schritt ist nicht gesetzt";
+  const step = c.naechster_schritt ? `nächster Schritt am ${speakDate(c.naechster_schritt)}` : "ein nächster Schritt ist nicht gesetzt";
   const spoken = `${c.firma || "Der Kontakt"} ist in der Phase ${phase}, ${step}. Wir haben ${(offers.data || []).length} Angebote und ${openInv.length} offene Rechnungen, dazu ${openTasks.length} offene Aufgaben.`;
   return {
     title: "Kunden-Akte",
@@ -805,7 +849,7 @@ function taskRow(t) {
     overdue,
     flags: { status: t.status, closed: t.status === "done", today: overdue || t.faellig === "2026-10-17" },
     search: t.titel.toLowerCase(),
-    cells: { titel: t.titel, faellig: t.faellig, prio: t.prioritaet, bot: t.bot },
+    cells: { titel: t.titel, faellig: deDate(t.faellig), prio: t.prioritaet, bot: t.bot },
     badge: { text: overdue ? "Überfällig" : "Offen", tone: overdue ? "o" : "w" },
   };
 }
@@ -815,7 +859,7 @@ function taskDetail(t) {
     title: "Aufgabe",
     meta: t.titel,
     crm: "aufgaben",
-    spoken: `${t.titel}, ${t.status === "done" ? "erledigt" : "offen"}${t.faellig ? `, fällig ${t.faellig}` : ""}.`,
+    spoken: `${t.titel}, ${t.status === "done" ? "erledigt" : "offen"}${t.faellig ? `, fällig am ${speakDate(t.faellig)}` : ""}.`,
     task: t,
   };
 }
@@ -886,10 +930,10 @@ export function demoBriefing() {
   const invoices = [{ nr: "R-0012", kunde: "Musterfirma GmbH", netto: 1500, faellig: "2026-10-08" }];
   const reminders = [{ text: "Beispiel-Café anrufen", datum: "2026-10-16" }];
   const nextSteps = [{ firma: "Beispiel-Café", datum: "2026-10-17", text: "Angebot schicken" }];
-  const spoken = "Guten Morgen, heute am 2026-10-17 stehen 2 Termine im Kalender. Bei den Aufgaben sind 3 fällig oder überfällig, davon 1 überfällig. 1 Rechnung ist überfällig. Dazu 1 fällige Wiedervorlage und 1 Kontakt mit fälligem nächsten Schritt.";
+  const spoken = briefingSpoken({ date: today, events, tasks, overdueInvoices: invoices, reminders, nextSteps });
   return {
     title: "Agenda · Heute",
-    meta: "Briefing · " + today,
+    meta: "Briefing · " + deDate(today),
     crm: "kalender",
     wide: true,
     spoken,
@@ -912,7 +956,7 @@ export function demoCustomer(id) {
       meta: hit.firma,
       crm: "contacts",
       wide: true,
-      spoken: `${hit.firma} ist in der Phase ${PHASE[hit.status]}, ${hit.naechster ? `nächster Schritt am ${hit.naechster}` : "ein nächster Schritt ist nicht gesetzt"}. In den Beispieldaten liegen dazu keine Angebote, keine offenen Rechnungen und keine offene Aufgabe.`,
+      spoken: `${hit.firma} ist in der Phase ${PHASE[hit.status]}, ${hit.naechster ? `nächster Schritt am ${speakDate(hit.naechster)}` : "ein nächster Schritt ist nicht gesetzt"}. In den Beispieldaten liegen dazu keine Angebote, keine offenen Rechnungen und keine offene Aufgabe.`,
       customer: {
         id: hit.id, firma: hit.firma, person: hit.person, email: "hallo@beispiel.de", tel: "+49 170 000000", ort: hit.ort,
         branche: "Lokal", status: PHASE[hit.status], quelle: hit.quelle, deal_wert: hit.deal, naechster_schritt: hit.naechster,
@@ -920,7 +964,7 @@ export function demoCustomer(id) {
       },
     };
   }
-  const spoken = "Beispiel-Café ist in der Phase Erstgespräch, nächster Schritt am 2026-10-17. Wir haben 1 Angebot und 0 offene Rechnungen, dazu 1 offene Aufgabe.";
+  const spoken = `Beispiel-Café ist in der Phase Erstgespräch, nächster Schritt am ${speakDate("2026-10-17")}. Wir haben 1 Angebot und 0 offene Rechnungen, dazu 1 offene Aufgabe.`;
   return {
     title: "Kunden-Akte",
     meta: "Beispiel-Café",

@@ -60,7 +60,7 @@ Nicht automatisch gegen die Live-Datenbank ausführen. Reihenfolge:
 3. `supabase/migrations/20261017230000_jarvis_actions_restore.sql`. Sie setzt den Action-Check auf `insert`, `update`, `delete` und `restore`, nimmt `pakete` und `ziele` in den Tabellen-Check auf und setzt die Insert-Policy neu (`user_id = auth.uid()` und `workspace_id = get_my_workspace_id()`). Kein Update- und kein Delete-Recht auf dem Protokoll. Bestehende Zeilen bleiben gültig.
 4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`. Ohne diesen Redeploy kennt die laufende Funktion Anlegen, Ändern, Löschen und Rückgängig nicht.
 
-`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v6`, damit das Handy die klickbaren Karten und das Vollbild-Layout lädt. Ein Redeploy von `jarvis-chat` ändert an diesem Layout nichts.
+`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v7`, damit das Handy Begrüßung, Datumsformat und die klickbaren Karten lädt. Ein Redeploy von `jarvis-chat` ändert an diesem Layout nichts. Die gesprochene Begrüßung kommt aus `jarvis-chat`: dafür ist der Redeploy in Schritt 4 nötig.
 
 Ohne Schritt 3 schlägt nur der Logeintrag für Löschen und Rückgängig fehl. Die CRM-Änderung bleibt, die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion ebenfalls erhalten und die Antwort enthält `log_warning`.
 
@@ -68,7 +68,11 @@ Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migrat
 
 ## Bestätigung
 
-Die Karten Heute, Pipeline, Offene Rechnungen und Bot-Status öffnen das passende Panel. Eine Pipeline-Stufe filtert auf diese Phase. Eine Aufgabe in der Heute-Liste öffnet die Aufgabe zum Bearbeiten. Das Kästchen fragt kurz nach und schreibt den Status erst nach Ja, über dieselbe Bestätigung wie `set_aufgaben_status`.
+Die Karten Heute, Pipeline, Offene Rechnungen und Bot-Status öffnen das passende Panel. Eine Pipeline-Stufe filtert auf diese Phase. Eine Aufgabe in der Heute-Liste öffnet die Aufgabe zum Bearbeiten. Das Kästchen fragt kurz nach und schreibt den Status erst nach Ja, über dieselbe Bestätigung wie `set_aufgaben_status`. Fälligkeiten in den Listen stehen als `tt.mm.jjjj`.
+
+Die Begrüßung folgt der Uhr in Europe/Berlin: 5 bis 11 Uhr „Guten Morgen“, 11 bis 18 Uhr „Guten Tag“, sonst „Guten Abend“. Ein gesprochenes Datum ist „Samstag, 17. Oktober“, nie `2026-10-17`.
+
+Volumen offen ist die Summe der Deal-Werte (netto) in Lead, Erstgespräch und Angebot, dieselbe Zahl wie „Offene Pipeline“ im CRM. Ein Kontakt ohne Betrag zählt mit 0. Entwürfe aus der Angebots-Liste zählen nicht mit. Vier Kontakte in Angebot und 0,00 € heißt: bei keinem dieser Deals steht ein Betrag.
 
 Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abbrechen). Erst danach prüft `revalidate()` den Plan erneut und schreibt. Mehrere Zeilen zeigen Anzahl und eine Vorschau. Löschen ist rot, mit Anzahl, Titeln und der Taste „Endgültig löschen“. Mehrere oder alle Zeilen löscht Jarvis nur, wenn Kim das ausdrücklich gesagt hat. „Rückgängig“ macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig. Jede Aktion landet in `jarvis_actions` mit dem vollen Zeilenstand: Löschen in `summary.before` (Aufgaben zusätzlich in `summary.row`), Ändern in `before` und `after`, Anlegen in `after`. Rückgängig schreibt `action = restore` und ebenfalls den vollen Stand, damit ein zweites Rückgängig denselben Weg zurückgeht. E-Mails, Mahnungen und Datei-Uploads gibt es nicht. `settings`, `integration_secrets`, Profile und Workspaces fasst Jarvis nicht an. Was nicht geht, sagt er in einem Satz, statt ersatzweise ein Panel zu öffnen.
 
@@ -95,7 +99,7 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v6`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v7`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
 
 Auf dem Handy füllt Jarvis den Bildschirm (`100dvh`, Safe-Area, kein horizontales Scrollen). `manifest.json` verlangt `fullscreen` und fällt auf `standalone` zurück, `start_url` und `scope` sind `/jarvis/`. iOS nutzt `apple-mobile-web-app-capable` und `black-translucent`. Ein einmaliger Hinweis im mobilen Browser erklärt „Zum Home-Bildschirm“. `maximum-scale` bleibt offen, damit Zoomen geht; das Eingabefeld ist auf dem Handy 16px, damit iOS beim Fokussieren nicht selbst hineinzoomt.
 

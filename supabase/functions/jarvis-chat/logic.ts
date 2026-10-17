@@ -117,6 +117,61 @@ export function berlinToday(d = new Date()): string {
   }).format(d);
 }
 
+const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+
+export function berlinHour(d = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).format(d));
+}
+
+export function greeting(d = new Date()): string {
+  const hour = berlinHour(d);
+  if (hour >= 5 && hour < 11) return "Guten Morgen";
+  if (hour >= 11 && hour < 18) return "Guten Tag";
+  return "Guten Abend";
+}
+
+export function speakDate(iso: string, now = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso || "");
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const wd = WEEKDAYS[new Date(Date.UTC(y, month - 1, day)).getUTCDay()];
+  const spoken = `${wd}, ${day}. ${MONTHS[month - 1]}`;
+  return y === Number(berlinToday(now).slice(0, 4)) ? spoken : `${spoken} ${y}`;
+}
+
+export function deDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso ?? "");
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
+export function briefingSpoken(
+  d: { date: string; events: unknown[]; tasks: Array<{ overdue?: boolean }>; overdueInvoices: unknown[]; reminders: unknown[]; nextSteps: unknown[] },
+  now = new Date(),
+): string {
+  const overdue = d.tasks.filter((t) => t.overdue).length;
+  const tasks = d.tasks.length === 0
+    ? "Heute ist keine Aufgabe fällig."
+    : `Bei den Aufgaben ${d.tasks.length === 1 ? "ist 1 fällig oder überfällig" : `sind ${d.tasks.length} fällig oder überfällig`}, davon ${overdue === 0 ? "keine überfällig" : overdue === 1 ? "1 überfällig" : `${overdue} überfällig`}.`;
+  const invoices = d.overdueInvoices.length === 0
+    ? "Keine Rechnung ist überfällig."
+    : d.overdueInvoices.length === 1
+    ? "1 Rechnung ist überfällig."
+    : `${d.overdueInvoices.length} Rechnungen sind überfällig.`;
+  const extra = (d.reminders.length || d.nextSteps.length)
+    ? `Dazu ${d.reminders.length === 1 ? "1 fällige Wiedervorlage" : `${d.reminders.length} fällige Wiedervorlagen`} und ${d.nextSteps.length === 1 ? "1 Kontakt" : `${d.nextSteps.length} Kontakte`} mit fälligem nächsten Schritt.`
+    : "Keine fällige Wiedervorlage und kein fälliger nächster Schritt.";
+  const termine = d.events.length === 1 ? "steht 1 Termin" : `stehen ${d.events.length} Termine`;
+  return `${greeting(now)}, heute ist ${speakDate(d.date, now)}. Im Kalender ${termine}. ${tasks} ${invoices} ${extra}`;
+}
+
 export function weekRange(today: string): { from: string; to: string } {
   const [y, m, d] = today.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -162,7 +217,7 @@ Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy
 Beträge aus dem CRM sind netto, sofern das Werkzeug nicht ausdrücklich brutto nennt.
 Öffne passende Werkzeuge, damit das HUD ein Panel zeigen kann.
 Jeden CRM-Bereich öffnest du mit open_area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter aus der Frage übernimmst du (only, status, quelle, query, from, to, view).
-Auf Briefing, Guten Morgen oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen, begrüße Kim, füge keine Zahlen hinzu.
+Auf Briefing oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen und füge keine Zahlen hinzu. Die Begrüßung darin folgt der Uhr in Europe/Berlin: 5 bis 11 Uhr Guten Morgen, 11 bis 18 Uhr Guten Tag, sonst Guten Abend. Ein Datum sprichst du als „Samstag, 17. Oktober“, nie als 2026-10-17.
 Auf „Was ist der Stand bei …“ nutzt du customer_file. Sprich das Feld summary in zwei Sätzen, ohne neue Zahlen.
 Eine Gesprächsnotiz, ein Recap oder „merk dir das Telefonat“ geht an meeting_recap: eine einzige Bestätigung. Die Notiz wird angehängt und überschreibt nichts, dazu die vereinbarten Aufgaben und eine Wiedervorlage.
 Retainer legst du über crm_insert an, standardmäßig pausiert, außer Kim sagt ausdrücklich aktiv. Paketpreise stehen in der Tabelle pakete, Zielwerte in ziele. Die Einstellungen mit dem Leistungskatalog fasst du nicht an.
@@ -175,7 +230,7 @@ export function systemBlocks(today: string, name: string): TextBlock[] {
     { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
     {
       type: "text",
-      text: `Heute ist ${today} (Europe/Berlin). Der angemeldete Nutzer heißt ${name || "Kim"}.`,
+      text: `Heute ist ${speakDate(today)} (Europe/Berlin). Internes Datum nur für Filter: ${today}. Der angemeldete Nutzer heißt ${name || "Kim"}.`,
     },
   ];
 }
