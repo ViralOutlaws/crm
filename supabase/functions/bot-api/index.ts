@@ -4,10 +4,13 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   type BotId,
   allowedOrigin,
-  beginBotRequest,
+  RATE_WINDOW_MS,
+  checkGlobalLimit,
+  checkIpLimit,
   clientIpForLimit,
   noteInvalidAttempt,
   noteValidToken,
+  retryAfterSeconds,
   appendBotResult,
   authorizeRunUpdate,
   bearerToken,
@@ -32,27 +35,31 @@ Deno.serve(async (req) => {
 
   const now = Date.now();
   const ip = clientIpForLimit(req.headers);
-  if (!beginBotRequest(rates, ip, now).ok) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
-
   const token = bearerToken(req.headers.get("authorization"));
-  if (!token) {
+  let hash = "";
+  if (token) {
+    try {
+      hash = await sha256Hex(token);
+    } catch {
+      hash = "";
+    }
+  }
+
+  const ipGate = checkIpLimit(rates, ip, now);
+  if (!ipGate.ok) return tooMany(headers, ipGate.retryAfter);
+  if (!token || !hash) {
     noteInvalidAttempt(rates, ip, now);
     return json({ error: "Token ungültig." }, 401, headers);
   }
+
+  const globalGate = checkGlobalLimit(rates, hash, now);
+  if (!globalGate.ok) return tooMany(headers, globalGate.retryAfter);
 
   let admin: SupabaseClient;
   try {
     admin = serviceClient();
   } catch (e) {
     return json({ error: publicError(e) }, 500, headers);
-  }
-
-  let hash = "";
-  try {
-    hash = await sha256Hex(token);
-  } catch {
-    noteInvalidAttempt(rates, ip, now);
-    return json({ error: "Token ungültig." }, 401, headers);
   }
 
   const tokenRes = await admin.from("bot_tokens").select("bot, workspace_id, token_hash, revoked_at").eq("token_hash", hash).maybeSingle();
@@ -62,7 +69,9 @@ Deno.serve(async (req) => {
     noteInvalidAttempt(rates, ip, now);
     return json({ error: "Token ungültig." }, 401, headers);
   }
-  if (!noteValidToken(rates, hash, now)) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
+  if (!noteValidToken(rates, hash, now)) {
+    return tooMany(headers, retryAfterSeconds(now, RATE_WINDOW_MS, rates.valid.get(hash) || []));
+  }
   const scope = { bot: matched.bot, workspace_id: matched.workspace_id };
 
   try {
@@ -219,6 +228,14 @@ function serviceClient(): SupabaseClient {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) throw new Error("Dienst nicht konfiguriert.");
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+function tooMany(headers: Record<string, string>, retryAfter: number) {
+  return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, {
+    ...headers,
+    "Retry-After": String(retryAfter),
+    "Access-Control-Expose-Headers": "Retry-After",
+  });
 }
 
 function json(body: unknown, status: number, headers: Record<string, string>) {

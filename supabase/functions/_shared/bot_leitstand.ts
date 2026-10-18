@@ -212,12 +212,36 @@ function rateMapCount(map: Map<string, number[]>): number {
   return total;
 }
 
-export function beginBotRequest(tables: RateTables, ip: string, now: number): { ok: true } | { ok: false } {
+export function retryAfterSeconds(now: number, windowMs: number, hits: number[]): number {
+  let oldest = Infinity;
+  for (const stamp of hits) {
+    if (now - stamp < windowMs && stamp < oldest) oldest = stamp;
+  }
+  if (!Number.isFinite(oldest)) return 1;
+  return Math.max(1, Math.ceil((windowMs - (now - oldest)) / 1000));
+}
+
+function refreshRateTables(tables: RateTables, now: number): void {
   sweepRateMap(tables.valid, now, RATE_WINDOW_MS);
   sweepRateMap(tables.invalid, now, INVALID_WINDOW_MS);
-  if (rateMapCount(tables.invalid) >= GLOBAL_INVALID_LIMIT) return { ok: false };
+  evictOldest(tables.valid, VALID_MAP_CAP);
   evictOldest(tables.invalid, INVALID_MAP_CAP);
-  if (rateBlocked(tables.invalid, ip, now, INVALID_LIMIT, INVALID_WINDOW_MS)) return { ok: false };
+}
+
+export function checkIpLimit(tables: RateTables, ip: string, now: number): { ok: true } | { ok: false; retryAfter: number } {
+  refreshRateTables(tables, now);
+  if (!rateBlocked(tables.invalid, ip, now, INVALID_LIMIT, INVALID_WINDOW_MS)) return { ok: true };
+  return { ok: false, retryAfter: retryAfterSeconds(now, INVALID_WINDOW_MS, tables.invalid.get(ip) || []) };
+}
+
+export function checkGlobalLimit(tables: RateTables, hash: string, now: number): { ok: true } | { ok: false; retryAfter: number } {
+  refreshRateTables(tables, now);
+  const globalLocked = rateMapCount(tables.invalid) >= GLOBAL_INVALID_LIMIT;
+  if (globalLocked && !tables.valid.has(hash)) {
+    const stamps: number[] = [];
+    for (const hits of tables.invalid.values()) stamps.push(...hits);
+    return { ok: false, retryAfter: retryAfterSeconds(now, INVALID_WINDOW_MS, stamps) };
+  }
   return { ok: true };
 }
 

@@ -14,11 +14,14 @@ import {
   publicError,
   GLOBAL_INVALID_KEY,
   GLOBAL_INVALID_LIMIT,
+  VALID_MAP_CAP,
   aufgabeBelongsToWorkspace,
-  beginBotRequest,
+  checkGlobalLimit,
+  checkIpLimit,
   clientIpForLimit,
   noteInvalidAttempt,
   noteValidToken,
+  retryAfterSeconds,
   rateAllow,
   runInScope,
   sweepRateMap,
@@ -237,11 +240,13 @@ Deno.test("Rate-Limit erst nach gültigem Token, ungültige Versuche pro IP gede
   const invalidCount = () => tables.invalid.size;
   const ip = "203.0.113.8";
   for (let i = 0; i < 20; i++) {
-    if (!beginBotRequest(tables, ip, 5_000).ok) throw new Error("zu früh gesperrt");
+    if (!checkIpLimit(tables, ip, 5_000).ok) throw new Error("zu früh gesperrt");
     noteInvalidAttempt(tables, ip, 5_000);
     if (validCount() !== 0) throw new Error("Hash vor der Prüfung gespeichert");
   }
-  if (beginBotRequest(tables, ip, 5_000).ok) throw new Error("IP nicht gedeckelt");
+  const ipGate = checkIpLimit(tables, ip, 5_000);
+  if (ipGate.ok) throw new Error("IP nicht gedeckelt");
+  if (ipGate.retryAfter < 1) throw new Error("Retry-After");
   if (validCount() !== 0) throw new Error("ungültiger Hash in der Token-Map");
   for (let i = 0; i < 300; i++) noteInvalidAttempt(tables, `198.51.100.${i}`, 5_000);
   if (invalidCount() > 256) throw new Error(`Map wächst: ${invalidCount()}`);
@@ -250,7 +255,7 @@ Deno.test("Rate-Limit erst nach gültigem Token, ungültige Versuche pro IP gede
   if (invalidCount() !== 0) throw new Error("alte Einträge bleiben");
   const hash = "ab".repeat(32);
   for (let i = 0; i < 60; i++) {
-    if (!beginBotRequest(tables, "2001:db8::1", 9_000).ok) throw new Error("gültig blockiert");
+    if (!checkIpLimit(tables, "2001:db8::1", 9_000).ok) throw new Error("gültig blockiert");
     if (!noteValidToken(tables, hash, 9_000)) throw new Error("gültig nicht gezählt");
   }
   if (noteValidToken(tables, hash, 9_000)) throw new Error("Token-Limit");
@@ -276,12 +281,27 @@ Deno.test("Limit-IP nimmt den Plattform-Header, nicht den ersten Forwarded-Eintr
   if (clientIpForLimit(headers({ "x-forwarded-for": "nicht-ip" })) !== GLOBAL_INVALID_KEY) throw new Error("topf");
   if (clientIpForLimit(headers({ "cf-connecting-ip": "2001:db8::1" })) !== "2001:db8::1") throw new Error("ipv6");
   const tables = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
+  const known = "cd".repeat(32);
+  const fresh = "ee".repeat(32);
+  if (!noteValidToken(tables, known, 1_000)) throw new Error("bekannt");
   for (let i = 0; i < GLOBAL_INVALID_LIMIT; i++) {
     const ip = `203.0.113.${i % 40}`;
-    if (!beginBotRequest(tables, ip, 7_000).ok) throw new Error(`global zu früh ${i}`);
-    noteInvalidAttempt(tables, ip, 7_000);
+    if (!checkIpLimit(tables, ip, 70_000).ok) throw new Error(`IP zu früh ${i}`);
+    noteInvalidAttempt(tables, ip, 70_000);
   }
-  if (beginBotRequest(tables, "192.0.2.55", 7_000).ok) throw new Error("globaler Deckel offen");
+  if (!checkIpLimit(tables, "192.0.2.55", 70_000).ok) throw new Error("fremde IP mitgesperrt");
+  const unknown = checkGlobalLimit(tables, fresh, 70_000);
+  if (unknown.ok) throw new Error("unbekannter Hash kommt durch");
+  if (unknown.retryAfter < 1) throw new Error("Retry-After global");
+  if (checkGlobalLimit(tables, known, 70_000).ok) throw new Error("abgelaufener Hash bleibt frei");
+  if (!noteValidToken(tables, known, 70_000)) throw new Error("erneut gültig");
+  if (!checkGlobalLimit(tables, known, 70_000).ok) throw new Error("bestätigter Hash blockiert");
+  for (let i = 0; i < VALID_MAP_CAP + 10; i++) noteValidToken(tables, `${i}`.padStart(64, "b"), 70_000);
+  if (tables.valid.size > VALID_MAP_CAP) throw new Error("gültige Map unbeschränkt");
+  const later = checkGlobalLimit(tables, known, 70_000 + 60_001);
+  if (!later.ok) throw new Error("Fenster bleibt zu");
+  if (tables.valid.size !== 0) throw new Error("alte gültige Einträge bleiben");
+  if (retryAfterSeconds(70_000, 60_000, [70_000]) !== 60) throw new Error("wartezeit");
 });
 
 Deno.test("Aufgabe muss im Workspace des Nutzers liegen", () => {
