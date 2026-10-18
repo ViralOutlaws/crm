@@ -28,6 +28,10 @@ const NEXT: Record<RunStatus, RunStatus[]> = {
 
 export const RATE_LIMIT = 60;
 export const RATE_WINDOW_MS = 60_000;
+export const INVALID_LIMIT = 20;
+export const INVALID_WINDOW_MS = 60_000;
+export const INVALID_MAP_CAP = 256;
+export const VALID_MAP_CAP = 64;
 
 export type TokenRow = {
   bot: string;
@@ -110,6 +114,79 @@ export function rateAllow(hits: number[], now: number, limit = RATE_LIMIT, windo
   if (fresh.length >= limit) return { ok: false, hits: fresh };
   fresh.push(now);
   return { ok: true, hits: fresh };
+}
+
+export function clientIpFromForwarded(header: string | null): string {
+  const raw = String(header || "").split(",")[0].trim();
+  if (!raw || raw.length > 64 || /[\s\r\n]/.test(raw)) return "unknown";
+  return raw;
+}
+
+export function sweepRateMap(map: Map<string, number[]>, now: number, windowMs: number): void {
+  for (const [key, hits] of map) {
+    const fresh = hits.filter((t) => now - t < windowMs);
+    if (!fresh.length) map.delete(key);
+    else if (fresh.length !== hits.length) map.set(key, fresh);
+  }
+}
+
+function evictOldest(map: Map<string, number[]>, cap: number): void {
+  while (map.size > cap) {
+    let oldestKey = "";
+    let oldest = Infinity;
+    for (const [key, hits] of map) {
+      const last = hits.length ? hits[hits.length - 1] : 0;
+      if (last < oldest) {
+        oldest = last;
+        oldestKey = key;
+      }
+    }
+    if (!oldestKey) break;
+    map.delete(oldestKey);
+  }
+}
+
+export function rateBlocked(map: Map<string, number[]>, key: string, now: number, limit: number, windowMs: number): boolean {
+  const fresh = (map.get(key) || []).filter((t) => now - t < windowMs);
+  if (!fresh.length) map.delete(key);
+  else if (fresh.length !== (map.get(key) || []).length) map.set(key, fresh);
+  return fresh.length >= limit;
+}
+
+export function admitRate(
+  map: Map<string, number[]>,
+  key: string,
+  now: number,
+  limit: number,
+  windowMs: number,
+  cap: number,
+): boolean {
+  sweepRateMap(map, now, windowMs);
+  const fresh = map.get(key) || [];
+  if (fresh.length >= limit) return false;
+  if (!map.has(key) && map.size >= cap) evictOldest(map, cap - 1);
+  fresh.push(now);
+  map.set(key, fresh);
+  evictOldest(map, cap);
+  return map.has(key);
+}
+
+export type RateTables = { valid: Map<string, number[]>; invalid: Map<string, number[]> };
+
+export function beginBotRequest(tables: RateTables, ip: string, now: number): { ok: true } | { ok: false } {
+  sweepRateMap(tables.valid, now, RATE_WINDOW_MS);
+  sweepRateMap(tables.invalid, now, INVALID_WINDOW_MS);
+  evictOldest(tables.invalid, INVALID_MAP_CAP);
+  if (rateBlocked(tables.invalid, ip, now, INVALID_LIMIT, INVALID_WINDOW_MS)) return { ok: false };
+  return { ok: true };
+}
+
+export function noteInvalidAttempt(tables: RateTables, ip: string, now: number): void {
+  admitRate(tables.invalid, ip, now, INVALID_LIMIT, INVALID_WINDOW_MS, INVALID_MAP_CAP);
+}
+
+export function noteValidToken(tables: RateTables, hash: string, now: number): boolean {
+  return admitRate(tables.valid, hash, now, RATE_LIMIT, RATE_WINDOW_MS, VALID_MAP_CAP);
 }
 
 export function secretNames(bot: string): { url: string; key: string } {

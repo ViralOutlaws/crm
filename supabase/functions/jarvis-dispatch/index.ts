@@ -67,6 +67,13 @@ Deno.serve(async (req) => {
     const createAufgabe = !ping && !aufgabeId && body.create_aufgabe !== false;
     if (!ping && !title) return json({ error: "Titel fehlt." }, 400, headers);
 
+    let admin: SupabaseClient;
+    try {
+      admin = serviceClient();
+    } catch (e) {
+      return json({ error: publicError(e) }, 500, headers);
+    }
+
     let linked = aufgabeId;
     let logWarning: string | null = null;
     if (createAufgabe) {
@@ -113,13 +120,18 @@ Deno.serve(async (req) => {
         now: new Date().toISOString(),
       },
       insertRun: async (row) => {
-        const { data, error } = await sb.from("bot_runs").insert(row).select("id").single();
+        if (String(row.workspace_id || "") !== workspaceId) throw new Error("Workspace stimmt nicht.");
+        const { data, error } = await admin.from("bot_runs").insert(row).select("id").single();
         if (error || !data?.id) throw new Error("Lauf nicht angelegt.");
         return { id: String(data.id) };
       },
       updateRun: async (id, patch) => {
-        const { error } = await sb.from("bot_runs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
-        if (error) throw new Error("Lauf nicht aktualisiert.");
+        const { data, error } = await admin.from("bot_runs")
+          .update({ ...patch, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("workspace_id", workspaceId)
+          .select("id");
+        if (error || !data?.length) throw new Error("Lauf nicht aktualisiert.");
       },
       post: async (url, hdrs, payload) => {
         const res = await fetch(url, {
@@ -161,6 +173,13 @@ function clip(v: unknown, max: number): string | null {
 function bearer(header: string | null): string | null {
   const m = header?.match(/^Bearer\s+(\S+)$/i);
   return m ? m[1] : null;
+}
+
+function serviceClient(): SupabaseClient {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) throw new Error("Dienst nicht konfiguriert.");
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 function userClient(jwt: string): SupabaseClient {
