@@ -19,7 +19,7 @@ supabase secrets set ELEVENLABS_SPEED=1.2
 
 `ELEVENLABS_API_KEY` ist für die Stimme Pflicht. `ELEVENLABS_VOICE_ID` ist optional und steht sonst auf `amAPTcyESqCO9CgYuf64`. `ELEVENLABS_MODEL` ist optional: Standard `eleven_multilingual_v2`, schnellere Alternative `eleven_flash_v2_5`. Andere Werte werden ignoriert. `ELEVENLABS_SPEED` ist optional und setzt `voice_settings.speed`. Der Standard ist 1.2. Zahlen werden auf 0.7 bis 1.2 geklemmt, ungültige Angaben bleiben bei 1.2. Der ElevenLabs-Schlüssel bleibt nur serverseitig.
 
-Beide Funktionen stehen in `supabase/config.toml` mit `verify_jwt = false`, weil sie das Nutzer-JWT selbst prüfen und OPTIONS für CORS beantworten müssen. Beim Deploy kein `--no-verify-jwt` setzen. `jarvis-chat` liest und schreibt mit dem JWT der angemeldeten Person, also unter RLS. Die Service-Role wird nicht verwendet. `jarvis-tts` prüft nur die Anmeldung und streamt `audio/mpeg`.
+`jarvis-chat`, `jarvis-tts` und `jarvis-dispatch` stehen in `supabase/config.toml` mit `verify_jwt = false`, weil sie das Nutzer-JWT selbst prüfen und OPTIONS für CORS beantworten müssen. `bot-api` steht ebenfalls auf `verify_jwt = false`, weil sich die Bots mit einem eigenen Token anmelden, nicht mit dem Nutzer-JWT. Beim Deploy kein `--no-verify-jwt` setzen. `jarvis-chat` liest und schreibt mit dem JWT der angemeldeten Person, also unter RLS. `jarvis-dispatch` legt den Lauf mit demselben JWT an. `bot-api` nutzt die Service-Role nur innerhalb der Funktion und gibt sie nie heraus. `jarvis-tts` prüft nur die Anmeldung und streamt `audio/mpeg`.
 
 ## Stimme
 
@@ -60,11 +60,68 @@ Nicht automatisch gegen die Live-Datenbank ausführen. Reihenfolge:
 3. `supabase/migrations/20261017230000_jarvis_actions_restore.sql`. Sie setzt den Action-Check auf `insert`, `update`, `delete` und `restore`, nimmt `pakete` und `ziele` in den Tabellen-Check auf und setzt die Insert-Policy neu (`user_id = auth.uid()` und `workspace_id = get_my_workspace_id()`). Kein Update- und kein Delete-Recht auf dem Protokoll. Bestehende Zeilen bleiben gültig.
 4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`. Ohne diesen Redeploy kennt die laufende Funktion Anlegen, Ändern, Löschen und Rückgängig nicht.
 
-`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v8`, damit das Handy Begrüßung, Datumsformat und die klickbaren Karten lädt. Das Handy-Layout braucht den Redeploy nicht. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` schon: dafür ist der Redeploy in Schritt 4 nötig.
+`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v9`. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` brauchen den Redeploy in Schritt 4. Der Leitstand braucht zusätzlich die Schritte im nächsten Abschnitt.
 
 Ohne Schritt 3 schlägt nur der Logeintrag für Löschen und Rückgängig fehl. Die CRM-Änderung bleibt, die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion ebenfalls erhalten und die Antwort enthält `log_warning`.
 
 Für `entwurf`, `pausiert` und den Social-Status `Idee` ist keine weitere Migration nötig. Diese Spalten sind freier Text ohne CHECK.
+
+## Bot-Leitstand
+
+Jarvis schickt Aufträge an die fünf Grok-Bots und holt das Ergebnis zurück ins CRM. Webby ist Website und Tech, Marky Marketing und Social, Saley Vertrieb und Leads, Cashy Finanzen und Rechnungen, Developy Software und Jarvis. „Webby soll eine Website für ein Yogastudio bauen“ wird `dispatch_to_bot` an Webby. Die Karte zeigt Bot und Auftrag. Erst nach Bestätigung legt `jarvis-dispatch` die Aufgabe und den Lauf an und ruft den Webhook. Fehlt URL oder Schlüssel, bleibt der Lauf auf `queued` und die Meldung ist genau `Bot noch nicht verbunden`. Eine Aufgabe, die nur einem Bot zugewiesen wird, bleibt im Kanban. Die Oberfläche fragt danach, ob der Auftrag auch an den Bot geht.
+
+Die Karte Bot-Status öffnet den Leitstand: Verbindung, letzter Lauf, Zeitlinie, Ergebnis und Links, dazu „Auftrag senden“ und „Verbindung testen“. Live aktualisiert sich über Supabase Realtime und zusätzlich alle fünf Sekunden. Die Demo ruft dabei weder Supabase noch einen Webhook auf.
+
+### Go-live Leitstand
+
+Nicht automatisch gegen die Live-Datenbank ausführen. Die Schritte aus dem Abschnitt Go-live oben (Migrationen `20261017190000`, optional `20261017220000`, `20261017230000`, danach `supabase functions deploy jarvis-chat`) bleiben Voraussetzung, weil Löschen, Rückgängig und die neuen Werkzeuge in `jarvis-chat` liegen. Danach, in dieser Reihenfolge:
+
+1. `supabase/migrations/20261017240000_bot_leitstand.sql` anwenden. Sie legt `bot_runs` an (RLS wie die anderen Workspace-Tabellen, nur `authenticated` im eigenen Workspace) und `bot_tokens` (keine Policy, `revoke` für `anon` und `authenticated`, nur `service_role`). Gespeichert wird der SHA-256, nie der Token. `bot_runs` kommt in die Realtime-Publication, falls `supabase_realtime` existiert.
+2. `supabase functions deploy jarvis-dispatch` ohne `--no-verify-jwt`.
+3. `supabase functions deploy bot-api` ohne `--no-verify-jwt`.
+4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`, damit `dispatch_to_bot`, `list_bot_runs` und `get_bot_run` in der laufenden Funktion sind. Derselbe Befehl wie im Go-live oben, nach diesem Branch.
+5. Secrets, ein Paar pro Bot. Ohne Paar bleibt der Auftrag auf `queued` mit `Bot noch nicht verbunden`:
+
+```bash
+supabase secrets set BOT_WEBHOOK_WEBBY_URL='https://…'
+supabase secrets set BOT_WEBHOOK_WEBBY_KEY='…'
+supabase secrets set BOT_WEBHOOK_MARKY_URL='https://…'
+supabase secrets set BOT_WEBHOOK_MARKY_KEY='…'
+supabase secrets set BOT_WEBHOOK_SALEY_URL='https://…'
+supabase secrets set BOT_WEBHOOK_SALEY_KEY='…'
+supabase secrets set BOT_WEBHOOK_CASHY_URL='https://…'
+supabase secrets set BOT_WEBHOOK_CASHY_KEY='…'
+supabase secrets set BOT_WEBHOOK_DEVELOPY_URL='https://…'
+supabase secrets set BOT_WEBHOOK_DEVELOPY_KEY='…'
+```
+
+Optional, nur wenn der Empfänger einen anderen Headernamen will. Standard ist `X-Webhook-Key`. Der Schlüssel geht immer zusätzlich als `Authorization: Bearer <key>`:
+
+```bash
+supabase secrets set BOT_WEBHOOK_KEY_HEADER='X-Webhook-Key'
+```
+
+`CRM_URL` ist optional und steht sonst auf `https://crm.viraloutlaws.de`.
+
+6. Token pro Bot, einmalig, von Webby mit Management-Zugang. Das Skript druckt den Token ein Mal und das `INSERT` für den Hash. Den Token in die Grok-Routine legen, nicht ins Repo und nicht in den Chat:
+
+```bash
+node scripts/bot-token.mjs webby <workspace-uuid>
+node scripts/bot-token.mjs marky <workspace-uuid>
+node scripts/bot-token.mjs saley <workspace-uuid>
+node scripts/bot-token.mjs cashy <workspace-uuid>
+node scripts/bot-token.mjs developy <workspace-uuid>
+```
+
+Das ausgegebene `INSERT` im SQL-Editor ausführen. Widerruf steht als `update` unter dem Hash. Ein widerrufener Token gilt nicht mehr.
+
+7. Pro Bot eine Grok-Bot-Routine mit Webhook-Trigger. Kim kopiert die Webhook-URL in `BOT_WEBHOOK_<BOT>_URL` und den Sender-Key in `BOT_WEBHOOK_<BOT>_KEY` (Schritt 5). Der Body ist JSON `{run_id, bot, title, instructions, aufgabe_id, crm_url, callback_url}` und bei einem Verbindungstest zusätzlich `ping: true`. Die Routine arbeitet den Auftrag und ruft `callback_url` auf, das ist `/functions/v1/bot-api`, mit `Authorization: Bearer <Bot-Token>` aus Schritt 6. `POST {"op":"update","run_id","status":"in_arbeit"}`, später `status` `erledigt` mit `result` und `links`, danach `POST {"op":"mirror","run_id"}`. Spiegeln setzt die verknüpfte Aufgabe auf `done` und hängt einen Block `[YYYY-MM-DD] Bot-Ergebnis (Name):` an. Die Zeile `Zuständig:` bleibt. `blockiert` und `fehler` setzen die Aufgabe nicht auf erledigt. `GET` ohne `run_id` listet nur die eigenen Läufe dieses Bots in seinem Workspace.
+
+Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v9`.
+
+### Was der Bot nicht darf
+
+`bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.
 
 ## Bestätigung
 
@@ -85,7 +142,7 @@ Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abb
 - Eine Löschkarte nennt die Anzahl und bis zu zwölf Titel. Höchstens 300 Zeilen pro Aufruf, höchstens 30 neue Zeilen. Die bestätigten IDs werden gelöscht oder geändert, nicht eine neue „alle“-Suche. Gelöschte und geänderte Zeilen stehen komplett im Protokoll (`summary.before`), damit Rückgängig sie zurücksetzen kann.
 - Angebote kennen `entwurf`, `gesendet`, `akzeptiert`, `abgelehnt`. Rechnungen kennen `entwurf`, `offen-rg`, `bezahlt`, `ueberfaellig`. Sagt Kim bei einer Rechnung „gesendet“ oder „offen“, speichert Jarvis `offen-rg`. Fehlt der Status, bleibt es ein Entwurf. Entwürfe zählen nicht als gesendete Angebote und nicht als offene Forderungen.
 - Social-Status sind `Idee`, `Geplant`, `Content fertig`, `Erstellt`, `Veröffentlicht`. Ohne Angabe bleibt es `Idee`. Assets und Dateien schreibt Jarvis nicht. Format und Säule nutzen dieselben Werte wie der Redaktionsplan.
-- Bot-Aufträge sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte. Im CRM steht dasselbe im Feld „Zugewiesen an Bot“ und auf der Karte.
+- Bot-Aufträge im Kanban sind Aufgaben. Die erste Zeile der Beschreibung lautet `Zuständig: Marky (Marketing / Social).` Es gibt dafür keine neue Spalte. Der Versand an den Grok-Bot ist ein eigener Lauf in `bot_runs` und steht im Leitstand. Im CRM steht die Zuständig-Zeile weiter im Feld „Zugewiesen an Bot“ und auf der Karte.
 - Termine haben keine Ende-Spalte. Steht ein Ende fest, liegt es in `notiz` als eigene Zeile `Bis: HH:MM`. Das CRM zeigt sie im Feld „Bis“.
 - Retainer legt Jarvis standardmäßig als `pausiert` an. `aktiv` nur, wenn das ausdrücklich in der Karte steht. Pausierte Retainer zählen nicht im MRR.
 - Kontakte nutzen die Phasen `lead`, `erstgespraech`, `angebot`, `gewonnen`, `verloren` und die Quellen `website`, `ki-check`, `empfehlung`, `instagram`, `google`, `kaltakquise`, `sonstiges`.
@@ -101,7 +158,7 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v8`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v9`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
 
 Auf dem Handy füllt Jarvis den Bildschirm (`100dvh`, Safe-Area, kein horizontales Scrollen). `manifest.json` verlangt `fullscreen` und fällt auf `standalone` zurück, `start_url` und `scope` sind `/jarvis/`. iOS nutzt `apple-mobile-web-app-capable` und `black-translucent`. Ein einmaliger Hinweis im mobilen Browser erklärt „Zum Home-Bildschirm“. `maximum-scale` bleibt offen, damit Zoomen geht; das Eingabefeld ist auf dem Handy 16px, damit iOS beim Fokussieren nicht selbst hineinzoomt.
 

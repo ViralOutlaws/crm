@@ -92,6 +92,34 @@ Deno.test("Tools cachen am letzten Werkzeug", () => {
   if (tools[0].cache_control) throw new Error("cache nur am Ende");
 });
 
+Deno.test("dispatch_to_bot zeigt Bot und Auftrag, route_to_bot bleibt das letzte Werkzeug", () => {
+  const plan = planFromTool("dispatch_to_bot", { bot: "webby", title: "Website für ein Yogastudio", instructions: "Ruhig, mobil." }, ctx);
+  if (plan.kind !== "bot_dispatch" || plan.bot !== "webby" || plan.tool !== "dispatch_to_bot") throw new Error(JSON.stringify(plan));
+  if (!plan.lines.some((l) => l.includes("Webby") && l.includes("Website / Tech"))) throw new Error(plan.lines.join("|"));
+  if (!plan.lines.some((l) => l.includes("Yogastudio"))) throw new Error("titel");
+  if (plan.data.create_aufgabe !== true) throw new Error("aufgabe");
+  const linked = revalidate({
+    kind: "bot_dispatch",
+    tool: "dispatch_to_bot",
+    bot: "webby",
+    data: { ...plan.data, aufgabe_id: "33333333-3333-4333-8333-333333333333", create_aufgabe: true },
+  }, ctx);
+  if (linked.data.create_aufgabe !== false || linked.data.aufgabe_id !== "33333333-3333-4333-8333-333333333333") {
+    throw new Error(JSON.stringify(linked.data));
+  }
+  const prompt = systemBlocks("2026-10-17", "Kim")[0].text;
+  if (!prompt.includes("Yogastudio") || !prompt.includes("dispatch_to_bot")) throw new Error("routing");
+  for (const name of ["bot_tokens", "bot_runs"]) {
+    let threw = false;
+    try {
+      resolveTable(name);
+    } catch {
+      threw = true;
+    }
+    if (!threw) throw new Error(name);
+  }
+});
+
 Deno.test("route_to_bot wird zur Aufgabe mit Bot-Zeile", () => {
   const plan = planFromTool("route_to_bot", { bot: "marketing", auftrag: "3 Reels schneiden", details: "Hook zuerst" }, ctx);
   if (plan.kind !== "aufgabe" || plan.table !== "aufgaben" || plan.bot !== "marky") throw new Error(JSON.stringify(plan));

@@ -50,6 +50,7 @@ export const WRITE_TOOLS = new Set([
   "create_rechnung",
   "save_social_post",
   "route_to_bot",
+  "dispatch_to_bot",
   "meeting_recap",
   "create_retainer",
   "create_ausgabe",
@@ -88,6 +89,9 @@ export function openPanelFor(tool: string): string | null {
     case "morning_briefing":
       return "agenda";
     case "route_to_bot":
+    case "dispatch_to_bot":
+    case "list_bot_runs":
+    case "get_bot_run":
       return "bots";
     case "customer_file":
       return "customer";
@@ -221,7 +225,7 @@ Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bez
 Die älteren Werkzeuge create_angebot und create_rechnung legen weiter nur Entwürfe an. Für einen anderen Status nimm crm_insert oder crm_update. set_aufgaben_status und delete_aufgaben bleiben für Aufgaben gültig.
 Wenn eine Aktion nicht unterstützt ist oder ein Werkzeug einen Fehler meldet, sagst du das in einem klaren Satz. Du öffnest dann nicht ersatzweise ein Panel.
 Fehlt der Status, bleiben Angebote und Rechnungen ein Entwurf und Social-Posts eine Idee. Sagt Kim einen anderen CRM-Status, übernimmst du ihn mit crm_insert oder crm_update.
-Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy (Finanzen) oder Developy (Software) werden Aufgaben im CRM, erst nach Kims Bestätigung. Spracherkennung: Marki, Markie und Marky sind Marky. Sally und Sali sind Saley. Kashy und Cashi sind Cashy. Webbi und Weby sind Webby. Developi ist Developy.
+Bots: Webby ist Website und Tech, Marky Marketing und Social, Saley Vertrieb und Leads, Cashy Finanzen und Rechnungen, Developy Software und Jarvis. „Webby soll eine Website für ein Yogastudio bauen“ ist dispatch_to_bot an Webby, eine Karte mit Bot und Auftrag, kein stiller Versand. route_to_bot und create_aufgabe mit Bot legen nur die CRM-Aufgabe an. Danach bietet die Oberfläche den Versand an. dispatch_to_bot nicht zusätzlich in derselben Runde aufrufen. list_bot_runs und get_bot_run lesen den Stand. Fehlt die Verbindung, bleibt der Lauf auf queued. Spracherkennung: Marki, Markie und Marky sind Marky. Sally und Sali sind Saley. Kashy und Cashi sind Cashy. Webbi und Weby sind Webby. Developi ist Developy.
 Angebot, Rechnung, Notiz, Retainer, Termin oder Aufgabe zu einem genannten Kunden: such den Kontakt und nimm die ID. Nennt Kim einen Namen, speichere nicht ohne diesen Kunden. Mehrere Treffer: frag nach, rate nicht.
 list_tasks filtert Aufgaben nach bot, due (today, overdue, week) und done. Die Zeile „Zuständig:“ zählt als Treffer. „Der Kunde von gestern“ ist search_contacts mit newest true.
 „Bestätigen“, „passt so“ und „ja, mach“ gelten der offenen Karte. „Abbrechen“ und „nein“ verwerfen sie. Eine Löschkarte braucht das Wort „löschen“. Wiederhole die Karte dann nicht.
@@ -524,6 +528,44 @@ const TOOLS: ToolDef[] = [
 
 const EXTRA_TOOLS: ToolDef[] = [
   {
+    name: "dispatch_to_bot",
+    description: "Schickt einen Auftrag an einen Grok-Bot: webby Website/Tech, marky Marketing/Social, saley Vertrieb/Leads, cashy Finanzen/Rechnungen, developy Software/Jarvis. Die Karte zeigt Bot und Auftrag. Erst nach Bestätigung. „Webby soll eine Website für ein Yogastudio bauen“ ist dieses Werkzeug. Nicht zusammen mit create_aufgabe in derselben Runde.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["bot", "title"],
+      properties: {
+        bot: { type: "string" },
+        title: { type: "string" },
+        instructions: { type: "string" },
+        aufgabe_id: { type: "string" },
+        kontakt_id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "list_bot_runs",
+    description: "Liest die letzten Bot-Läufe. Optional bot und status (queued, sent, in_arbeit, erledigt, blockiert, fehler). Nur lesen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        bot: { type: "string" },
+        status: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "get_bot_run",
+    description: "Liest einen Bot-Lauf mit Status, Ergebnis, Links und dem Ereignisprotokoll. Nur lesen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["run_id"],
+      properties: { run_id: { type: "string" } },
+    },
+  },
+  {
     name: "list_tasks",
     description: "Listet bis zu 25 Aufgaben. Filter: bot (webby, marky, saley, cashy, developy, auch die gesprochenen Varianten), due today|overdue|week, done true|false, query für Titel oder Zuständig-Zeile. Nur lesen.",
     input_schema: {
@@ -750,6 +792,8 @@ export function planFromTool(name: string, input: unknown, ctx: Ctx): Plan {
       return planAufgabe(o, "create_aufgabe");
     case "route_to_bot":
       return planRoute(o);
+    case "dispatch_to_bot":
+      return planDispatch(o);
     case "create_wiedervorlage":
       return planWv(o);
     case "create_kal_event":
@@ -827,6 +871,8 @@ export function revalidate(input: unknown, ctx: Ctx): Plan {
     case "crm_delete":
     case "crm_undo":
       return revalidateCrm(kind, data, ctx.today);
+    case "bot_dispatch":
+      return planDispatch(data);
     case "social_insert":
     case "social_update": {
       const copy = { ...data };
@@ -1271,6 +1317,40 @@ function rowsFromPlan(data: Record<string, unknown>): AufgabeRow[] {
   }
   if (Number(data.count) !== ids.length) throw new Error("Die Anzahl passt nicht zur Liste.");
   return ids.map((id, i) => ({ id: String(id), titel: String(titles[i] ?? "") }));
+}
+
+function planDispatch(o: Record<string, unknown>): Plan {
+  const bot = normBot(o.bot);
+  const title = clip(o.title, 300) || clip(o.auftrag, 300);
+  if (!title) throw new Error("Titel fehlt.");
+  const instructions = clip(o.instructions ?? o.details ?? o.beschreibung, 4000) || "";
+  const aufgabe_id = o.aufgabe_id ? optUuid(o, "aufgabe_id") : null;
+  const kontakt_id = o.kontakt_id ? optUuid(o, "kontakt_id") : null;
+  const create_aufgabe = !aufgabe_id && o.create_aufgabe !== false;
+  const focus = bot === "webby"
+    ? "Website / Tech"
+    : bot === "saley"
+    ? "Vertrieb / Leads"
+    : bot === "cashy"
+    ? "Finanzen / Rechnungen"
+    : bot === "developy"
+    ? "Software / Jarvis"
+    : BOTS[bot].role;
+  return {
+    kind: "bot_dispatch",
+    tool: "dispatch_to_bot",
+    table: "bot_runs",
+    action: "insert",
+    summary: `Auftrag an ${BOTS[bot].name}`,
+    lines: [
+      `Bot: ${BOTS[bot].name} (${focus})`,
+      `Auftrag: ${title}`,
+      instructions ? `Anweisung: ${instructions.slice(0, 180)}` : "Anweisung: —",
+      create_aufgabe ? "Neue Aufgabe im CRM und Versand an den Bot" : "Bestehende Aufgabe, kein zweites Kanban",
+    ],
+    bot,
+    data: { bot, title, instructions, aufgabe_id, kontakt_id, create_aufgabe },
+  };
 }
 
 function planRoute(o: Record<string, unknown>): Plan {

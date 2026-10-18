@@ -438,6 +438,29 @@ a:hover{text-decoration:underline}
 .install-hint span{flex:1;min-width:0}
 .install-hint b{color:var(--gold);font-weight:600}
 .install-hint button{margin-left:auto;min-height:36px;padding:0 12px;border:1px solid var(--gold);background:var(--gold);color:#000;font-weight:600;cursor:pointer;flex:none}
+.leitstand{display:flex;flex-direction:column;gap:12px;min-width:0}
+.leit-card{border:1px solid rgba(253,173,0,.28);background:rgba(0,0,0,.28);padding:12px;min-width:0}
+.leit-card header{display:flex;align-items:center;gap:10px;min-width:0}
+.leit-card header b{display:block;font-size:15px}
+.leit-card header span{display:block;color:var(--mut);font-size:12px}
+.leit-card .st{margin-left:auto}
+.leit-card .conn-verbunden{color:var(--green)}
+.leit-card .conn-verbunden::before{background:var(--green);box-shadow:0 0 6px var(--green)}
+.leit-card .conn-fehler{color:var(--red)}
+.leit-card .conn-fehler::before{background:var(--red);box-shadow:0 0 6px var(--red)}
+.leit-card .conn-offen{color:var(--mut)}
+.timeline{list-style:none;margin:8px 0 0;padding:0 0 0 10px;border-left:1px solid rgba(54,226,255,.35)}
+.timeline li{padding:3px 0 3px 8px;font-size:12px;color:#d9cfb6}
+.timeline time{font-family:var(--mono);font-size:10px;color:var(--cyan);margin-right:6px}
+.runline{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-top:8px;min-width:0}
+.runline a{color:var(--cyan);word-break:break-all}
+.leit-card .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.leit-card .acts button{min-height:44px;padding:0 12px;border:1px solid var(--gold);background:var(--gold);color:#000;font-weight:600;cursor:pointer}
+.leit-card .acts .ghost{background:transparent;color:var(--gold)}
+.bot.wait .st::before{background:#8a8172;box-shadow:none;opacity:1}
+.bot.bad .st{color:var(--red)}
+.bot.bad .st::before{background:var(--red);box-shadow:0 0 6px var(--red);opacity:1}
+@media (min-width:900px){.leitstand{display:grid;grid-template-columns:1fr 1fr}}
 @media (max-width:700px){
   .dossier{grid-template-columns:minmax(0,1fr)}
   .kv{grid-template-columns:minmax(0,92px) minmax(0,1fr)}
