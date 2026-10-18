@@ -1,5 +1,6 @@
 // Reine Planung/Validierung für Jarvis-Schreibwerkzeuge. Kein Netzwerk, keine Secrets.
 // Jeder Plan wird serverseitig erneut geprüft, bevor etwas geschrieben wird.
+import { revalidateCrm } from "./schema.ts";
 
 export const BOTS: Record<string, { name: string; role: string; letter: string }> = {
   webby: { name: "Webby", role: "Websites", letter: "W" },
@@ -30,10 +31,11 @@ export type Plan = {
   kind: string;
   tool: string;
   table: string;
-  action: "insert" | "update";
+  action: "insert" | "update" | "delete";
   summary: string;
   lines: string[];
   bot: string | null;
+  danger?: boolean;
   data: Record<string, unknown>;
 };
 
@@ -52,6 +54,12 @@ export const WRITE_TOOLS = new Set([
   "create_retainer",
   "create_ausgabe",
   "create_roi",
+  "set_aufgaben_status",
+  "delete_aufgaben",
+  "crm_insert",
+  "crm_update",
+  "crm_delete",
+  "crm_undo",
 ]);
 
 export function isWriteTool(name: string): boolean {
@@ -72,6 +80,7 @@ export function openPanelFor(tool: string): string | null {
     case "create_angebot":
       return "pipeline";
     case "list_tasks_and_events":
+    case "list_tasks":
     case "create_aufgabe":
     case "create_wiedervorlage":
     case "create_kal_event":
@@ -92,6 +101,9 @@ export function openPanelFor(tool: string): string | null {
       return "ausgaben";
     case "create_roi":
       return "roi";
+    case "set_aufgaben_status":
+    case "delete_aufgaben":
+      return "aufgaben";
     default:
       return null;
   }
@@ -104,6 +116,61 @@ export function berlinToday(d = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).format(d);
+}
+
+const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+
+export function berlinHour(d = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).format(d));
+}
+
+export function greeting(d = new Date()): string {
+  const hour = berlinHour(d);
+  if (hour >= 5 && hour < 11) return "Guten Morgen";
+  if (hour >= 11 && hour < 18) return "Guten Tag";
+  return "Guten Abend";
+}
+
+export function speakDate(iso: string, now = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso || "");
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const wd = WEEKDAYS[new Date(Date.UTC(y, month - 1, day)).getUTCDay()];
+  const spoken = `${wd}, ${day}. ${MONTHS[month - 1]}`;
+  return y === Number(berlinToday(now).slice(0, 4)) ? spoken : `${spoken} ${y}`;
+}
+
+export function deDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return String(iso ?? "");
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
+export function briefingSpoken(
+  d: { date: string; events: unknown[]; tasks: Array<{ overdue?: boolean }>; overdueInvoices: unknown[]; reminders: unknown[]; nextSteps: unknown[] },
+  now = new Date(),
+): string {
+  const overdue = d.tasks.filter((t) => t.overdue).length;
+  const tasks = d.tasks.length === 0
+    ? "Heute ist keine Aufgabe fällig."
+    : `Bei den Aufgaben ${d.tasks.length === 1 ? "ist 1 fällig oder überfällig" : `sind ${d.tasks.length} fällig oder überfällig`}, davon ${overdue === 0 ? "keine überfällig" : overdue === 1 ? "1 überfällig" : `${overdue} überfällig`}.`;
+  const invoices = d.overdueInvoices.length === 0
+    ? "Keine Rechnung ist überfällig."
+    : d.overdueInvoices.length === 1
+    ? "1 Rechnung ist überfällig."
+    : `${d.overdueInvoices.length} Rechnungen sind überfällig.`;
+  const extra = (d.reminders.length || d.nextSteps.length)
+    ? `Dazu ${d.reminders.length === 1 ? "1 fällige Wiedervorlage" : `${d.reminders.length} fällige Wiedervorlagen`} und ${d.nextSteps.length === 1 ? "1 Kontakt" : `${d.nextSteps.length} Kontakte`} mit fälligem nächsten Schritt.`
+    : "Keine fällige Wiedervorlage und kein fälliger nächster Schritt.";
+  const termine = d.events.length === 1 ? "steht 1 Termin" : `stehen ${d.events.length} Termine`;
+  return `${greeting(now)}, heute ist ${speakDate(d.date, now)}. Im Kalender ${termine}. ${tasks} ${invoices} ${extra}`;
 }
 
 export function weekRange(today: string): { from: string; to: string } {
@@ -128,37 +195,111 @@ export function sumNetto(positions: Array<{ optional?: boolean; total?: number }
 }
 
 export function botFromText(s: unknown): string | null {
-  const m = String(s ?? "").match(/Zuständig:\s*(Webby|Marky|Saley|Cashy|Developy)/i);
+  const m = String(s ?? "").match(/Zuständig:\s*([A-Za-zÄÖÜäöüß]+)/i);
   if (!m) return null;
-  return m[1].toLowerCase();
+  return matchBot(m[1]);
 }
 
 const SYSTEM = `Du bist Jarvis, der Assistent von Kim bei Viral Outlaws, einer Performance-Marketing-Agentur.
 Du sprichst Deutsch, knapp und klar, wie ein HUD-Copilot. Über die Agentur sprichst du immer als „wir“, nie als Außenstehender.
+Jede Anfrage ist genau eines: handeln, antworten, zeigen oder plaudern.
+Handeln: Kim will Daten ändern. Lege sofort die Bestätigungskarte vor, mit sinnvollen Vorgaben (Entwurf, pausiert, todo, Datum aus dem Tagesblock). Frag nur, wenn ein Pflichtwert wirklich fehlt. Die Karte ist die Bestätigung, frag nicht doppelt. „Lösche alle Aufgaben“ ruft delete_aufgaben mit all und confirm true auf, ohne Rückfrage.
+Antworten: Kim fragt nach Daten. Lies das passende Werkzeug und antworte nur daraus.
+Zeigen: Kim will etwas sehen. Nutze open_area und beantworte die Frage aus den mitgelieferten Zeilen.
+Plaudern: kurz, ohne Werkzeug.
 Du erfindest niemals Zahlen, Namen, Beträge, Termine, Status oder Zitate. Nur was ein Werkzeug zurückgibt, darfst du als Tatsache sagen.
 Wenn ein Werkzeug nichts liefert, ein Feld leer ist oder eine Abfrage scheitert, sagst du ausdrücklich, dass die Daten fehlen.
 Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Bestätigung vor und antworten mit awaiting_confirmation.
-Solange das so ist, sagst du nicht, etwas sei angelegt, gespeichert oder erledigt. Bitte um Bestätigung.
-Du versendest keine E-Mails, keine Mahnungen und keine Angebote. Du markierst Rechnungen nicht als offen, versendet oder bezahlt und löschst nichts.
-Angebote und Rechnungen legst du nur als Entwurf an. Social-Media-Posts nur als Entwurf; im CRM heißt dieser Status „Idee“.
-Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy (Finanzen) oder Developy (Software) werden Aufgaben im CRM, erst nach Kims Bestätigung.
+Solange das so ist, sagst du nicht, etwas sei angelegt, gespeichert, gelöscht oder erledigt. Bitte um Bestätigung.
+Sprich in kurzen Sätzen, ohne Markdown, ohne Aufzählungszeichen und ohne IDs. Ein Datum sprichst du als „Samstag, 17. Oktober“, einen Betrag als „1.250 Euro“.
+Sag nie, etwas sei erledigt, bevor die Karte bestätigt wurde.
+Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand.
+Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, immer mit Bestätigungskarte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
+crm_delete zeigt Anzahl und Titel, die Karte ist rot. Eine einzelne Zeile braucht confirm nicht. Mehrere oder alle nur, wenn Kim das ausdrücklich sagt, dann confirm true. crm_update und crm_insert zeigen bei mehreren Zeilen Anzahl und Vorschau. all braucht ebenfalls confirm true.
+Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bezahlt, ueberfaellig. Angebot: entwurf, gesendet, akzeptiert, abgelehnt. Aufgabe: todo, doing, done. Ein Bot steht als Zeile „Zuständig: Name (Rolle).“ in der Beschreibung, ein Termin-Ende als „Bis: HH:MM“ in der Notiz.
+„Rückgängig“ ruft crm_undo auf. Das macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig.
+Die älteren Werkzeuge create_angebot und create_rechnung legen weiter nur Entwürfe an. Für einen anderen Status nimm crm_insert oder crm_update. set_aufgaben_status und delete_aufgaben bleiben für Aufgaben gültig.
+Wenn eine Aktion nicht unterstützt ist oder ein Werkzeug einen Fehler meldet, sagst du das in einem klaren Satz. Du öffnest dann nicht ersatzweise ein Panel.
+Fehlt der Status, bleiben Angebote und Rechnungen ein Entwurf und Social-Posts eine Idee. Sagt Kim einen anderen CRM-Status, übernimmst du ihn mit crm_insert oder crm_update.
+Aufträge an Webby (Websites), Marky (Marketing/Social), Saley (Vertrieb), Cashy (Finanzen) oder Developy (Software) werden Aufgaben im CRM, erst nach Kims Bestätigung. Spracherkennung: Marki, Markie und Marky sind Marky. Sally und Sali sind Saley. Kashy und Cashi sind Cashy. Webbi und Weby sind Webby. Developi ist Developy.
+Angebot, Rechnung, Notiz, Retainer, Termin oder Aufgabe zu einem genannten Kunden: such den Kontakt und nimm die ID. Nennt Kim einen Namen, speichere nicht ohne diesen Kunden. Mehrere Treffer: frag nach, rate nicht.
+list_tasks filtert Aufgaben nach bot, due (today, overdue, week) und done. Die Zeile „Zuständig:“ zählt als Treffer. „Der Kunde von gestern“ ist search_contacts mit newest true.
+„Bestätigen“, „passt so“ und „ja, mach“ gelten der offenen Karte. „Abbrechen“ und „nein“ verwerfen sie. Eine Löschkarte braucht das Wort „löschen“. Wiederhole die Karte dann nicht.
 Beträge aus dem CRM sind netto, sofern das Werkzeug nicht ausdrücklich brutto nennt.
 Öffne passende Werkzeuge, damit das HUD ein Panel zeigen kann.
 Jeden CRM-Bereich öffnest du mit open_area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter aus der Frage übernimmst du (only, status, quelle, query, from, to, view).
-Auf Briefing, Guten Morgen oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen, begrüße Kim, füge keine Zahlen hinzu.
+Auf Briefing oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen und füge keine Zahlen hinzu. Die Begrüßung darin folgt der Uhr in Europe/Berlin: 5 bis 11 Uhr Guten Morgen, 11 bis 18 Uhr Guten Tag, sonst Guten Abend. Ein Datum sprichst du als „Samstag, 17. Oktober“, nie als 2026-10-17.
 Auf „Was ist der Stand bei …“ nutzt du customer_file. Sprich das Feld summary in zwei Sätzen, ohne neue Zahlen.
 Eine Gesprächsnotiz, ein Recap oder „merk dir das Telefonat“ geht an meeting_recap: eine einzige Bestätigung. Die Notiz wird angehängt und überschreibt nichts, dazu die vereinbarten Aufgaben und eine Wiedervorlage.
-Retainer legst du nur nach Bestätigung an, standardmäßig pausiert, außer Kim sagt ausdrücklich aktiv. Ausgaben und ROI-Zeilen ebenfalls nur nach Bestätigung. Pakete und Zielwerte änderst du nicht.
+Retainer legst du über crm_insert an, standardmäßig pausiert, außer Kim sagt ausdrücklich aktiv. Paketpreise stehen in der Tabelle pakete, Zielwerte in ziele. Die Einstellungen mit dem Leistungskatalog fasst du nicht an.
 upsert_contact.notes ersetzt die internen Notizen. Zum Anhängen neue_notiz oder meeting_recap nutzen.`;
 
 type TextBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
 
-export function systemBlocks(today: string, name: string): TextBlock[] {
+export const MAX_TOOL_ROUNDS = 6;
+export const HISTORY_IDLE_MS = 30 * 60 * 1000;
+
+export function addIsoDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+export function weekdayName(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  sonntag: 0, montag: 1, dienstag: 2, mittwoch: 3, donnerstag: 4, freitag: 5, samstag: 6,
+};
+
+export function resolveDayPhrase(today: string, phrase: string): string | null {
+  const s = String(phrase || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  if (/\buebermorgen\b/.test(s)) return addIsoDays(today, 2);
+  if (/\bgestern\b/.test(s)) return addIsoDays(today, -1);
+  if (/\bmorgen\b/.test(s)) return addIsoDays(today, 1);
+  if (/\bheute\b/.test(s)) return today;
+  const hit = /\b(naechsten|naechster|naechste|kommenden|kommende|diesen|diese|diesem)\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag)\b/.exec(s);
+  if (!hit) return null;
+  const want = WEEKDAY_INDEX[hit[2]];
+  const [y, m, d] = today.split("-").map(Number);
+  const current = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  let delta = (want - current + 7) % 7;
+  const upcoming = hit[1].startsWith("naechst") || hit[1].startsWith("kommend");
+  if (upcoming && delta === 0) delta = 7;
+  return addIsoDays(today, delta);
+}
+
+export function upcomingDays(today: string, count = 14): string {
+  const parts: string[] = [];
+  for (let i = 0; i <= count; i++) {
+    const iso = addIsoDays(today, i);
+    const [y, m, d] = iso.split("-").map(Number);
+    const year = y === Number(today.slice(0, 4)) ? "" : ` ${y}`;
+    parts.push(`${weekdayName(iso)}, ${d}. ${MONTHS[m - 1]}${year} = ${iso}`);
+  }
+  return parts.join("; ");
+}
+
+export function berlinClock(d = new Date()): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(d);
+}
+
+export function systemBlocks(today: string, name: string, now = new Date()): TextBlock[] {
   return [
     { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
     {
       type: "text",
-      text: `Heute ist ${today} (Europe/Berlin). Der angemeldete Nutzer heißt ${name || "Kim"}.`,
+      text: `Heute ist ${speakDate(today, now)}, ${berlinClock(now)} Uhr (Europe/Berlin). Internes Datum nur für Filter: ${today}. Der angemeldete Nutzer heißt ${name || "Kim"}. Nächste Tage, ISO nur für Werkzeuge: ${upcomingDays(today, 14)}. „nächsten Dienstag“ ist der nächste Dienstag nach heute.`,
     },
   ];
 }
@@ -180,6 +321,7 @@ const TOOLS: ToolDef[] = [
       properties: {
         query: { type: "string", description: "Suchtext, kann leer sein" },
         status: { type: "string", description: "lead | erstgespraech | angebot | gewonnen | verloren" },
+        newest: { type: "boolean", description: "true für die zuletzt angelegten Kontakte, zum Beispiel der Kunde von gestern" },
         limit: { type: "integer" },
       },
     },
@@ -256,7 +398,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_aufgabe",
-    description: "Legt eine Aufgabe im Kanban an, Status immer Offen. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erst nach Bestätigung. Kein Erledigen, kein Löschen.",
+    description: "Legt eine Aufgabe im Kanban an, Status immer Offen. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erst nach Bestätigung. Erledigen geht über set_aufgaben_status, Löschen über delete_aufgaben.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -382,8 +524,22 @@ const TOOLS: ToolDef[] = [
 
 const EXTRA_TOOLS: ToolDef[] = [
   {
+    name: "list_tasks",
+    description: "Listet bis zu 25 Aufgaben. Filter: bot (webby, marky, saley, cashy, developy, auch die gesprochenen Varianten), due today|overdue|week, done true|false, query für Titel oder Zuständig-Zeile. Nur lesen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        bot: { type: "string" },
+        due: { type: "string", description: "today | overdue | week" },
+        done: { type: "boolean" },
+        query: { type: "string" },
+      },
+    },
+  },
+  {
     name: "open_area",
-    description: "Öffnet einen CRM-Bereich im HUD. area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter optional: query, status, quelle, only (overdue|open|drafts), from, to, view (week|month). Nur lesen.",
+    description: "Öffnet einen CRM-Bereich im HUD und liefert die ersten etwa 25 Zeilen zum Antworten. area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter optional: query, status, quelle, only (overdue|open|drafts), from, to, view (week|month). Nur lesen.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -492,6 +648,92 @@ const EXTRA_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    name: "set_aufgaben_status",
+    description: "Markiert Aufgaben als erledigt (done) oder wieder offen (todo), eine oder mehrere. Filter: id, ids, query (Titel), only (open|done|doing|overdue), all. Erst die Bestätigungskarte, nichts ist vorher gespeichert. Kein Löschen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["status"],
+      properties: {
+        status: { type: "string", description: "done (erledigt) oder todo (offen)" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string", description: "Teil des Titels" },
+        only: { type: "string", description: "open | done | doing | overdue" },
+        all: { type: "boolean", description: "Alle Aufgaben in diesem Statuswechsel, nur wenn Kim alle meint" },
+      },
+    },
+  },
+  {
+    name: "delete_aufgaben",
+    description: "Löscht Aufgaben endgültig, eine, einen Filter oder alle. Die Karte listet Anzahl und Titel. confirm muss true sein, wenn es mehrere oder alle sind und Kim das ausdrücklich gesagt hat. Ohne confirm bei Menge oder alle lehnt das Werkzeug ab. Nicht für Kontakte, Rechnungen oder andere Tabellen.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string", description: "Teil des Titels" },
+        only: { type: "string", description: "open | done | doing | overdue" },
+        all: { type: "boolean", description: "Wirklich jede Aufgabe. Nur mit confirm true." },
+        confirm: { type: "boolean", description: "true nur bei ausdrücklichem Mehrfach- oder Alle-Löschen" },
+      },
+    },
+  },
+  {
+    name: "crm_insert",
+    description: "Legt eine oder mehrere CRM-Zeilen an (rows, höchstens 30). table: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. Kein workspace_id, keine settings, keine Geheimnisse, keine Datei-Uploads. Aufgaben: bot webby|marky|saley|cashy|developy. Termine: bis als HH:MM. Status nur die CRM-Werte, Rechnung gesendet heißt offen-rg. Erst die Bestätigungskarte.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table", "rows"],
+      properties: {
+        table: { type: "string" },
+        rows: { type: "array", items: { type: "object" } },
+      },
+    },
+  },
+  {
+    name: "crm_update",
+    description: "Ändert bestehende Zeilen. id, ids, query (Titel, Firma, Betreff) oder all. all nur mit confirm true, und nur wenn Kim alle meint. patch enthält nur die Felder, die sich ändern. Mehrere Treffer: Karte mit Anzahl und Vorschau. Kein Versand, kein Upload, keine settings.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table", "patch"],
+      properties: {
+        table: { type: "string" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string" },
+        all: { type: "boolean" },
+        confirm: { type: "boolean" },
+        patch: { type: "object" },
+      },
+    },
+  },
+  {
+    name: "crm_delete",
+    description: "Löscht Zeilen endgültig. Die Karte ist rot und nennt Anzahl und Titel. confirm muss true sein, wenn es mehrere oder alle sind und Kim das ausdrücklich gesagt hat. Eine einzelne ID braucht confirm nicht. Nicht für settings oder Geheimnisse.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["table"],
+      properties: {
+        table: { type: "string" },
+        id: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        query: { type: "string" },
+        all: { type: "boolean" },
+        confirm: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "crm_undo",
+    description: "Macht die letzte protokollierte Jarvis-Änderung rückgängig, nach einer Bestätigungskarte. Nur wenn Kim Rückgängig sagt. Ohne Argumente.",
+    input_schema: { type: "object", additionalProperties: false, properties: {} },
+  },
 ];
 
 export function anthropicTools(): ToolDef[] {
@@ -576,6 +818,15 @@ export function revalidate(input: unknown, ctx: Ctx): Plan {
       return planAusgabe(data);
     case "roi":
       return planRoi(data);
+    case "aufgabe_status":
+      return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "status", status: normAufgabeStatus(data.status) }, true);
+    case "aufgabe_delete":
+      return planAufgabeChange(selectorFromPlan(data), rowsFromPlan(data), { op: "delete" }, true);
+    case "crm_insert":
+    case "crm_update":
+    case "crm_delete":
+    case "crm_undo":
+      return revalidateCrm(kind, data, ctx.today);
     case "social_insert":
     case "social_update": {
       const copy = { ...data };
@@ -878,6 +1129,150 @@ function planAufgabe(o: Record<string, unknown>, tool: string): Plan {
   };
 }
 
+export const AUFGABE_MATCH_LIMIT = 300;
+
+export type AufgabeScope = "single" | "bulk" | "all";
+
+export type AufgabeSelector = {
+  id: string | null;
+  ids: string[];
+  query: string | null;
+  only: "open" | "done" | "doing" | "overdue" | null;
+  bot: string | null;
+  all: boolean;
+  confirm: boolean;
+  scope: AufgabeScope;
+};
+
+export type AufgabeRow = { id: string; titel: string; status?: string | null };
+
+const AUFGABE_ONLY = new Set(["open", "done", "doing", "overdue"]);
+
+export function normAufgabeStatus(v: unknown): "done" | "todo" {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (["done", "erledigt", "complete", "completed", "abgehakt", "fertig"].includes(s)) return "done";
+  if (["todo", "offen", "open", "unerledigt"].includes(s)) return "todo";
+  throw new Error("Status muss erledigt (done) oder offen (todo) sein.");
+}
+
+function flag(v: unknown): boolean {
+  return v === true || String(v).toLowerCase() === "true";
+}
+
+export function parseAufgabeSelector(input: unknown, mode: "status" | "delete"): AufgabeSelector {
+  const o = asObj(input);
+  const id = optUuid(o, "id");
+  const rawIds = o.ids === undefined || o.ids === null ? [] : o.ids;
+  if (!Array.isArray(rawIds)) throw new Error("ids muss eine Liste sein.");
+  const ids = [...new Set(rawIds.map((item) => {
+    const s = String(item ?? "").trim();
+    if (!UUID.test(s)) throw new Error("Eine Aufgaben-ID ist ungültig.");
+    return s;
+  }))];
+  if (id && !ids.includes(id)) ids.unshift(id);
+  if (ids.length > AUFGABE_MATCH_LIMIT) throw new Error("Zu viele Aufgaben auf einmal.");
+  const query = clip(o.query, 80);
+  let only: AufgabeSelector["only"] = null;
+  if (o.only !== undefined && o.only !== null && String(o.only).trim() !== "") {
+    const s = String(o.only).toLowerCase().trim();
+    if (!AUFGABE_ONLY.has(s)) throw new Error("Filter only muss open, done, doing oder overdue sein.");
+    only = s as AufgabeSelector["only"];
+  }
+  const all = flag(o.all);
+  const confirm = flag(o.confirm);
+  const bot = o.bot !== undefined && o.bot !== null && String(o.bot).trim() !== "" ? normBot(o.bot) : null;
+  if (all && (ids.length > 0 || query || only || bot)) throw new Error("Entweder alle Aufgaben oder ein Filter, nicht beides.");
+  if (!all && !ids.length && !query && !only && !bot) throw new Error("Welche Aufgaben? Nenne einen Titel, eine ID oder einen Filter.");
+  const scope: AufgabeScope = all ? "all" : !query && !only && !bot && ids.length === 1 ? "single" : "bulk";
+  if (mode === "delete" && scope === "all" && !confirm) {
+    throw new Error("Alle Aufgaben lösche ich nur, wenn Kim das ausdrücklich sagt. Dann confirm auf true setzen.");
+  }
+  return { id: ids[0] ?? null, ids, query, only, bot, all, confirm, scope };
+}
+
+export function planAufgabeChange(
+  selector: AufgabeSelector,
+  rows: AufgabeRow[],
+  change: { op: "status"; status: "done" | "todo" } | { op: "delete" },
+  frozen = false,
+): Plan {
+  const seen = new Set<string>();
+  let list = rows.map((r) => {
+    const id = String(r.id ?? "").trim();
+    if (!UUID.test(id)) throw new Error("Aufgaben-ID ungültig.");
+    if (seen.has(id)) throw new Error("Dieselbe Aufgabe steht doppelt in der Liste.");
+    seen.add(id);
+    return { id, titel: clip(r.titel, 300) || "Ohne Titel", status: r.status == null ? null : String(r.status) };
+  });
+  if (!frozen && change.op === "status") list = list.filter((r) => r.status !== change.status);
+  if (!list.length) {
+    throw new Error(change.op === "delete"
+      ? "Keine passende Aufgabe gefunden."
+      : change.status === "done"
+      ? "Keine offene Aufgabe dafür. Sie ist vielleicht schon erledigt."
+      : "Keine erledigte Aufgabe dafür. Sie ist vielleicht schon offen.");
+  }
+  if (list.length > AUFGABE_MATCH_LIMIT) throw new Error("Zu viele Aufgaben. Bitte enger filtern.");
+  const many = selector.scope === "all" || list.length > 1;
+  if (!frozen && change.op === "delete" && many && !selector.confirm) {
+    throw new Error(`Das träfe ${list.length} Aufgaben. Mehrere oder alle lösche ich nur, wenn Kim das ausdrücklich sagt. Dann confirm auf true setzen.`);
+  }
+  const titles = list.map((r) => r.titel);
+  const shown = titles.slice(0, 12);
+  const lines = [
+    `Anzahl: ${list.length}`,
+    change.op === "delete" ? "Endgültig löschen." : change.status === "done" ? "Status: Erledigt" : "Status: Offen",
+    ...shown,
+  ];
+  if (titles.length > shown.length) lines.push(`… und ${titles.length - shown.length} weitere`);
+  const scope: AufgabeScope = selector.scope === "all" ? "all" : list.length === 1 ? "single" : "bulk";
+  const one = list.length === 1;
+  let summary: string;
+  if (change.op === "delete") {
+    summary = scope === "all" ? `Alle ${list.length} Aufgaben löschen` : one ? `Aufgabe löschen: ${titles[0]}` : `${list.length} Aufgaben löschen`;
+  } else if (change.status === "done") {
+    summary = one ? `Aufgabe erledigen: ${titles[0]}` : `${list.length} Aufgaben erledigen`;
+  } else {
+    summary = one ? `Aufgabe wieder öffnen: ${titles[0]}` : `${list.length} Aufgaben wieder öffnen`;
+  }
+  return {
+    kind: change.op === "delete" ? "aufgabe_delete" : "aufgabe_status",
+    tool: change.op === "delete" ? "delete_aufgaben" : "set_aufgaben_status",
+    table: "aufgaben",
+    action: change.op === "delete" ? "delete" : "update",
+    summary,
+    lines,
+    bot: null,
+    ...(change.op === "delete" ? { danger: true } : {}),
+    data: {
+      ids: list.map((r) => r.id),
+      titles,
+      count: list.length,
+      scope,
+      confirm: selector.confirm || frozen,
+      ...(change.op === "status" ? { status: change.status } : {}),
+    },
+  };
+}
+
+function selectorFromPlan(data: Record<string, unknown>): AufgabeSelector {
+  const ids = Array.isArray(data.ids) ? data.ids.map((id) => String(id)) : [];
+  const scope: AufgabeScope = data.scope === "all" || data.scope === "bulk" || data.scope === "single"
+    ? data.scope
+    : ids.length > 1 ? "bulk" : "single";
+  return { id: ids[0] ?? null, ids, query: null, only: null, bot: null, all: scope === "all", confirm: true, scope };
+}
+
+function rowsFromPlan(data: Record<string, unknown>): AufgabeRow[] {
+  const ids = data.ids;
+  const titles = data.titles;
+  if (!Array.isArray(ids) || !Array.isArray(titles) || !ids.length || ids.length !== titles.length) {
+    throw new Error("Die Aufgabenliste ist unvollständig.");
+  }
+  if (Number(data.count) !== ids.length) throw new Error("Die Anzahl passt nicht zur Liste.");
+  return ids.map((id, i) => ({ id: String(id), titel: String(titles[i] ?? "") }));
+}
+
 function planRoute(o: Record<string, unknown>): Plan {
   const bot = normBot(o.bot);
   const titel = reqStr(o, "auftrag", 300, "Auftrag");
@@ -1129,28 +1524,43 @@ function normPipe(v: unknown): string {
   return map[s];
 }
 
-export function normBot(v: unknown): string {
+const BOT_ALIASES: Record<string, string> = {
+  webby: "webby",
+  webbi: "webby",
+  weby: "webby",
+  website: "webby",
+  websites: "webby",
+  web: "webby",
+  marky: "marky",
+  marki: "marky",
+  markie: "marky",
+  marketing: "marky",
+  social: "marky",
+  saley: "saley",
+  sally: "saley",
+  sali: "saley",
+  vertrieb: "saley",
+  sales: "saley",
+  cashy: "cashy",
+  kashy: "cashy",
+  cashi: "cashy",
+  finanzen: "cashy",
+  finance: "cashy",
+  developy: "developy",
+  developi: "developy",
+  software: "developy",
+  dev: "developy",
+};
+
+export function matchBot(v: unknown): string | null {
   const s = String(v ?? "").toLowerCase().trim();
-  const aliases: Record<string, string> = {
-    webby: "webby",
-    website: "webby",
-    websites: "webby",
-    web: "webby",
-    marky: "marky",
-    marketing: "marky",
-    social: "marky",
-    saley: "saley",
-    vertrieb: "saley",
-    sales: "saley",
-    cashy: "cashy",
-    finanzen: "cashy",
-    finance: "cashy",
-    developy: "developy",
-    software: "developy",
-    dev: "developy",
-  };
-  if (!aliases[s]) throw new Error("Bot muss Webby, Marky, Saley, Cashy oder Developy sein.");
-  return aliases[s];
+  return BOT_ALIASES[s] || null;
+}
+
+export function normBot(v: unknown): string {
+  const hit = matchBot(v);
+  if (!hit) throw new Error("Bot muss Webby, Marky, Saley, Cashy oder Developy sein.");
+  return hit;
 }
 
 function normPrio(v: unknown): string {

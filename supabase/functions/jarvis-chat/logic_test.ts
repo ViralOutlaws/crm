@@ -1,12 +1,24 @@
 import {
   anthropicTools,
   botFromText,
+  briefingSpoken,
+  deDate,
+  greeting,
+  matchBot,
+  MAX_TOOL_ROUNDS,
+  normBot,
+  parseAufgabeSelector,
+  planAufgabeChange,
   planFromTool,
+  resolveDayPhrase,
   revalidate,
+  speakDate,
+  upcomingDays,
   sumNetto,
   systemBlocks,
   weekRange,
 } from "./logic.ts";
+import { parseCrmSelector, planCrmChange, planCrmInsert, planCrmUndo, resolveTable } from "./schema.ts";
 
 const ctx = { today: "2026-10-17" };
 
@@ -16,10 +28,60 @@ Deno.test("Systemprompt ist deutsch, cached und spricht als wir", () => {
     throw new Error("system cache_control fehlt");
   }
   const text = blocks[0].text;
-  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee"]) {
+  for (const part of ["wir", "erfind", "Bestätigung", "Entwurf", "Idee", "delete_aufgaben", "set_aufgaben_status", "crm_delete", "crm_undo", "nicht ersatzweise ein Panel", "Bezahlt"]) {
     if (!text.includes(part)) throw new Error(`Prompt ohne ${part}`);
   }
   if (!blocks[1].text.includes("Kim")) throw new Error("Name fehlt");
+});
+
+Deno.test("Begrüßung folgt der Berliner Uhr und Daten sind deutsch", () => {
+  const evening = new Date("2026-10-17T21:20:00Z");
+  const morning = new Date("2026-10-17T06:30:00Z");
+  const afternoon = new Date("2026-10-17T12:00:00Z");
+  const night = new Date("2026-10-17T22:30:00Z");
+  if (greeting(evening) !== "Guten Abend") throw new Error(greeting(evening));
+  if (greeting(morning) !== "Guten Morgen") throw new Error(greeting(morning));
+  if (greeting(afternoon) !== "Guten Tag") throw new Error(greeting(afternoon));
+  if (greeting(night) !== "Guten Abend") throw new Error(greeting(night));
+  if (speakDate("2026-10-17", evening) !== "Samstag, 17. Oktober") throw new Error(speakDate("2026-10-17", evening));
+  if (speakDate("2025-03-01", evening) !== "Samstag, 1. März 2025") throw new Error(speakDate("2025-03-01", evening));
+  if (deDate("2026-10-15") !== "15.10.2026") throw new Error(deDate("2026-10-15"));
+  const spoken = briefingSpoken({
+    date: "2026-10-17",
+    events: [{}, {}],
+    tasks: [{ overdue: true }, {}, {}],
+    overdueInvoices: [{}],
+    reminders: [{}],
+    nextSteps: [{}],
+  }, evening);
+  if (!spoken.startsWith("Guten Abend, heute ist Samstag, 17. Oktober.")) throw new Error(spoken);
+  if (spoken.includes("2026-10-17") || spoken.includes("Guten Morgen")) throw new Error(spoken);
+  const blocks = systemBlocks("2026-10-17", "Kim");
+  if (!blocks[1].text.includes("Samstag, 17. Oktober")) throw new Error(blocks[1].text);
+  if (blocks[1].text.includes("Heute ist 2026-10-17")) throw new Error(blocks[1].text);
+  if (blocks[1].cache_control) throw new Error("Tagesblock darf nicht cachen");
+  if (!blocks[1].text.includes("Dienstag, 20. Oktober = 2026-10-20")) throw new Error(blocks[1].text);
+  if (MAX_TOOL_ROUNDS !== 6) throw new Error("Runden");
+  const prompt = blocks[0].text;
+  for (const part of ["handeln", "antworten", "zeigen", "plaudern", "Lösche alle Aufgaben", "1.250 Euro", "list_tasks", "newest"]) {
+    if (!prompt.includes(part)) throw new Error(`Prompt ohne ${part}`);
+  }
+});
+
+Deno.test("nächsten Dienstag und Bot-Aliase", () => {
+  if (resolveDayPhrase("2026-10-17", "nächsten Dienstag") !== "2026-10-20") {
+    throw new Error(String(resolveDayPhrase("2026-10-17", "nächsten Dienstag")));
+  }
+  if (resolveDayPhrase("2026-10-20", "nächsten Dienstag") !== "2026-10-27") throw new Error("gleicher Wochentag");
+  if (resolveDayPhrase("2026-10-17", "morgen") !== "2026-10-18") throw new Error("morgen");
+  if (resolveDayPhrase("2026-10-17", "übermorgen") !== "2026-10-19") throw new Error("übermorgen");
+  if (resolveDayPhrase("2026-10-17", "gestern") !== "2026-10-16") throw new Error("gestern");
+  if (!upcomingDays("2026-10-17", 14).includes("2026-10-31")) throw new Error("14 Tage");
+  for (const [said, id] of [["Marki", "marky"], ["Markie", "marky"], ["Sally", "saley"], ["Sali", "saley"], ["Kashy", "cashy"], ["Cashi", "cashy"], ["Webbi", "webby"], ["Weby", "webby"], ["Developi", "developy"]] as const) {
+    if (normBot(said) !== id || matchBot(said) !== id) throw new Error(said);
+  }
+  const byBot = parseAufgabeSelector({ bot: "Marki" }, "status");
+  if (byBot.bot !== "marky" || byBot.scope !== "bulk") throw new Error(JSON.stringify(byBot));
 });
 
 Deno.test("Tools cachen am letzten Werkzeug", () => {
@@ -147,6 +209,204 @@ Deno.test("Gespräch hängt eine Notiz an und bündelt Aufgaben plus Wiedervorla
   if (again.data.neue_notiz !== plan.data.neue_notiz) throw new Error("revalidate");
   const ret = planFromTool("create_retainer", { paket: "Social", betrag: 500 }, ctx);
   if (ret.data.status !== "pausiert" || ret.table !== "retainer") throw new Error(JSON.stringify(ret.data));
+});
+
+Deno.test("Aufgaben löschen und erledigen laufen über die Karte", () => {
+  const a = "11111111-1111-4111-8111-111111111111";
+  const b = "22222222-2222-4222-8222-222222222222";
+  let all = false;
+  try {
+    parseAufgabeSelector({ all: true }, "delete");
+  } catch (e) {
+    all = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!all) throw new Error("alle ohne confirm");
+
+  const confirmed = parseAufgabeSelector({ all: true, confirm: true }, "delete");
+  const plan = planAufgabeChange(confirmed, [
+    { id: a, titel: "Angebot nachfassen", status: "todo" },
+    { id: b, titel: "Reel schneiden", status: "doing" },
+  ], { op: "delete" });
+  if (!plan.danger || plan.action !== "delete" || plan.kind !== "aufgabe_delete" || plan.tool !== "delete_aufgaben") {
+    throw new Error(JSON.stringify(plan));
+  }
+  if (plan.data.count !== 2) throw new Error("count");
+  if (!plan.lines.includes("Anzahl: 2") || !plan.lines.includes("Angebot nachfassen") || !plan.lines.includes("Reel schneiden")) {
+    throw new Error(plan.lines.join("|"));
+  }
+
+  let bulk = false;
+  try {
+    planAufgabeChange(parseAufgabeSelector({ query: "Angebot" }, "delete"), [
+      { id: a, titel: "Angebot A" },
+      { id: b, titel: "Angebot B" },
+    ], { op: "delete" });
+  } catch (e) {
+    bulk = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!bulk) throw new Error("mehrere ohne confirm");
+
+  const single = planAufgabeChange(
+    parseAufgabeSelector({ id: a }, "delete"),
+    [{ id: a, titel: "Nur eine", status: "todo" }],
+    { op: "delete" },
+  );
+  if (!single.danger || single.data.count !== 1 || single.data.confirm !== false) throw new Error(JSON.stringify(single.data));
+
+  let done = false;
+  try {
+    planAufgabeChange(
+      parseAufgabeSelector({ query: "Backup" }, "status"),
+      [{ id: a, titel: "Backup", status: "done" }],
+      { op: "status", status: "done" },
+    );
+  } catch (e) {
+    done = e instanceof Error && e.message.includes("erledigt");
+  }
+  if (!done) throw new Error("schon erledigt");
+
+  const statusPlan = planAufgabeChange(
+    parseAufgabeSelector({ ids: [a, b] }, "status"),
+    [{ id: a, titel: "Offen", status: "todo" }, { id: b, titel: "Fertig", status: "done" }],
+    { op: "status", status: "done" },
+  );
+  if (statusPlan.danger || statusPlan.action !== "update" || statusPlan.data.count !== 1 || statusPlan.data.status !== "done") {
+    throw new Error(JSON.stringify(statusPlan));
+  }
+
+  const again = revalidate(plan, ctx);
+  if (!again.danger || again.action !== "delete" || again.data.count !== 2) throw new Error(JSON.stringify(again));
+  const titles = again.data.titles as string[];
+  if (titles[0] !== "Angebot nachfassen" || titles[1] !== "Reel schneiden") throw new Error(titles.join("|"));
+
+  const statusAgain = revalidate(statusPlan, ctx);
+  if (statusAgain.danger || statusAgain.data.status !== "done" || statusAgain.action !== "update") {
+    throw new Error(JSON.stringify(statusAgain));
+  }
+  if ((statusAgain.data.ids as string[]).length !== 1) throw new Error("frozen filter");
+});
+
+Deno.test("CRM-Werkzeuge prüfen Spalten, Status und Löschbestätigung", () => {
+  const a = "11111111-1111-4111-8111-111111111111";
+  const b = "22222222-2222-4222-8222-222222222222";
+  let blocked = false;
+  try {
+    resolveTable("integration_secrets");
+  } catch (e) {
+    blocked = e instanceof Error && e.message.includes("Geheimnisse");
+  }
+  if (!blocked) throw new Error("secrets");
+
+  let ws = false;
+  try {
+    planCrmInsert({ table: "contacts", rows: [{ firma: "Beispiel", workspace_id: "x" }] }, ctx.today);
+  } catch (e) {
+    ws = e instanceof Error && e.message.includes("workspace_id");
+  }
+  if (!ws) throw new Error("workspace");
+
+  const paid = planCrmInsert({ table: "rechnungen", rows: [{ betreff: "Retainer", status: "bezahlt" }] }, ctx.today);
+  const paidRow = (paid.data.rows as Array<Record<string, unknown>>)[0];
+  if (paidRow.status !== "bezahlt" || paid.action !== "insert") throw new Error(JSON.stringify(paidRow));
+  const sent = planCrmInsert({ table: "rechnungen", rows: [{ betreff: "Retainer", status: "gesendet" }] }, ctx.today);
+  if ((sent.data.rows as Array<Record<string, unknown>>)[0].status !== "offen-rg") throw new Error("gesendet");
+
+  const task = planCrmInsert({ table: "aufgaben", rows: [{ titel: "Reel schneiden", bot: "marky" }] }, ctx.today);
+  const taskRow = (task.data.rows as Array<Record<string, unknown>>)[0];
+  if (taskRow.status !== "todo" || taskRow.bot !== "marky") throw new Error(JSON.stringify(taskRow));
+
+  const event = planCrmInsert({ table: "kal_events", rows: [{ titel: "Call", datum: "2026-10-20", bis: "9:30" }] }, ctx.today);
+  if ((event.data.rows as Array<Record<string, unknown>>)[0].bis !== "09:30") throw new Error("bis");
+
+  let assets = false;
+  try {
+    planCrmInsert({ table: "social_media_posts", rows: [{ thema: "Hook", assets: [] }] }, ctx.today);
+  } catch (e) {
+    assets = e instanceof Error && e.message.includes("Dateien");
+  }
+  if (!assets) throw new Error("assets");
+
+  let all = false;
+  try {
+    parseCrmSelector({ table: "contacts", all: true }, "delete");
+  } catch (e) {
+    all = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!all) throw new Error("all");
+
+  const del = planCrmChange(parseCrmSelector({ table: "contacts", all: true, confirm: true }, "delete"), [
+    { id: a, titel: "Beispiel GmbH" },
+    { id: b, titel: "Café" },
+  ]);
+  if (!del.danger || del.action !== "delete" || del.data.count !== 2) throw new Error(JSON.stringify(del));
+  if (!del.lines.includes("Anzahl: 2") || !del.lines.includes("Beispiel GmbH")) throw new Error(del.lines.join("|"));
+
+  let many = false;
+  try {
+    planCrmChange(parseCrmSelector({ table: "contacts", query: "Beispiel" }, "delete"), [
+      { id: a, titel: "A" },
+      { id: b, titel: "B" },
+    ]);
+  } catch (e) {
+    many = e instanceof Error && e.message.includes("confirm");
+  }
+  if (!many) throw new Error("bulk");
+
+  const upd = planCrmChange(parseCrmSelector({ table: "rechnungen", query: "Retainer", patch: { status: "bezahlt" } }, "update"), [
+    { id: a, titel: "Retainer März" },
+    { id: b, titel: "Retainer April" },
+  ]);
+  if (upd.danger || upd.data.count !== 2 || (upd.data.patch as { status?: string }).status !== "bezahlt") throw new Error(JSON.stringify(upd));
+  if (!upd.lines.includes("Anzahl: 2")) throw new Error(upd.lines.join("|"));
+
+  const again = revalidate(del, ctx);
+  if (!again.danger || again.action !== "delete" || again.data.count !== 2) throw new Error(JSON.stringify(again));
+
+  const undo = planCrmUndo(a, [{
+    action: "delete",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Reel schneiden", before: { id: b, titel: "Reel schneiden" } },
+  }]);
+  if (undo.kind !== "crm_undo" || undo.action !== "insert" || undo.danger) throw new Error(JSON.stringify(undo));
+  const undoAgain = revalidate(undo, ctx);
+  if (undoAgain.data.batch !== a || undoAgain.action !== "insert") throw new Error(JSON.stringify(undoAgain));
+
+  const restoredDelete = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Reel schneiden", before: { id: b, titel: "Reel schneiden" }, after: null },
+  }]);
+  if (restoredDelete.action !== "insert" || restoredDelete.danger) throw new Error(JSON.stringify(restoredDelete));
+
+  const restoredInsert = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: { titel: "Neu", before: null, after: { id: b, titel: "Neu" } },
+  }]);
+  if (restoredInsert.action !== "delete" || !restoredInsert.danger) throw new Error(JSON.stringify(restoredInsert));
+
+  const restoredUpdate = planCrmUndo(a, [{
+    action: "restore",
+    table: "aufgaben",
+    recordId: b,
+    summary: {
+      titel: "Alt",
+      before: { id: b, titel: "Alt", status: "todo" },
+      after: { id: b, titel: "Alt", status: "done" },
+    },
+  }]);
+  if (restoredUpdate.action !== "update" || restoredUpdate.danger) throw new Error(JSON.stringify(restoredUpdate));
+
+  let bare = false;
+  try {
+    planCrmUndo(a, [{ action: "restore", table: "aufgaben", recordId: b, summary: { titel: "Leer" } }]);
+  } catch (e) {
+    bare = e instanceof Error && e.message.includes("nicht rückgängig");
+  }
+  if (!bare) throw new Error("restore ohne Snapshot");
 });
 
 Deno.test("Wiedervorlage ist nie erledigt, Kontakt braucht Firma, Woche startet Montag", () => {

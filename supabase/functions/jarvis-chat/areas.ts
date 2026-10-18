@@ -1,6 +1,6 @@
 // Lesen für Holo-Panels. Immer mit dem Nutzer-JWT, damit RLS gilt.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { botFromText, eur, sumNetto, weekRange, type Ctx } from "./logic.ts";
+import { botFromText, briefingSpoken, deDate, eur, speakDate, sumNetto, weekRange, type Ctx } from "./logic.ts";
 
 type Row = Record<string, unknown>;
 type View = Record<string, unknown>;
@@ -15,9 +15,23 @@ export async function openArea(sb: SupabaseClient, userId: string, input: Record
   if (!AREAS.has(area)) throw new Error("Unbekannter Bereich. Möglich: " + [...AREAS].join(", "));
   const filter = pickFilter(input);
   const view = await buildArea(sb, userId, area, filter, ctx);
+  const rows = Array.isArray(view.rows) ? view.rows.slice(0, 25).map((r) => {
+    const row = r as { id?: string; cells?: Record<string, unknown>; badge?: { text?: string } };
+    return { id: row.id || null, cells: row.cells || {}, badge: row.badge?.text || "" };
+  }) : [];
+  const lanes = view.lanes && typeof view.lanes === "object"
+    ? Object.fromEntries(Object.entries(view.lanes as Record<string, unknown[]>).map(([k, arr]) => [k, (arr || []).slice(0, 8)]))
+    : undefined;
   return {
     ui: { panel: area === "social" ? "content_week" : area, data: view },
-    forModel: { hinweis: view.note || "Live aus dem CRM.", filter, anzahl: Array.isArray(view.rows) ? view.rows.length : undefined, kpis: view.kpis },
+    forModel: {
+      hinweis: (view.note || "Live aus dem CRM.") + " Die ersten Zeilen stehen in zeilen. Antworte daraus, erfinde keine weiteren.",
+      filter,
+      anzahl: Array.isArray(view.rows) ? view.rows.length : rows.length,
+      kpis: view.kpis,
+      zeilen: rows,
+      ...(lanes ? { spalten: lanes } : {}),
+    },
   };
 }
 
@@ -44,10 +58,10 @@ export async function morningBriefing(sb: SupabaseClient, _userId: string, ctx: 
   const nextSteps = (contacts.data ?? []).filter((c) => !c.archiviert && c.naechster_schritt && c.naechster_schritt <= today).slice(0, 20).map((c) => ({
     firma: c.firma || c.person || "Ohne Namen", datum: c.naechster_schritt, text: c.naechster_schritt_text || "", status: c.status,
   }));
-  const summary = briefingSummary({ date: today, events, tasks: taskRows, overdueInvoices, reminders, nextSteps });
+  const summary = briefingSpoken({ date: today, events, tasks: taskRows, overdueInvoices, reminders, nextSteps });
   const view = {
     title: "Agenda · Heute",
-    meta: "Briefing · " + today,
+    meta: "Briefing · " + deDate(today),
     crm: "kalender",
     wide: true,
     spoken: summary,
@@ -305,7 +319,7 @@ async function aufgabenView(sb: SupabaseClient, ctx: Ctx): Promise<View> {
     overdue: !!(t.faellig && t.faellig < ctx.today && t.status !== "done"),
     flags: { status: t.status, closed: t.status === "done" },
     search: String(t.titel || "").toLowerCase(),
-    cells: { titel: t.titel || "", faellig: t.faellig || "", status: t.status || "", prio: t.prioritaet || "", bot: botFromText(t.beschreibung) || "" },
+    cells: { titel: t.titel || "", faellig: deDate(String(t.faellig || "")), status: t.status || "", prio: t.prioritaet || "", bot: botFromText(t.beschreibung) || "" },
     badge: { text: t.status === "done" ? "Erledigt" : t.faellig && t.faellig < ctx.today ? "Überfällig" : "Offen", tone: t.status === "done" ? "f" : t.faellig && t.faellig < ctx.today ? "o" : "w" },
   }));
   return base("Aufgaben", "kanban", rows, [
@@ -470,22 +484,11 @@ function nettoOf(positions: unknown): number {
   }));
 }
 
-function briefingSummary(d: { date: string; events: unknown[]; tasks: Array<{ overdue?: boolean }>; overdueInvoices: unknown[]; reminders: unknown[]; nextSteps: unknown[] }) {
-  const overdue = d.tasks.filter((t) => t.overdue).length;
-  return [
-    `Guten Morgen, heute am ${d.date} stehen ${d.events.length} Termine im Kalender.`,
-    d.tasks.length ? `Bei den Aufgaben sind ${d.tasks.length} fällig oder überfällig, davon ${overdue} überfällig.` : "Heute ist keine Aufgabe fällig.",
-    d.overdueInvoices.length ? `${d.overdueInvoices.length} Rechnungen sind überfällig.` : "Keine Rechnung ist überfällig.",
-    (d.reminders.length || d.nextSteps.length)
-      ? `Dazu ${d.reminders.length} fällige Wiedervorlagen und ${d.nextSteps.length} Kontakte mit fälligem nächsten Schritt.`
-      : "Keine fällige Wiedervorlage und kein fälliger nächster Schritt.",
-  ].join(" ");
-}
 
 function customerSummary(c: Row, offers: Row[], invoices: Row[], tasks: Row[], today: string) {
   const openInv = invoices.filter((r) => r.status === "offen-rg" || r.status === "ueberfaellig" || (r.status === "offen-rg" && r.faellig && String(r.faellig) < today));
   const phase = labelPhase(String(c.status || "lead"));
-  const step = c.naechster_schritt ? `nächster Schritt am ${c.naechster_schritt}` : "ein nächster Schritt ist nicht gesetzt";
+  const step = c.naechster_schritt ? `nächster Schritt am ${speakDate(String(c.naechster_schritt))}` : "ein nächster Schritt ist nicht gesetzt";
   return `${c.firma || "Der Kontakt"} ist in der Phase ${phase}, ${step}. Wir haben ${offers.length} Angebote und ${openInv.length} offene Rechnungen, dazu ${tasks.length} offene Aufgaben.`;
 }
 

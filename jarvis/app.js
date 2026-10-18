@@ -1,9 +1,25 @@
+import {
+  HANDSFREE_KEY,
+  cleanTranscript,
+  createUtterance,
+  createWakeGate,
+  handsFreeHint,
+  handsFreePref,
+  handsFreeSupport,
+  historyExpired,
+  HISTORY_IDLE_MS,
+  isStopCommand,
+  prefAfterGrant,
+  voiceCardAction,
+  withEntityContext,
+} from "./listen.js";
 import { createElevenLabsSpeech } from "./speech.js";
 import {
   AREAS,
   BOTS,
   SUPABASE_KEY,
   berlinToday,
+  deDate,
   crmHref,
   demoBriefing,
   demoCustomer,
@@ -16,10 +32,13 @@ import {
   fnUrl,
   getSupabase,
   ttsUrl,
+  botsView,
+  demoTask,
   loadArea,
   loadBriefing,
   loadCustomer,
   loadSide,
+  loadTask,
 } from "./data.js";
 
 const $ = (s) => document.querySelector(s);
@@ -46,6 +65,12 @@ if (INSTANT) {
   $("#muteWave").style.display = "none";
 }
 addEventListener("pointerdown", () => speech.unlock(), { once: true });
+addEventListener("pointerdown", (e) => {
+  if (!handsPending) return;
+  if (e.target?.closest?.("#hands")) return;
+  handsPending = false;
+  armHandsFree();
+});
 
 const S = { mode: "idle", amp: 0, target: 0, mic: 0, speakEnd: 0, impulse: 0, listening: false };
 let speakToken = 0;
@@ -53,6 +78,10 @@ let sb = null;
 let userId = null;
 let session = null;
 let history = [];
+let historyAt = 0;
+let entityNotes = [];
+let cardNote = "";
+const wake = createWakeGate();
 let currentArea = null;
 let currentFilter = null;
 const botTimers = {};
@@ -70,11 +99,15 @@ function setMode(m, sub) {
   $("#coreState").textContent = map[0];
   $("#coreSub").textContent = sub || map[1];
   $("#hState").textContent = map[2];
+  const wrap = $("#coreWrap");
+  if (wrap) wrap.dataset.mode = m;
+  document.body.dataset.phase = m;
+  if (typeof paintListen === "function") paintListen();
 }
 
 function tickClock() {
   const d = new Date();
-  $("#clock").innerHTML = `${d.toLocaleDateString("de-DE", { weekday: "long" })}<b>${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</b>`;
+  $("#clock").innerHTML = `<span class="clock-day">${d.toLocaleDateString("de-DE", { weekday: "long" })}</span><b>${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</b>`;
 }
 
 function renderSide(data) {
@@ -82,20 +115,20 @@ function renderSide(data) {
   $("#todayDate").textContent = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
   const items = (d.today || []).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
   $("#todayList").innerHTML = items.length ? items.map((e) => e.type === "ev"
-    ? `<div class="row"><span class="time">${esc(e.t)}</span><div><span>${esc(e.x)}</span></div></div>`
-    : `<div class="row"><span class="chk"></span><div><span>${esc(e.x)}</span><div class="sub">${esc(e.t)}</div></div>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
+    ? `<button type="button" class="row tap" data-open="kalender"><span class="time">${esc(e.t)}</span><span>${esc(e.x)}</span></button>`
+    : `<div class="row tap" role="button" tabindex="0" data-open="task" data-id="${esc(e.id || "")}" data-title="${esc(e.x)}" data-status="${esc(e.status || "todo")}"><button type="button" class="chk" aria-pressed="${e.status === "done" ? "true" : "false"}" aria-label="${e.status === "done" ? "Wieder öffnen" : "Erledigen"}: ${esc(e.x)}" ${e.id ? "" : "disabled"}></button><span class="row-hit"><span>${esc(e.x)}</span><span class="sub">${esc(deDate(e.t))}</span></span>${e.prio ? '<span class="prio">PRIO</span>' : ""}</div>`).join("")
     : `<div class="empty">${DEMO ? "Keine Beispieltermine." : "Heute nichts geladen."}</div>`;
   const keys = [["lead", "Lead"], ["erstgespraech", "Erstgespr."], ["angebot", "Angebot"], ["gewonnen", "Gewonnen"]];
   const counts = d.counts || {};
   const mx = Math.max(1, ...keys.map(([k]) => counts[k] || 0));
-  $("#pipeMini").innerHTML = keys.map(([k, label]) => `<div class="stage ${k === "gewonnen" ? "win" : ""}"><b>${counts[k] || 0}</b><span>${label}</span><i style="width:${((counts[k] || 0) / mx) * 100}%"></i></div>`).join("");
+  $("#pipeMini").innerHTML = keys.map(([k, label]) => `<button type="button" class="stage tap ${k === "gewonnen" ? "win" : ""}" data-open="pipeline" data-stage="${esc(k)}" aria-label="Pipeline ${esc(label)}"><b>${counts[k] || 0}</b><span>${label}</span><i style="width:${((counts[k] || 0) / mx) * 100}%"></i></button>`).join("");
   $("#pipeVol").textContent = eur(d.volume || 0);
   $("#pipeTag").textContent = DEMO ? "Beispiel" : "Live";
   $("#invTag").textContent = DEMO ? "Beispiel" : "Live";
   const invoices = d.invoices || [];
-  $("#invMini").innerHTML = invoices.length ? invoices.map((i) => `<div class="inv ${i.over ? "over" : ""}"><div>${esc(i.k)}<span class="nr">${esc(i.nr)}</span></div><div class="amt">${eur(i.b)}<small>${i.over ? "überfällig" : "offen"}</small></div></div>`).join("") : `<div class="empty">${DEMO ? "Keine offenen Beispielrechnungen." : "Keine offenen Rechnungen."}</div>`;
+  $("#invMini").innerHTML = invoices.length ? invoices.map((i) => `<button type="button" class="inv tap ${i.over ? "over" : ""}" data-open="rechnungen"><span>${esc(i.k)}<span class="nr">${esc(i.nr)}</span></span><span class="amt">${eur(i.b)}<small>${i.over ? "überfällig" : "offen"}</small></span></button>`).join("") : `<div class="empty">${DEMO ? "Keine offenen Beispielrechnungen." : "Keine offenen Rechnungen."}</div>`;
   $("#invSum").textContent = eur(invoices.reduce((s, i) => s + (Number(i.b) || 0), 0));
-  $("#botList").innerHTML = BOTS.map((b) => `<div class="bot idle" id="bot-${b.id}"><div class="av">${b.letter}</div><div><div class="nm">${b.name}</div><div class="rl">${esc(b.role)}</div></div><span class="st">Bereit</span></div>`).join("");
+  $("#botList").innerHTML = BOTS.map((b) => `<button type="button" class="bot idle tap" id="bot-${b.id}" data-open="bots"><span class="av">${b.letter}</span><span><span class="nm">${b.name}</span><span class="rl">${esc(b.role)}</span></span><span class="st">Bereit</span></button>`).join("");
   $("#footMode").textContent = DEMO ? "◆ Beispieldaten · keine Verbindung zum CRM" : "◆ Live · Daten unter deiner Anmeldung";
   const mode = $("#hMode");
   if (mode) mode.textContent = DEMO ? "Demo" : "Live";
@@ -177,11 +210,19 @@ function typeWrite(text, tok) {
 }
 
 function endSpeak() {
-  if (S.mode === "speak") setMode(S.listening ? "listen" : "idle");
+  if (S.mode !== "speak") return;
+  finishReply(speakEpoch);
 }
 
 async function say(text) {
+  const cut = speechCut;
+  const gen = beginReply();
+  speakEpoch = gen;
   const tok = ++speakToken;
+  if (cut !== speechCut) {
+    finishReply(gen);
+    return;
+  }
   setMode("speak");
   S.speakEnd = performance.now() + Math.max(1200, String(text).length * 55);
   speech.speak(text, {
@@ -217,8 +258,19 @@ function openView(view, areaId) {
     btn.onclick = () => openArea(currentArea, JSON.parse(btn.getAttribute("data-filter")));
   });
   el.querySelectorAll("tr.click, .lc.click").forEach((row) => {
-    row.onclick = () => { if (row.dataset.id) openCustomer(row.dataset.id); };
+    row.onclick = () => {
+      if (!row.dataset.id) return;
+      if (row.dataset.open === "task") openTask(row.dataset.id);
+      else openCustomer(row.dataset.id);
+    };
+    row.onkeydown = (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      row.click();
+    };
   });
+  const form = el.querySelector(".task-form");
+  if (form && view.task) wireTaskForm(form, view.task);
   holoLayer.appendChild(el);
   holoLayer.classList.add("has");
   holoCount();
@@ -230,6 +282,7 @@ function renderBody(view) {
   const kpis = kpiHtml(view.kpis);
   const filters = (view.filters || []).map((f) => `<button type="button" data-filter="${esc(JSON.stringify(f.filter))}">${esc(f.label)}</button>`).join("");
   const bar = filters ? `<div class="filters">${filters}</div>` : "";
+  if (view.task) return spoken + taskHtml(view.task);
   if (view.customer) return spoken + kpis + dossierHtml(view.customer);
   if (view.lanes) return spoken + kpis + boardHtml(view);
   if (view.posts) return spoken + kpis + bar + postsHtml(view.posts);
@@ -248,9 +301,9 @@ function tableHtml(view) {
   if (!rows.length) return `<div class="empty">${view.note && !view.spoken ? esc(view.note) : "Keine Einträge."}</div>`;
   const head = cols.map((c) => `<th class="${c.align === "r" ? "r" : ""}">${esc(c.label)}</th>`).join("") + "<th></th>";
   const body = rows.map((r) => {
-    const tds = cols.map((c) => `<td class="${c.align === "r" ? "r mono" : ""}">${esc(r.cells?.[c.key] ?? "")}</td>`).join("");
+    const tds = cols.map((c) => `<td class="${c.align === "r" ? "r mono" : ""}">${esc(showDate(r.cells?.[c.key] ?? ""))}</td>`).join("");
     const badge = r.badge ? `<td><span class="badge ${esc(r.badge.tone || "e")}">${esc(r.badge.text)}</span></td>` : "<td></td>";
-    const click = r.open === "customer" && r.id ? ` class="click" data-id="${esc(r.id)}"` : "";
+    const click = r.id && (r.open === "customer" || r.open === "task") ? ` class="click" tabindex="0" data-id="${esc(r.id)}" data-open="${esc(r.open)}"` : "";
     return `<tr${click}>${tds}${badge}</tr>`;
   }).join("");
   return `<table class="ht"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -276,25 +329,157 @@ function agendaHtml(a) {
   const block = (title, rows) => `<h5 style="font-family:'Bebas Neue';letter-spacing:.12em;color:var(--gold);font-weight:400;margin:8px 0">${esc(title)}</h5>` + (rows.length
     ? `<table class="ht"><tbody>${rows.map((r) => `<tr><td>${esc(r.left)}</td><td class="r"><span class="badge ${esc(r.tone || "e")}">${esc(r.right)}</span></td></tr>`).join("")}</tbody></table>`
     : `<div class="empty">Nichts fällig.</div>`);
-  const tasks = (a.tasks || []).map((t) => ({ left: t.titel, right: t.overdue ? "Überfällig" : (t.faellig || "Offen"), tone: t.overdue ? "o" : "w" }));
-  const reminders = (a.reminders || []).map((t) => ({ left: t.text, right: t.datum || "", tone: "w" }));
+  const tasks = (a.tasks || []).map((t) => ({ left: t.titel, right: t.faellig ? (t.overdue ? `Überfällig · ${deDate(t.faellig)}` : deDate(t.faellig)) : "Offen", tone: t.overdue ? "o" : "w" }));
+  const reminders = (a.reminders || []).map((t) => ({ left: t.text, right: showDate(t.datum || ""), tone: "w" }));
   const invoices = (a.invoices || []).map((t) => ({ left: `${t.nr || ""} ${t.kunde || ""}`.trim(), right: eur(t.netto), tone: "o" }));
-  const steps = (a.nextSteps || []).map((t) => ({ left: t.firma, right: t.datum || "", tone: "w" }));
+  const steps = (a.nextSteps || []).map((t) => ({ left: t.firma, right: showDate(t.datum || ""), tone: "w" }));
   return `<div class="agenda"><div class="tl">${events}</div><div>${block("Aufgaben", tasks)}${block("Wiedervorlagen", reminders)}${block("Überfällige Rechnungen", invoices)}${block("Nächste Schritte", steps)}</div></div>`;
 }
 
 function dossierHtml(c) {
   const list = (title, rows) => `<h5>${esc(title)}</h5>` + (rows.length ? `<table class="ht"><tbody>${rows.map((r) => `<tr><td>${esc(r.a)}</td><td>${esc(r.b)}</td><td class="r mono">${esc(r.c || "")}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">Keine.</div>`);
   return `<div class="dossier"><div>
-      <div class="kv"><span>Firma</span><b>${esc(c.firma)}</b><span>Person</span><b>${esc(c.person)}</b><span>Phase</span><b>${esc(c.status)}</b><span>Quelle</span><b>${esc(c.quelle)}</b><span>Ort</span><b>${esc(c.ort)}</b><span>E-Mail</span><b>${esc(c.email)}</b><span>Deal</span><b>${c.deal_wert ? esc(eur(c.deal_wert)) : "—"}</b><span>Nächster Schritt</span><b>${esc(c.naechster_schritt || "—")} ${esc(c.naechster_schritt_text || "")}</b></div>
+      <div class="kv"><span>Firma</span><b>${esc(c.firma)}</b><span>Person</span><b>${esc(c.person)}</b><span>Phase</span><b>${esc(c.status)}</b><span>Quelle</span><b>${esc(c.quelle)}</b><span>Ort</span><b>${esc(c.ort)}</b><span>E-Mail</span><b>${esc(c.email)}</b><span>Deal</span><b>${c.deal_wert ? esc(eur(c.deal_wert)) : "—"}</b><span>Nächster Schritt</span><b>${esc(showDate(c.naechster_schritt || "—"))} ${esc(c.naechster_schritt_text || "")}</b></div>
       <h5>Notizen</h5><div class="noteblock">${esc(c.notes || "Keine internen Notizen.")}</div>
       ${(c.notizen || []).map((n) => `<div class="row"><span class="time">${esc(n.datum)}</span><div>${esc(n.text)}</div></div>`).join("")}
     </div><div>
       ${list("Angebote", (c.angebote || []).map((a) => ({ a: a.nr, b: a.betreff, c: eur(a.netto) })))}
       ${list("Rechnungen", (c.rechnungen || []).map((a) => ({ a: a.nr, b: a.status, c: eur(a.netto) })))}
-      ${list("Aufgaben", (c.aufgaben || []).map((a) => ({ a: a.titel, b: a.bot || a.status, c: a.faellig || "" })))}
-      ${list("Termine", (c.termine || []).map((a) => ({ a: a.datum, b: a.titel, c: a.zeit || "" })))}
+      ${list("Aufgaben", (c.aufgaben || []).map((a) => ({ a: a.titel, b: a.bot || a.status, c: showDate(a.faellig || "") })))}
+      ${list("Termine", (c.termine || []).map((a) => ({ a: showDate(a.datum), b: a.titel, c: a.zeit || "" })))}
     </div></div>`;
+}
+
+function taskStatusPlan(task, next) {
+  const title = task.x || task.titel || "Aufgabe";
+  return {
+    kind: "aufgabe_status",
+    tool: "set_aufgaben_status",
+    table: "aufgaben",
+    action: "update",
+    bot: null,
+    summary: next === "done" ? `Aufgabe erledigen: ${title}` : `Aufgabe wieder öffnen: ${title}`,
+    lines: ["Anzahl: 1", next === "done" ? "Status: Erledigt" : "Status: Offen", title],
+    data: { ids: [task.id], titles: [title], count: 1, scope: "single", confirm: true, status: next },
+  };
+}
+
+function askTaskToggle(task, anchor) {
+  if (!task?.id) {
+    toast("Aufgabe", "Diese Zeile hat keine ID.", "!");
+    return;
+  }
+  document.querySelectorAll(".inline-confirm").forEach((n) => n.remove());
+  const next = task.status === "done" ? "todo" : "done";
+  const box = document.createElement("div");
+  box.className = "inline-confirm";
+  box.setAttribute("role", "group");
+  box.innerHTML = `<span>${esc(next === "done" ? "Erledigen" : "Wieder öffnen")}: ${esc(task.x || task.titel)}</span><button type="button" class="yes">Ja</button><button type="button" class="no">Nein</button>`;
+  anchor.insertAdjacentElement("afterend", box);
+  box.querySelector(".no").onclick = () => box.remove();
+  box.querySelector(".yes").onclick = () => confirmPlan(taskStatusPlan(task, next), box);
+  box.querySelector(".yes").focus();
+}
+
+function taskHtml(t) {
+  const prios = ["hoch", "normal", "niedrig", "mittel"];
+  const opts = prios.map((p) => `<option value="${p}"${p === (t.prioritaet || "normal") ? " selected" : ""}>${p}</option>`).join("");
+  const stand = t.status === "done" ? "erledigt" : t.status === "doing" ? "in Arbeit" : "offen";
+  return `<form class="task-form" data-id="${esc(t.id)}">
+    <label>Titel<input name="titel" value="${esc(t.titel)}" maxlength="300" required></label>
+    <label>Fällig<input name="faellig" type="date" value="${esc(t.faellig || "")}"></label>
+    <label>Priorität<select name="prioritaet">${opts}</select></label>
+    <label>Beschreibung<textarea name="beschreibung" maxlength="5000">${esc(t.beschreibung || "")}</textarea></label>
+    <p class="task-stand">Status: ${esc(stand)}</p>
+    <div class="acts"><button type="submit">Änderung bestätigen</button><button type="button" class="ghost" data-toggle>${t.status === "done" ? "Wieder öffnen" : "Erledigen"}</button></div>
+  </form>`;
+}
+
+function wireTaskForm(form, task) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const titel = form.titel.value.trim();
+    if (!titel) return;
+    const faellig = form.faellig.value;
+    const prioritaet = form.prioritaet.value;
+    const beschreibung = form.beschreibung.value.trim();
+    const patch = { titel, prioritaet, faellig: faellig || null };
+    if (beschreibung) patch.beschreibung = beschreibung;
+    showConfirm({
+      kind: "crm_update",
+      tool: "crm_update",
+      table: "aufgaben",
+      action: "update",
+      bot: null,
+      summary: `Aufgabe ändern: ${titel}`,
+      lines: [`Titel: ${titel}`, `Fällig: ${faellig ? deDate(faellig) : "—"}`, `Priorität: ${prioritaet}`],
+      data: { table: "aufgaben", ids: [task.id], titles: [titel], count: 1, scope: "single", confirm: true, patch },
+    });
+  });
+  form.querySelector("[data-toggle]").addEventListener("click", () => askTaskToggle({ id: task.id, x: task.titel, status: task.status }, form));
+}
+
+async function openTask(id) {
+  if (!id) return openArea("aufgaben", { due: "today" });
+  const cut = speechCut;
+  beginReply();
+  setMode("think");
+  try {
+    const view = DEMO ? demoTask(id) : await loadTask(sb, id);
+    openView(view, "aufgaben");
+    if (cut !== speechCut) return;
+    await say(view.spoken || "Hier ist die Aufgabe.");
+  } catch (e) {
+    if (cut !== speechCut) return;
+    await say(e.message || "Die Aufgabe ist nicht lesbar.");
+  }
+}
+
+async function openBots() {
+  const cut = speechCut;
+  beginReply();
+  setMode("think");
+  const view = botsView();
+  openView(view, "aufgaben");
+  if (cut !== speechCut) return;
+  await say(view.spoken);
+}
+
+function openDash(el) {
+  const kind = el.dataset.open;
+  if (kind === "aufgaben") return openArea("aufgaben", el.dataset.due ? { due: el.dataset.due } : null);
+  if (kind === "pipeline") return openArea("pipeline", el.dataset.stage ? { status: el.dataset.stage } : null);
+  if (kind === "rechnungen") return openArea("rechnungen");
+  if (kind === "bots") return openBots();
+  if (kind === "kalender") return openArea("kalender");
+  if (kind === "task") return openTask(el.dataset.id);
+}
+
+$("#app").addEventListener("click", (e) => {
+  const chk = e.target.closest(".chk");
+  if (chk) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = chk.closest("[data-open='task']");
+    if (!row) return;
+    askTaskToggle({ id: row.dataset.id, x: row.dataset.title, status: row.dataset.status || "todo" }, row);
+    return;
+  }
+  const open = e.target.closest("[data-open]");
+  if (!open || !open.closest("#app")) return;
+  openDash(open);
+});
+$("#app").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const open = e.target.closest("[data-open]");
+  if (!open || !open.closest("#app") || open.tagName === "BUTTON" || open.tagName === "A") return;
+  e.preventDefault();
+  openDash(open);
+});
+
+function showDate(v) {
+  const s = String(v ?? "");
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? deDate(s) : s;
 }
 
 function closeEl(h, instant) {
@@ -316,15 +501,23 @@ function closeHolo() {
 holoLayer.addEventListener("click", (e) => { if (e.target === holoLayer) closeHolo(); });
 
 function showConfirm(plan) {
+  const danger = !!plan.danger;
   const el = document.createElement("article");
-  el.className = "confirm";
+  el.className = danger ? "confirm danger" : "confirm";
+  const yes = danger ? "Endgültig löschen" : "Bestätigen";
   el.innerHTML = `<h4>${esc(plan.summary || "Bitte bestätigen")}</h4><ul>${(plan.lines || []).map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
-    <div class="acts"><button type="button" class="yes">Bestätigen</button><button type="button" class="no">Abbrechen</button></div>`;
+    <div class="acts"><button type="button" class="yes">${yes}</button><button type="button" class="no">Abbrechen</button></div>`;
   el.querySelector(".no").onclick = () => {
     el.remove();
-    say("Abgebrochen. Es wurde nichts gespeichert.");
+    cardNote = `Zuletzt abgebrochen, nichts gespeichert: ${plan.summary || "Karte"}`;
+    say(danger ? "Abgebrochen. Es wurde nichts gelöscht." : "Abgebrochen. Es wurde nichts gespeichert.");
   };
-  el.querySelector(".yes").onclick = () => confirmPlan(plan, el);
+  el.querySelector(".yes").onclick = () => {
+    cardNote = `Karte bestätigt, Speichern läuft: ${plan.summary || "Karte"}`;
+    confirmPlan(plan, el);
+  };
+  cardNote = `Offene Karte, noch nicht gespeichert: ${plan.summary || "Karte"}${danger ? ". Löschen braucht das Wort löschen." : ""}`;
+  notePlanEntities(plan);
   $("#confirms").appendChild(el);
   return el;
 }
@@ -333,6 +526,7 @@ async function confirmPlan(plan, el) {
   el.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   if (DEMO) {
     el.remove();
+    cardNote = `Zuletzt bestätigt, im Demo nicht gespeichert: ${plan.summary || "Karte"}`;
     if (plan.bot) activateBot(plan.bot, plan.summary);
     await say("Im Demo-Modus wird nichts gespeichert. Die Karte zeigt nur, was Jarvis nach deiner Bestätigung schreiben würde.");
     return;
@@ -350,6 +544,11 @@ async function confirmPlan(plan, el) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "Speichern fehlgeschlagen.");
     el.remove();
+    cardNote = `Zuletzt bestätigt und gespeichert: ${body.summary || plan.summary || "Karte"}`;
+    if (sb) {
+      const side = await loadSide(sb).catch(() => null);
+      if (side) renderSide(side);
+    }
     if (body.bot) activateBot(body.bot, body.summary || plan.summary);
     await say(body.log_warning ? `${body.summary}. ${body.log_warning}` : `${body.summary || "Gespeichert"}.`);
     if (body.panel) openArea(panelToArea(body.panel)).catch(() => {});
@@ -370,32 +569,42 @@ function panelToArea(panel) {
 /* ---------- Bereiche ---------- */
 async function openArea(id, filter) {
   currentFilter = filter || null;
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoView(id, filter) : await loadArea(sb, id, filter || {}, userId);
     if (id === "social" && filter?.view === "month" && DEMO) view.title = "Social · Monat";
     openView(view, id);
-    const n = view.posts ? view.posts.length : (view.rows ? view.rows.length : null);
+    if (cut !== speechCut) return;
+    const n = view.posts ? view.posts.length : view.lanes ? Object.values(view.lanes).reduce((s, a) => s + a.length, 0) : (view.rows ? view.rows.length : null);
     const line = view.spoken || (n == null ? `${view.title} ist offen.` : `${view.title}: ${n} Einträge.`);
     await say(line);
   } catch (e) {
+    if (cut !== speechCut) return;
     openView({ title: AREAS.find((a) => a.id === id)?.label || "Bereich", crm: id, note: e.message || "Nicht lesbar.", rows: [], columns: [], kpis: [] }, id);
     await say(e.message || "Der Bereich ist gerade nicht lesbar.");
   }
 }
 
 async function openCustomer(idOrQuery) {
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoCustomer(idOrQuery) : await loadCustomer(sb, idOrQuery);
     openView(view, "contacts");
+    if (cut !== speechCut) return;
     await say(view.spoken || view.note || "Hier ist die Akte.");
   } catch (e) {
+    if (cut !== speechCut) return;
     await say(e.message || "Die Akte ist nicht lesbar.");
   }
 }
 
 async function openBriefing(manual) {
+  const cut = speechCut;
+  beginReply();
   setMode("think");
   try {
     const view = DEMO ? demoBriefing() : await loadBriefing(sb);
@@ -403,8 +612,10 @@ async function openBriefing(manual) {
     if (!DEMO && !manual) {
       try { localStorage.setItem("jarvis_briefing_day", berlinToday()); } catch { /* ignore */ }
     }
+    if (cut !== speechCut) return;
     await say(view.spoken);
   } catch (e) {
+    if (cut !== speechCut) return;
     await say(e.message || "Das Briefing ist gerade nicht lesbar.");
   }
 }
@@ -423,7 +634,23 @@ $("#launcher").addEventListener("click", (e) => {
   toggleMenu(false);
   openArea(id);
 });
+function setNav(open) {
+  const header = document.querySelector("#app header");
+  if (!header) return;
+  header.classList.toggle("nav-open", open);
+  $("#navBtn")?.setAttribute("aria-expanded", open ? "true" : "false");
+}
+$("#navBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setNav(!document.querySelector("#app header").classList.contains("nav-open"));
+});
+addEventListener("click", (e) => {
+  if (e.target.closest("#navBtn") || e.target.closest("#navMenu")) return;
+  setNav(false);
+});
+addEventListener("keydown", (e) => { if (e.key === "Escape") setNav(false); });
 $("#areasBtn").onclick = () => {
+  setNav(false);
   const open = toggleMenu();
   if (open) say("Welchen Bereich soll ich öffnen?");
 };
@@ -456,6 +683,56 @@ function engine(raw) {
   if (create && has(q, "rechnung")) return { say: "Rechnung als Entwurf. Sie gilt nicht als offene Forderung und wird nicht versendet.", cardPlan: { kind: "rechnung", tool: "create_rechnung", summary: "Rechnung anlegen", bot: "cashy", lines: ["Kunde: Musterfirma GmbH", "Status: Entwurf"], data: { status: "entwurf" } } };
   if (create && has(q, "retainer")) return { say: "Retainer bleibt pausiert, bis du ihn ausdrücklich aktivierst.", cardPlan: { kind: "retainer", tool: "create_retainer", summary: "Retainer anlegen", lines: ["Paket: Social Betreuung", "Betrag: 850,00 € / Monat", "Status: pausiert"], data: { status: "pausiert" } } };
   if (has(q, "marky", "reel", "posts erstellen")) return { say: "Aufgabe an Marky. Sie landet erst nach deiner Bestätigung im Kanban.", bot: ["marky", "Posts erstellen"], cardPlan: { kind: "aufgabe", tool: "route_to_bot", bot: "marky", summary: "Aufgabe an Marky", lines: ["Aufgabe: 3 Reels schneiden", "Zuständig: Marky", "Status: Offen"], data: { status: "todo" } } };
+  if (has(q, "e-mail", "email", " mail", "mahnung")) return { say: "E-Mails und Mahnungen verschicke ich nicht. Einen Status kann ich nach deiner Bestätigung setzen, verschickt wird dabei nichts." };
+  if (has(q, "hochlad", "upload")) return { say: "Dateien und Social-Uploads lade ich nicht hoch." };
+  if (has(q, "rückgängig", "rueckgaengig")) {
+    return {
+      say: "Ich setze die letzte Änderung zurück, sobald du bestätigst. Im Demo wird nichts verändert.",
+      cardPlan: { kind: "crm_undo", tool: "crm_undo", summary: "1 Aufgabe auf den vorherigen Stand setzen", lines: ["Anzahl: 1", "Setzt die Felder auf den Stand vor der letzten Änderung.", "Angebot nachfassen"], data: { count: 1 } },
+    };
+  }
+  if ((has(q, "bezahlt") || has(q, "gesendet")) && has(q, "rechnung")) {
+    const paid = has(q, "bezahlt");
+    return {
+      say: "Ich setze den Rechnungsstatus, sobald du bestätigst. Verschickt wird dabei nichts.",
+      cardPlan: { kind: "crm_update", tool: "crm_update", summary: "Rechnung ändern: Beispielrechnung", lines: ["Anzahl: 1", paid ? "status: bezahlt" : "status: offen-rg", "Beispielrechnung"], data: { status: paid ? "bezahlt" : "offen-rg" } },
+    };
+  }
+  if (has(q, "lösch", "loesch")) {
+    if (has(q, "aufgabe", "kanban")) {
+      return {
+        say: "Ich lösche Aufgaben nur nach deiner Bestätigung. Die Karte nennt Anzahl und Titel. Im Demo wird nichts gelöscht.",
+        cardPlan: {
+          kind: "aufgabe_delete",
+          tool: "delete_aufgaben",
+          danger: true,
+          summary: "Alle 3 Aufgaben löschen",
+          lines: ["Anzahl: 3", "Endgültig löschen.", "Angebot nachfassen", "Reel schneiden", "Rechnung prüfen"],
+          data: { count: 3, scope: "all", confirm: true },
+        },
+      };
+    }
+    if (has(q, "einstellung", "geheim", "passwort")) return { say: "Einstellungen und Geheimnisse ändere ich nicht." };
+    const what = has(q, "rechnung") ? "Rechnung" : has(q, "angebot") ? "Angebot" : has(q, "kontakt") ? "Kontakt" : has(q, "termin", "kalender") ? "Termin" : has(q, "retainer") ? "Retainer" : has(q, "wiedervorlage") ? "Wiedervorlage" : has(q, "ausgabe") ? "Ausgabe" : has(q, "social", "post") ? "Social-Post" : has(q, "paket") ? "Paket" : has(q, "ziel") ? "Ziel" : has(q, "roi") ? "ROI" : "";
+    if (!what) return { say: "Sag mir, welchen CRM-Eintrag ich löschen soll. Einstellungen und Geheimnisse ändere ich nicht." };
+    return {
+      say: `Ich lösche ${what === "ROI" ? "die ROI-Zeile" : "den Eintrag"} nur nach deiner Bestätigung. Die Karte nennt Anzahl und Titel. Im Demo wird nichts gelöscht.`,
+      cardPlan: { kind: "crm_delete", tool: "crm_delete", danger: true, summary: `${what} löschen: Beispiel`, lines: ["Anzahl: 1", "Endgültig löschen.", "Beispiel"], data: { count: 1 } },
+    };
+  }
+  if (has(q, "aufgabe", "kanban") && has(q, "erledig", "abhake", "abhaken", "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt")) {
+    const reopen = has(q, "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt");
+    return {
+      say: reopen ? "Ich öffne die Aufgabe wieder, sobald du bestätigst." : "Ich markiere die Aufgabe als erledigt, sobald du bestätigst.",
+      cardPlan: {
+        kind: "aufgabe_status",
+        tool: "set_aufgaben_status",
+        summary: reopen ? "Aufgabe wieder öffnen: Angebot nachfassen" : "Aufgabe erledigen: Angebot nachfassen",
+        lines: ["Anzahl: 1", reopen ? "Status: Offen" : "Status: Erledigt", "Angebot nachfassen"],
+        data: { status: reopen ? "todo" : "done", count: 1 },
+      },
+    };
+  }
   if (has(q, "social", "content", "instagram", "posts")) return { area: "social", say: "Hier ist der Social-Plan. Entwürfe haben den Status Idee." };
   if (has(q, "rechnung", "rechnungen")) return { area: "rechnungen", say: "Hier sind die Rechnungen." };
   if (has(q, "angebot")) return { area: "angebote", say: "Hier sind die Angebote." };
@@ -476,18 +753,87 @@ function engine(raw) {
     : null };
 }
 
+function noteEntity(id, label, table) {
+  const key = String(id || "");
+  const name = String(label || "").trim();
+  if (!key || !name) return;
+  entityNotes = entityNotes.filter((n) => n.id !== key);
+  entityNotes.push({ id: key, label: name.slice(0, 80), table: table || "crm" });
+  if (entityNotes.length > 8) entityNotes.shift();
+}
+
+function notePlanEntities(plan) {
+  const data = plan?.data || {};
+  const ids = Array.isArray(data.ids) ? data.ids : [];
+  const titles = Array.isArray(data.titles) ? data.titles : [];
+  ids.forEach((id, i) => noteEntity(id, titles[i] || plan.summary, plan.table || "crm"));
+  if (data.kunde_id) noteEntity(data.kunde_id, plan.summary, "contacts");
+  if (data.kontakt_id) noteEntity(data.kontakt_id, plan.summary, "contacts");
+}
+
+function contextLine() {
+  const bits = [];
+  if (entityNotes.length) bits.push(entityNotes.map((n) => `${n.label} (${n.table} ${n.id})`).join("; "));
+  if (cardNote) bits.push(cardNote);
+  return bits.join(". ");
+}
+
+function rememberTurn() {
+  const now = Date.now();
+  if (historyExpired(historyAt, now, HISTORY_IDLE_MS)) {
+    history = [];
+    entityNotes = [];
+    cardNote = "";
+  }
+  historyAt = now;
+}
+
+function noteUi(data) {
+  const rows = data?.data?.rows;
+  if (!Array.isArray(rows)) return;
+  for (const row of rows.slice(0, 8)) {
+    const cells = row?.cells || {};
+    const label = cells.firma || cells.titel || cells.betreff || cells.nr || cells.text || "";
+    if (row?.id && label) noteEntity(row.id, label, data.panel || "crm");
+  }
+}
+
 async function ask(text) {
-  text = String(text || "").trim();
+  text = cleanTranscript(text);
   if (!text) return;
+  const card = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
+  if (card) {
+    const act = voiceCardAction(text, card.classList.contains("danger"));
+    if (act === "confirm") {
+      card.querySelector(".yes")?.click();
+      return;
+    }
+    if (act === "reject") {
+      card.querySelector(".no")?.click();
+      return;
+    }
+  }
+  if (isStopCommand(text)) {
+    $("#inp").value = "";
+    interruptSpeech();
+    toast("Jarvis", "Alles klar.", "J");
+    return;
+  }
+  const cut = speechCut;
+  $("#inp").value = "";
+  beginReply();
   userMsg(text);
   speakToken += 1;
   speech.cancel();
   if (!DEMO) {
+    rememberTurn();
     history.push({ role: "user", content: text });
-    await liveAsk();
+    await liveAsk(cut);
     return;
   }
+  if (cut !== speechCut) return;
   const r = engine(text);
+  if (cut !== speechCut) return;
   if (r.menu) toggleMenu(true);
   if (r.bot) activateBot(r.bot[0], r.bot[1]);
   if (r.card) showConfirm(demoMeeting());
@@ -504,7 +850,9 @@ async function ask(text) {
   if (r.say) await say(r.say);
 }
 
-async function liveAsk() {
+async function liveAsk(cut) {
+  const gen = beginReply();
+  speakEpoch = gen;
   setMode("think");
   const el = document.createElement("div");
   el.className = "msg j";
@@ -519,8 +867,9 @@ async function liveAsk() {
         apikey: SUPABASE_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages: history.slice(-12) }),
+      body: JSON.stringify({ messages: withEntityContext(history.slice(-12), contextLine()) }),
     });
+    if (cut !== speechCut) return;
     if (!res.ok || !res.body) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || "Jarvis ist nicht erreichbar.");
@@ -529,17 +878,20 @@ async function liveAsk() {
     const dec = new TextDecoder();
     let buf = "";
     let full = "";
-    const voiced = !speech.isMuted();
+    const voiced = !speech.isMuted() && cut === speechCut;
     const voice = voiced ? speech.openStream({
       onstart() {
+        if (cut !== speechCut) return;
         setMode("speak");
         S.speakEnd = performance.now() + 120000;
       },
       onboundary() { S.impulse = 1; },
       onend() {
+        if (speakEpoch !== gen) return;
         S.speakEnd = 0;
+        if (cut !== speechCut) return;
         if (S.mode === "speak") endSpeak();
-        else if (S.mode === "think") setMode("idle");
+        else finishReply(gen);
       },
       onfallback() { toast("Stimme", "ElevenLabs nicht erreichbar. Ich nutze die Browserstimme.", "i"); },
     }) : null;
@@ -559,20 +911,25 @@ async function liveAsk() {
           full += data.text;
           sp.textContent = full;
           $("#log").scrollTop = 1e9;
-          voice?.push(data.text);
+          if (cut === speechCut) voice?.push(data.text);
         } else if (ev === "confirm") showConfirm(data);
-        else if (ev === "ui" && data.data) openView(data.data, panelToArea(data.panel));
+        else if (ev === "ui" && data.data) {
+          noteUi(data);
+          openView(data.data, panelToArea(data.panel));
+        }
         else if (ev === "bot" && data.id) activateBot(data.id, data.task || "Auftrag");
         else if (ev === "error") throw new Error(data.message || "Fehler");
       }
     }
     if (full) history.push({ role: "assistant", content: full });
+    if (cut !== speechCut) return;
     if (voice) voice.close();
-    else setMode("idle");
+    else finishReply(gen);
   } catch (e) {
     speech.cancel();
     sp.textContent = e.message || "Jarvis ist gerade nicht erreichbar.";
-    setMode("idle");
+    S.speakEnd = 0;
+    if (cut === speechCut) finishReply(gen);
   }
 }
 
@@ -597,18 +954,82 @@ $("#mute").onclick = () => {
 };
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const listenSupport = handsFreeSupport(window);
+const utterance = createUtterance();
+let epoch = 0;
+let speakEpoch = 0;
+let speechCut = 0;
+let armed = false;
+let handsPending = false;
+let ptt = false;
+let armGen = 0;
 let rec = null;
+let activeTicket = 0;
 let micStream = null;
 let analyser = null;
-$("#mic").onclick = async () => {
-  if (S.listening) return stopMic();
-  speech.cancel();
-  S.listening = true;
-  $("#mic").classList.add("on");
-  setMode("listen");
-  $("#hMic").textContent = "An";
+
+function storedHands() {
+  try { return localStorage.getItem(HANDSFREE_KEY); } catch { return null; }
+}
+function handsOn() {
+  return handsFreePref(storedHands()) === true;
+}
+function writeHands(on) {
+  try { localStorage.setItem(HANDSFREE_KEY, on ? "1" : "0"); } catch { /* privat */ }
+}
+function noteGrant() {
+  if (!listenSupport.ok) return;
+  const raw = storedHands();
+  if (prefAfterGrant(raw) !== "1" || raw === "1") return;
+  writeHands(true);
+  armed = true;
+  toast("Freisprechen", "Ist an. Eine kurze Pause sendet den Satz. Der Kopfhörer schaltet es aus.", "i");
+  paintListen();
+}
+
+function paintListen() {
+  const on = handsOn() && listenSupport.ok;
+  const hands = $("#hands");
+  const hint = $("#listenHint");
+  const hintText = handsFreeHint(listenSupport.reason);
+  if (hands) {
+    hands.classList.toggle("on", on);
+    hands.setAttribute("aria-pressed", on ? "true" : "false");
+    hands.setAttribute("aria-disabled", listenSupport.ok ? "false" : "true");
+    hands.title = listenSupport.ok ? (on ? "Freisprechen aus" : "Freisprechen an") : hintText;
+  }
+  if (hint) {
+    hint.textContent = hintText;
+    hint.hidden = !hintText;
+  }
+  const micOn = ptt || (on && armed && S.mode === "listen");
+  $("#mic").classList.toggle("on", micOn);
+  $("#mic").setAttribute("aria-pressed", micOn ? "true" : "false");
+  $("#mic").title = on ? "Satz jetzt senden" : "Sprechen";
+  $("#hMic").textContent = ptt ? "An" : (on && armed && S.mode === "listen" ? "Dauer" : "Aus");
+  S.listening = micOn;
+}
+
+function haltRecognition() {
+  activeTicket += 1;
+  const current = rec;
+  rec = null;
+  try { current && current.abort(); } catch { /* ignore */ }
+}
+
+function closeMicMeter() {
+  if (micStream) micStream.getTracks().forEach((t) => t.stop());
+  micStream = null;
+  if (analyser?._ac) analyser._ac.close().catch(() => {});
+  analyser = null;
+  S.mic = 0;
+}
+
+async function openMicMeter() {
+  if (micStream) return true;
+  if (!navigator.mediaDevices?.getUserMedia) return false;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const ac = new (window.AudioContext || window.webkitAudioContext)();
     const src = ac.createMediaStreamSource(micStream);
     analyser = ac.createAnalyser();
@@ -616,46 +1037,245 @@ $("#mic").onclick = async () => {
     analyser._data = new Uint8Array(analyser.fftSize);
     src.connect(analyser);
     analyser._ac = ac;
+    return true;
   } catch {
-    toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
-    stopMic();
+    return false;
+  }
+}
+
+function beginReply() {
+  epoch += 1;
+  utterance.reset();
+  haltRecognition();
+  return epoch;
+}
+
+function finishReply(gen) {
+  if (gen !== epoch) return;
+  if (speech.isSpeaking()) return;
+  epoch += 1;
+  if (ptt) return;
+  if (armed && handsOn() && listenSupport.ok) {
+    setMode("listen", "FREISPRECHEN");
+    armHandsFree({ quiet: true }).then((ok) => {
+      if (ok || rec || ptt || !handsOn() || !armed) return;
+      handsPending = true;
+      if (S.mode === "listen") setMode("idle");
+    });
     return;
   }
+  setMode("idle");
+}
+
+function interruptSpeech() {
+  speechCut += 1;
+  speech.cancel();
+  speakToken += 1;
+  S.speakEnd = 0;
+  utterance.reset();
+  finishReply(epoch);
+}
+
+function heardText(results) {
+  let finalText = "";
+  let interimText = "";
+  const list = results || [];
+  for (let i = 0; i < list.length; i++) {
+    const result = list[i];
+    const t = String(result[0]?.transcript || "").trim();
+    if (!t) continue;
+    if (result.isFinal) finalText = finalText ? `${finalText} ${t}` : t;
+    else interimText = interimText ? `${interimText} ${t}` : t;
+  }
+  return { finalText, interimText };
+}
+
+function startContinuous(ticket, seenEpoch) {
+  if (!SR || ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return false;
+  let session;
+  try { session = new SR(); } catch { return false; }
+  let recError = "";
+  rec = session;
+  session.lang = "de-DE";
+  session.continuous = true;
+  session.interimResults = true;
+  session.onresult = (e) => {
+    if (ticket !== activeTicket || epoch !== seenEpoch || ptt) return;
+    const heard = heardText(e.results);
+    utterance.sync(heard.finalText, heard.interimText, (text) => {
+      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
+      const cleaned = cleanTranscript(text);
+      const openCard = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
+      if (openCard && voiceCardAction(cleaned, openCard.classList.contains("danger"))) {
+        ask(cleaned);
+        return;
+      }
+      const gated = wake.accept(cleaned);
+      if (!gated.take) return;
+      ask(gated.text);
+    });
+    const field = $("#inp");
+    if (field) field.value = cleanTranscript(utterance.preview());
+  };
+  session.onerror = (ev) => { recError = ev?.error || "error"; };
+  session.onend = () => {
+    if (rec === session) rec = null;
+    if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return;
+    if (recError === "not-allowed" || recError === "service-not-allowed") {
+      armed = false;
+      handsPending = true;
+      paintListen();
+      if (S.mode === "listen") setMode("idle");
+      toast("Mikrofon", "Kein Zugriff. Tippe nochmal auf den Kopfhörer.", "!");
+      return;
+    }
+    if (recError === "audio-capture" && micStream) closeMicMeter();
+    recError = "";
+    setTimeout(() => {
+      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
+      startContinuous(ticket, seenEpoch);
+    }, 280);
+  };
+  try {
+    session.start();
+    return true;
+  } catch {
+    if (rec === session) rec = null;
+    return false;
+  }
+}
+
+function armHandsFree(opts = {}) {
+  if (!listenSupport.ok || !handsOn()) return Promise.resolve(false);
+  const quiet = !!opts.quiet;
+  const mine = ++armGen;
+  armed = true;
+  handsPending = false;
+  return (async () => {
+    haltRecognition();
+    const ticket = activeTicket;
+    const seenEpoch = epoch;
+    const metered = await openMicMeter();
+    if (mine !== armGen || ticket !== activeTicket || seenEpoch !== epoch || !armed || !handsOn() || ptt) return false;
+    if (!metered && quiet) return false;
+    if (metered) noteGrant();
+    const started = startContinuous(ticket, seenEpoch);
+    if (mine !== armGen || !started) return false;
+    noteGrant();
+    if (S.mode !== "think" && S.mode !== "speak") setMode("listen", "FREISPRECHEN");
+    else paintListen();
+    return true;
+  })();
+}
+
+function bootHandsFree() {
+  paintListen();
+  if (!listenSupport.ok || !handsOn()) return;
+  armHandsFree({ quiet: true }).then((ok) => {
+    if (!ok && handsOn() && armed && !rec && !ptt) handsPending = true;
+  });
+}
+
+async function startPtt() {
+  if (ptt) return;
+  ptt = true;
+  utterance.reset();
+  haltRecognition();
+  setMode("listen", "SPRECHEN SIE JETZT");
+  const metered = await openMicMeter();
+  if (!ptt) return;
+  if (!metered) {
+    toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
+    stopPtt();
+    return;
+  }
+  noteGrant();
   if (!SR) {
     toast("Spracherkennung", "In diesem Browser nicht verfügbar.", "i");
-    setTimeout(() => { if (S.listening) stopMic(); }, 4000);
+    setTimeout(() => { if (ptt) stopPtt(); }, 4000);
     return;
   }
-  rec = new SR();
-  rec.lang = "de-DE";
-  rec.interimResults = true;
-  rec.onresult = (e) => {
-    const r = [...e.results].map((x) => x[0].transcript).join("");
-    $("#inp").value = r;
+  let session;
+  try { session = new SR(); } catch { stopPtt(); return; }
+  rec = session;
+  session.lang = "de-DE";
+  session.interimResults = true;
+  session.continuous = false;
+  session.onresult = (e) => {
+    if (!ptt || rec !== session) return;
+    let said = "";
+    for (let i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
+    said = cleanTranscript(said);
+    $("#inp").value = said;
     if (e.results[e.results.length - 1].isFinal) {
-      $("#inp").value = "";
-      stopMic();
-      ask(r);
+      stopPtt({ keepMode: true });
+      ask(said);
     }
   };
-  rec.onerror = () => {};
-  rec.onend = () => { if (S.listening) stopMic(); };
-  try { rec.start(); } catch { /* ignore */ }
+  session.onerror = () => {};
+  session.onend = () => { if (ptt && rec === session) stopPtt(); };
+  try { session.start(); } catch { /* ignore */ }
+}
+
+function stopPtt(opts = {}) {
+  const was = ptt;
+  ptt = false;
+  if (was) haltRecognition();
+  if (!(armed && handsOn() && listenSupport.ok)) closeMicMeter();
+  if (was && !opts.keepMode && S.mode === "listen") setMode("idle");
+  else paintListen();
+}
+
+$("#hands").onclick = async () => {
+  speech.unlock?.();
+  if (!listenSupport.ok) {
+    toast("Freisprechen", handsFreeHint(listenSupport.reason), "i");
+    return;
+  }
+  if (handsOn()) {
+    writeHands(false);
+    armed = false;
+    handsPending = false;
+    utterance.reset();
+    if (!ptt) {
+      haltRecognition();
+      closeMicMeter();
+      if (S.mode === "listen") setMode("idle");
+    }
+    paintListen();
+    return;
+  }
+  writeHands(true);
+  const ok = await armHandsFree();
+  if (!ok && handsOn()) toast("Mikrofon", "Kein Zugriff. Bitte die Freigabe erlauben und nochmal tippen.", "!");
 };
 
-function stopMic() {
-  S.listening = false;
-  $("#mic").classList.remove("on");
-  $("#hMic").textContent = "Aus";
-  try { rec && rec.abort(); } catch { /* ignore */ }
-  rec = null;
-  if (micStream) micStream.getTracks().forEach((t) => t.stop());
-  micStream = null;
-  if (analyser?._ac) analyser._ac.close().catch(() => {});
-  analyser = null;
-  S.mic = 0;
-  if (S.mode === "listen") setMode("idle");
-}
+$("#mic").onclick = async () => {
+  speech.unlock?.();
+  if (handsOn() && listenSupport.ok) {
+    if (S.mode === "speak" || S.mode === "think" || speech.isSpeaking()) {
+      interruptSpeech();
+      return;
+    }
+    const pending = utterance.flushNow();
+    if (pending) {
+      ask(pending);
+      return;
+    }
+    if (!rec) {
+      const ok = await armHandsFree();
+      if (!ok) toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
+    }
+    return;
+  }
+  if (ptt) {
+    const pending = $("#inp").value.trim();
+    stopPtt({ keepMode: !!pending });
+    if (pending) ask(pending);
+    return;
+  }
+  await startPtt();
+};
 
 /* ---------- Canvas ---------- */
 const sc = $("#stars");
@@ -856,8 +1476,12 @@ $("#logout").onclick = async () => {
   location.reload();
 };
 
-const chips = ["Briefing", "Was ist der Stand bei Beispiel-Café?", "Gespräch mit Beispiel-Café notieren", "Offene Rechnungen", "Social diese Woche", "Pipeline", "Bereiche"];
-$("#chips").innerHTML = chips.map((c) => `<button type="button" class="chip">${esc(c)}</button>`).join("");
+if (DEMO) {
+  const chips = ["Briefing", "Was ist der Stand bei Beispiel-Café?", "Gespräch mit Beispiel-Café notieren", "Offene Rechnungen", "Social diese Woche", "Pipeline", "Bereiche"];
+  $("#chips").innerHTML = chips.map((c) => `<button type="button" class="chip">${esc(c)}</button>`).join("");
+} else {
+  $("#chips").remove();
+}
 
 renderSide(DEMO ? demoSide() : { today: [], counts: {}, volume: 0, invoices: [] });
 tickClock();
@@ -867,6 +1491,7 @@ sizeCore();
 addEventListener("resize", () => { initStars(); sizeCore(); });
 if (window.ResizeObserver) new ResizeObserver(sizeCore).observe(cv);
 setMode("idle");
+bootHandsFree();
 requestAnimationFrame(loop);
 if (params.has("noboot")) finishBoot();
 else runBoot();
@@ -874,6 +1499,56 @@ bootSession();
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+}
+
+installHint();
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.matchMedia("(display-mode: fullscreen)").matches
+    || window.navigator.standalone === true;
+}
+
+function installHintSeen() {
+  try { return localStorage.getItem("jarvis_install_hint") === "1"; } catch { return true; }
+}
+
+function installHint() {
+  if (isStandalone() || installHintSeen()) return;
+  if (!window.matchMedia("(max-width: 800px)").matches) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let deferred = null;
+  const el = document.createElement("div");
+  el.className = "install-hint";
+  el.setAttribute("role", "note");
+  const text = document.createElement("span");
+  text.innerHTML = ios
+    ? "Vollbild: Teilen, dann <b>Zum Home-Bildschirm</b>."
+    : "Vollbild: Browser-Menü, dann <b>Zum Home-Bildschirm</b>.";
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.textContent = "OK";
+  const dismiss = () => {
+    try { localStorage.setItem("jarvis_install_hint", "1"); } catch { /* Hinweis bleibt bis zum Neuladen */ }
+    el.remove();
+  };
+  ok.addEventListener("click", async () => {
+    if (deferred) {
+      deferred.prompt();
+      try { await deferred.userChoice; } catch { /* Abbruch ist in Ordnung */ }
+      deferred = null;
+    }
+    dismiss();
+  });
+  el.append(text, ok);
+  document.body.appendChild(el);
+  window.addEventListener("beforeinstallprompt", (e) => {
+    if (!el.isConnected) return;
+    e.preventDefault();
+    deferred = e;
+    text.innerHTML = "Vollbild: <b>Zum Home-Bildschirm</b>.";
+    ok.textContent = "Installieren";
+  });
 }
 
 async function applyQuery() {

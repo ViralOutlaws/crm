@@ -1,16 +1,26 @@
 // Jarvis-Chat: prüft das Nutzer-JWT, liest und schreibt im CRM nur mit diesem JWT (RLS).
 // Schreibwerkzeuge werden nicht ausgeführt, sondern als Bestätigung an die Oberfläche gegeben.
-// Bestätigte Pläne prüft revalidate() erneut. Löschen, Mailversand und Bezahlt/Versendet gibt es nicht.
+// Bestätigte Pläne prüft revalidate() erneut. Danach darf Jarvis in den CRM-Tabellen anlegen, ändern und löschen.
+// Einstellungen und Geheimnisse bleiben tabu. Mails und Datei-Uploads gibt es nicht.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { customerFile, fuzzyFind, morningBriefing, openArea } from "./areas.ts";
 import {
   anthropicTools,
   berlinToday,
   botFromText,
+  BOTS,
+  matchBot,
+  MAX_TOOL_ROUNDS,
+  AUFGABE_MATCH_LIMIT,
   isWriteTool,
+  normAufgabeStatus,
   openPanelFor,
+  parseAufgabeSelector,
+  planAufgabeChange,
   planFromTool,
   revalidate,
+  type AufgabeRow,
+  type AufgabeSelector,
   socialUpdateAllowed,
   sumNetto,
   systemBlocks,
@@ -18,6 +28,23 @@ import {
   type Ctx,
   type Plan,
 } from "./logic.ts";
+import {
+  applyVirtual,
+  areaForTable,
+  columnsFromSnapshot,
+  CRM_MATCH_LIMIT,
+  parseCrmSelector,
+  loggedChange,
+  planCrmChange,
+  planCrmInsert,
+  planCrmUndo,
+  rowTitle,
+  searchColumns,
+  splitWrite,
+  stampsUpdatedAt,
+  type CrmSelector,
+  type UndoEntry,
+} from "./schema.ts";
 
 const encoder = new TextEncoder();
 
@@ -133,7 +160,7 @@ async function runChat(
   const tools = anthropicTools();
   const messages: ChatMsg[] = history.map((m) => ({ role: m.role, content: m.content }));
 
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const turn = await streamAnthropic(apiKey, model, system, messages, tools, (text) => send("delta", { text }));
     const toolUses = turn.content.filter((b) => b.type === "tool_use") as Array<{ type: "tool_use"; id: string; name: string; input: unknown }>;
     if (!toolUses.length || turn.stop !== "tool_use") return;
@@ -145,6 +172,17 @@ async function runChat(
       try {
         if (isWriteTool(tool.name)) {
           let input = tool.input;
+          const bound = await bindNamedCustomer(sb, tool.name, input);
+          if (bound.blocked) {
+            if (bound.ui) send("ui", bound.ui);
+            results.push({
+              type: "tool_result",
+              tool_use_id: tool.id,
+              content: JSON.stringify(bound.forModel),
+            });
+            continue;
+          }
+          input = bound.input;
           if (tool.name === "meeting_recap") {
             const prep = await prepareMeeting(sb, tool.input);
             if (prep.blocked) {
@@ -158,7 +196,11 @@ async function runChat(
             }
             input = prep.input;
           }
-          const plan = planFromTool(tool.name, input, ctx);
+          const plan = tool.name === "set_aufgaben_status" || tool.name === "delete_aufgaben"
+            ? await planAufgabenWrite(sb, tool.name, input, ctx)
+            : tool.name === "crm_insert" || tool.name === "crm_update" || tool.name === "crm_delete" || tool.name === "crm_undo"
+            ? await planCrmWrite(sb, tool.name, input, ctx)
+            : planFromTool(tool.name, input, ctx);
           send("confirm", plan);
           if (plan.bot) send("bot", { id: plan.bot, task: plan.summary, pending: true });
           results.push({
@@ -299,6 +341,12 @@ async function executeConfirm(
   ctx: Ctx,
 ): Promise<Record<string, unknown>> {
   const plan = revalidate({ kind: body.kind, tool: body.tool, bot: body.bot, data: body.data }, ctx);
+  if (plan.kind === "crm_insert" || plan.kind === "crm_update" || plan.kind === "crm_delete" || plan.kind === "crm_undo") {
+    return await executeCrm(sb, workspaceId, userId, plan, ctx);
+  }
+  if (plan.kind === "aufgabe_status" || plan.kind === "aufgabe_delete") {
+    return await executeAufgabeChange(sb, workspaceId, userId, plan);
+  }
   if (plan.kind === "meeting") {
     const written = await writeMeeting(sb, workspaceId, plan, ctx);
     let warning: string | null = null;
@@ -596,6 +644,156 @@ async function writeMeeting(sb: SupabaseClient, ws: string, plan: Plan, ctx: Ctx
   return { id, logs };
 }
 
+const CUSTOMER_FK: Record<string, "kunde_id" | "kontakt_id"> = {
+  create_angebot: "kunde_id",
+  create_rechnung: "kunde_id",
+  create_retainer: "kunde_id",
+  create_roi: "kunde_id",
+  create_aufgabe: "kontakt_id",
+  create_wiedervorlage: "kontakt_id",
+  create_kal_event: "kontakt_id",
+  route_to_bot: "kontakt_id",
+};
+
+const INSERT_FK: Record<string, "kunde_id" | "kontakt_id"> = {
+  angebote: "kunde_id",
+  rechnungen: "kunde_id",
+  retainer: "kunde_id",
+  roi_daten: "kunde_id",
+  aufgaben: "kontakt_id",
+  wiedervorlagen: "kontakt_id",
+  kal_events: "kontakt_id",
+};
+
+type Bind =
+  | { blocked: true; ui: { panel: string; data: unknown } | null; forModel: unknown }
+  | { blocked: false; input: unknown };
+
+function customerName(o: Record<string, unknown>): string {
+  for (const key of ["kunde", "kunde_name", "kontakt", "kontakt_name", "firma"]) {
+    const s = typeof o[key] === "string" ? o[key].trim() : "";
+    if (s && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return s;
+  }
+  return "";
+}
+
+function dropCustomerNames(o: Record<string, unknown>) {
+  for (const key of ["kunde", "kunde_name", "kontakt", "kontakt_name"]) delete o[key];
+}
+
+function manyContacts(rows: Array<{ id: string; firma: string | null; person: string | null }>) {
+  return {
+    panel: "contacts",
+    data: {
+      title: "Mehrere Treffer",
+      meta: "Bitte auswählen",
+      crm: "contacts",
+      wide: true,
+      columns: [{ key: "firma", label: "Firma" }, { key: "person", label: "Person" }],
+      rows: rows.map((r) => ({
+        id: r.id,
+        open: "customer",
+        cells: { firma: r.firma || "", person: r.person || "" },
+      })),
+      kpis: [{ label: "Treffer", value: String(rows.length) }],
+      note: "Mehrere Kontakte passen. Nicht raten.",
+    },
+  };
+}
+
+async function resolveOne(sb: SupabaseClient, name: string): Promise<Bind | { id: string }> {
+  const found = await fuzzyFind(sb, name);
+  if (found.kind === "none") {
+    return {
+      blocked: true,
+      ui: null,
+      forModel: { status: "not_saved", hinweis: `Kein Kontakt für „${name}“. Nichts gespeichert. Frag nach dem Namen, erfinde niemanden.` },
+    };
+  }
+  if (found.kind === "many") {
+    return {
+      blocked: true,
+      ui: manyContacts(found.rows),
+      forModel: { status: "not_saved", hinweis: "Mehrere Kontakte. Frag nach, welchen. Noch nichts gespeichert.", kandidaten: found.rows },
+    };
+  }
+  return { id: found.id };
+}
+
+async function bindNamedCustomer(sb: SupabaseClient, tool: string, input: unknown): Promise<Bind> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { blocked: false, input };
+  const o = { ...(input as Record<string, unknown>) };
+  if (tool === "crm_insert") {
+    const fk = INSERT_FK[String(o.table || "")];
+    if (!fk || !Array.isArray(o.rows)) return { blocked: false, input: o };
+    const rows = o.rows.map((row) => row && typeof row === "object" && !Array.isArray(row) ? { ...(row as Record<string, unknown>) } : row);
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      const rec = row as Record<string, unknown>;
+      if (rec[fk]) {
+        dropCustomerNames(rec);
+        continue;
+      }
+      const name = customerName(rec);
+      if (!name) continue;
+      const hit = await resolveOne(sb, name);
+      if ("blocked" in hit) return hit;
+      rec[fk] = hit.id;
+      dropCustomerNames(rec);
+      if (fk === "kunde_id") delete rec.firma;
+    }
+    return { blocked: false, input: { ...o, rows } };
+  }
+  const fk = CUSTOMER_FK[tool];
+  if (!fk || o[fk]) return { blocked: false, input };
+  const name = customerName(o);
+  if (!name) return { blocked: false, input };
+  const hit = await resolveOne(sb, name);
+  if ("blocked" in hit) return hit;
+  o[fk] = hit.id;
+  dropCustomerNames(o);
+  if (fk === "kunde_id") delete o.firma;
+  return { blocked: false, input: o };
+}
+
+async function listTasks(sb: SupabaseClient, o: Record<string, unknown>, ctx: Ctx) {
+  let q = sb.from("aufgaben").select("id, titel, beschreibung, status, prioritaet, faellig").limit(80);
+  const bot = o.bot ? matchBot(o.bot) : null;
+  if (o.bot && !bot) throw new Error("Bot muss Webby, Marky, Saley, Cashy oder Developy sein.");
+  if (bot) q = q.ilike("beschreibung", `%Zuständig: ${BOTS[bot].name}%`);
+  if (o.done === true || String(o.done).toLowerCase() === "true") q = q.eq("status", "done");
+  if (o.done === false || String(o.done).toLowerCase() === "false") q = q.neq("status", "done");
+  const { data, error } = await q;
+  if (error) throw new Error(dbErr(error.message));
+  let rows = data ?? [];
+  const due = String(o.due || "");
+  if (due === "overdue") rows = rows.filter((t) => t.faellig && t.faellig < ctx.today && t.status !== "done");
+  else if (due === "today") rows = rows.filter((t) => t.faellig && t.faellig <= ctx.today && t.status !== "done");
+  else if (due === "week") {
+    const range = weekRange(ctx.today);
+    rows = rows.filter((t) => t.faellig && t.faellig >= range.from && t.faellig <= range.to);
+  }
+  const query = likeSafe(o.query).toLowerCase();
+  if (query) {
+    rows = rows.filter((t) => `${t.titel || ""} ${t.beschreibung || ""}`.toLowerCase().includes(query));
+  }
+  const aufgaben = rows.slice(0, 25).map((t) => ({
+    id: t.id,
+    titel: t.titel,
+    status: t.status,
+    faellig: t.faellig,
+    bot: botFromText(t.beschreibung),
+  }));
+  return {
+    ui: null,
+    forModel: {
+      hinweis: aufgaben.length ? "Live aus dem CRM. IDs nicht vorlesen." : "Keine passenden Aufgaben.",
+      anzahl: rows.length,
+      aufgaben,
+    },
+  };
+}
+
 async function prepareMeeting(sb: SupabaseClient, input: unknown): Promise<
   | { blocked: true; ui: { panel: string; data: unknown } | null; forModel: unknown }
   | { blocked: false; input: Record<string, unknown> }
@@ -672,6 +870,402 @@ async function writeSocial(sb: SupabaseClient, ws: string, plan: Plan, ctx: Ctx)
   return String(found.data.id);
 }
 
+const AUFGABE_CHUNK = 80;
+
+async function planAufgabenWrite(sb: SupabaseClient, name: string, input: unknown, ctx: Ctx): Promise<Plan> {
+  const mode = name === "delete_aufgaben" ? "delete" : "status";
+  const selector = parseAufgabeSelector(input, mode);
+  const raw = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const change = mode === "delete"
+    ? { op: "delete" as const }
+    : { op: "status" as const, status: normAufgabeStatus(raw.status) };
+  const rows = await findAufgaben(sb, selector, ctx, change);
+  return planAufgabeChange(selector, rows, change);
+}
+
+async function findAufgaben(
+  sb: SupabaseClient,
+  selector: AufgabeSelector,
+  ctx: Ctx,
+  change: { op: "status"; status: "done" | "todo" } | { op: "delete" },
+): Promise<AufgabeRow[]> {
+  const run = async (ids?: string[]) => {
+    let q = sb.from("aufgaben").select("id, titel, status, beschreibung").order("titel", { ascending: true }).limit(AUFGABE_MATCH_LIMIT + 1);
+    if (ids) q = q.in("id", ids);
+    if (selector.bot) q = q.ilike("beschreibung", `%Zuständig: ${BOTS[selector.bot].name}%`);
+    if (selector.query) {
+      const safe = likeSafe(selector.query);
+      if (!safe) throw new Error("Der Titelfilter ist leer.");
+      const asBot = matchBot(selector.query);
+      if (asBot) q = q.or(`titel.ilike.%${safe}%,beschreibung.ilike.%Zuständig: ${BOTS[asBot].name}%`);
+      else q = q.or(`titel.ilike.%${safe}%,beschreibung.ilike.%${safe}%`);
+    }
+    if (change.op === "status") q = change.status === "done" ? q.neq("status", "done") : q.eq("status", "done");
+    if (selector.only === "open" || selector.only === "overdue") q = q.neq("status", "done");
+    else if (selector.only === "done") q = q.eq("status", "done");
+    else if (selector.only === "doing") q = q.eq("status", "doing");
+    if (selector.only === "overdue") q = q.not("faellig", "is", null).lt("faellig", ctx.today);
+    const { data, error } = await q;
+    if (error) throw new Error(dbErr(error.message));
+    return (data ?? []) as Array<{ id: string; titel: string | null; status: string | null }>;
+  };
+
+  let rows: Array<{ id: string; titel: string | null; status: string | null }> = [];
+  if (selector.ids.length) {
+    for (let i = 0; i < selector.ids.length; i += AUFGABE_CHUNK) {
+      rows.push(...await run(selector.ids.slice(i, i + AUFGABE_CHUNK)));
+      if (rows.length > AUFGABE_MATCH_LIMIT) break;
+    }
+  } else {
+    rows = await run();
+  }
+  if (rows.length > AUFGABE_MATCH_LIMIT) throw new Error("Mehr als 300 Aufgaben. Bitte enger filtern.");
+  return rows.map((r) => ({
+    id: String(r.id),
+    titel: String(r.titel ?? ""),
+    status: r.status == null ? null : String(r.status),
+  }));
+}
+
+async function executeAufgabeChange(
+  sb: SupabaseClient,
+  ws: string,
+  userId: string,
+  plan: Plan,
+): Promise<Record<string, unknown>> {
+  const ids = Array.isArray(plan.data.ids) ? plan.data.ids.map((id) => String(id)) : [];
+  const loaded = await loadAufgabenByIds(sb, ids);
+  const byId = new Map(loaded.map((row) => [String(row.id), row]));
+  if (ids.some((id) => !byId.has(id))) throw new Error("Keine Aufgabe gefunden oder kein Zugriff.");
+  const rows = ids.map((id) => byId.get(id)!);
+
+  if (plan.kind === "aufgabe_status") {
+    const status = plan.data.status === "todo" ? "todo" : "done";
+    const now = new Date().toISOString();
+    for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+      const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+      const { data, error } = await sb.from("aufgaben").update({ status, updated_at: now }).in("id", chunk).select("id");
+      if (error) throw new Error(dbErr(error.message));
+      if (!data || data.length !== chunk.length) throw new Error("Nicht alle Aufgaben ließen sich ändern.");
+    }
+    let warning: string | null = null;
+    for (const row of rows) {
+      const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "update", {
+        tool: plan.tool,
+        kind: plan.kind,
+        titel: row.titel ?? null,
+        from: row.status ?? null,
+        to: status,
+        before: row,
+        after: { ...row, status, updated_at: now },
+      });
+      if (w) warning = w;
+    }
+    const n = rows.length;
+    const summary = status === "done"
+      ? (n === 1 ? "Aufgabe erledigt" : `${n} Aufgaben erledigt`)
+      : (n === 1 ? "Aufgabe wieder geöffnet" : `${n} Aufgaben wieder geöffnet`);
+    return {
+      ok: true,
+      id: String(rows[0].id),
+      table: "aufgaben",
+      action: "update",
+      summary,
+      lines: plan.lines,
+      bot: null,
+      panel: "aufgaben",
+      logged: n,
+      log_warning: warning,
+    };
+  }
+
+  for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+    const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+    const { data, error } = await sb.from("aufgaben").delete().in("id", chunk).select("id");
+    if (error) throw new Error(dbErr(error.message));
+    if (!data || data.length !== chunk.length) throw new Error("Nicht alle Aufgaben ließen sich löschen.");
+  }
+  let warning: string | null = null;
+  for (const row of rows) {
+    const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "delete", {
+      tool: plan.tool,
+      kind: plan.kind,
+      titel: row.titel ?? null,
+      row,
+      before: row,
+      after: null,
+    });
+    if (w) warning = w;
+  }
+  const n = rows.length;
+  return {
+    ok: true,
+    id: String(rows[0].id),
+    table: "aufgaben",
+    action: "delete",
+    summary: n === 1 ? "Aufgabe gelöscht" : `${n} Aufgaben gelöscht`,
+    lines: plan.lines,
+    bot: null,
+    panel: "aufgaben",
+    logged: n,
+    log_warning: warning,
+  };
+}
+
+async function loadAufgabenByIds(sb: SupabaseClient, ids: string[]): Promise<Array<Record<string, unknown>>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+    const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+    const { data, error } = await sb.from("aufgaben").select("*").in("id", chunk);
+    if (error) throw new Error(dbErr(error.message));
+    for (const row of data ?? []) out.push(row as Record<string, unknown>);
+  }
+  return out;
+}
+
+async function planCrmWrite(sb: SupabaseClient, name: string, input: unknown, ctx: Ctx): Promise<Plan> {
+  if (name === "crm_insert") return planCrmInsert(input, ctx.today);
+  if (name === "crm_undo") {
+    const loaded = await readUndoBatch(sb, null);
+    return planCrmUndo(loaded.batch, loaded.entries);
+  }
+  const mode = name === "crm_delete" ? "delete" : "update";
+  const selector = parseCrmSelector(input, mode);
+  const hits = await findCrmRows(sb, selector);
+  return planCrmChange(selector, hits);
+}
+
+async function findCrmRows(sb: SupabaseClient, selector: CrmSelector): Promise<Array<{ id: string; titel: string }>> {
+  const search = searchColumns(selector.table);
+  const run = async (ids?: string[]) => {
+    let q = sb.from(selector.table).select("*").limit(CRM_MATCH_LIMIT + 1);
+    if (ids) q = q.in("id", ids);
+    if (selector.query) {
+      const safe = likeSafe(selector.query);
+      if (!safe) throw new Error("Der Suchtext ist leer.");
+      if (!search.length) throw new Error("Diese Tabelle hat kein Suchfeld. Nenne die ID.");
+      q = q.or(search.map((col) => `${col}.ilike.%${safe}%`).join(","));
+    }
+    const { data, error } = await q;
+    if (error) throw new Error(dbErr(error.message));
+    return (data ?? []) as Array<Record<string, unknown>>;
+  };
+  let rows: Array<Record<string, unknown>> = [];
+  if (selector.ids.length) {
+    for (let i = 0; i < selector.ids.length; i += AUFGABE_CHUNK) {
+      rows.push(...await run(selector.ids.slice(i, i + AUFGABE_CHUNK)));
+      if (rows.length > CRM_MATCH_LIMIT) break;
+    }
+  } else {
+    rows = await run();
+  }
+  if (rows.length > CRM_MATCH_LIMIT) throw new Error("Mehr als 300 Zeilen. Bitte enger filtern.");
+  return rows.map((row) => ({ id: String(row.id), titel: rowTitle(selector.table, row) }));
+}
+
+async function executeCrm(
+  sb: SupabaseClient,
+  ws: string,
+  userId: string,
+  plan: Plan,
+  ctx: Ctx,
+): Promise<Record<string, unknown>> {
+  if (plan.kind === "crm_undo") return await executeUndo(sb, ws, userId, plan, ctx);
+  const table = String(plan.data.table);
+  const batch = crypto.randomUUID();
+  let warning: string | null = null;
+  const remember = async (action: "insert" | "update" | "delete", id: string, titel: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null) => {
+    const w = await logRow(sb, ws, userId, table, id, action, {
+      tool: plan.tool,
+      kind: plan.kind,
+      batch,
+      titel,
+      table,
+      before,
+      after,
+    });
+    if (w) warning = w;
+  };
+
+  if (plan.kind === "crm_insert") {
+    const rows = Array.isArray(plan.data.rows) ? plan.data.rows as Array<Record<string, unknown>> : [];
+    const ids: string[] = [];
+    for (const raw of rows) {
+      const split = splitWrite(table, raw, "insert", ctx.today);
+      let next = applyVirtual(table, split.columns, split.virtual, ctx.today);
+      const id = crypto.randomUUID();
+      next = { ...next, id, workspace_id: ws };
+      if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
+      if ((table === "angebote" || table === "rechnungen") && !next.nr) {
+        next.nr = await nextNr(sb, table as "angebote" | "rechnungen", table === "angebote" ? "A" : "R");
+      }
+      if (table === "social_media_posts" && !next.external_id) next.external_id = `jarvis-${ctx.today}-${id.slice(0, 8)}`;
+      await assertContact(sb, (next.kontakt_id ?? next.kunde_id ?? null) as string | null);
+      const ins = await sb.from(table).insert(next).select("*").single();
+      if (ins.error) throw new Error(dbErr(ins.error.message));
+      const saved = ins.data as Record<string, unknown>;
+      ids.push(id);
+      await remember("insert", id, rowTitle(table, saved), null, saved);
+    }
+    return crmResult(plan, ids[0] ?? "", ids.length, warning);
+  }
+
+  const ids = Array.isArray(plan.data.ids) ? plan.data.ids.map((id) => String(id)) : [];
+  const loaded = await loadRows(sb, table, ids);
+  const byId = new Map(loaded.map((row) => [String(row.id), row]));
+  if (ids.some((id) => !byId.has(id))) throw new Error("Keine Zeile gefunden oder kein Zugriff.");
+
+  if (plan.kind === "crm_delete") {
+    for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+      const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+      const del = await sb.from(table).delete().in("id", chunk).select("id");
+      if (del.error) throw new Error(dbErr(del.error.message));
+      if (!del.data || del.data.length !== chunk.length) throw new Error("Nicht alle Zeilen ließen sich löschen.");
+    }
+    for (const id of ids) {
+      const row = byId.get(id)!;
+      await remember("delete", id, rowTitle(table, row), row, null);
+    }
+    return crmResult(plan, ids[0], ids.length, warning);
+  }
+
+  const rawPatch = {
+    ...(plan.data.patch && typeof plan.data.patch === "object" ? plan.data.patch as Record<string, unknown> : {}),
+    ...(plan.data.virtual && typeof plan.data.virtual === "object" ? plan.data.virtual as Record<string, unknown> : {}),
+  };
+  const split = splitWrite(table, rawPatch, "patch", ctx.today);
+  const now = new Date().toISOString();
+  for (const id of ids) {
+    const current = byId.get(id)!;
+    const base = { ...split.columns };
+    if (split.virtual.neue_notiz) base.notizen = current.notizen ?? [];
+    if (split.virtual.bot && base.beschreibung == null) base.beschreibung = current.beschreibung ?? "";
+    if (split.virtual.bis && base.notiz == null) base.notiz = current.notiz ?? "";
+    const next = applyVirtual(table, base, split.virtual, ctx.today);
+    if (stampsUpdatedAt(table)) next.updated_at = now;
+    await assertContact(sb, (next.kontakt_id ?? next.kunde_id ?? null) as string | null);
+    const upd = await sb.from(table).update(next).eq("id", id).select("*").single();
+    if (upd.error) throw new Error(dbErr(upd.error.message));
+    await remember("update", id, rowTitle(table, current), current, upd.data as Record<string, unknown>);
+  }
+  return crmResult(plan, ids[0], ids.length, warning);
+}
+
+async function executeUndo(sb: SupabaseClient, ws: string, userId: string, plan: Plan, ctx: Ctx): Promise<Record<string, unknown>> {
+  const batch = String(plan.data.batch ?? "");
+  const loaded = await readUndoBatch(sb, batch);
+  const table = loaded.entries[0]?.table;
+  if (!table || table !== plan.table) throw new Error("Das ist nicht mehr die letzte Änderung.");
+  const fresh = crypto.randomUUID();
+  let warning: string | null = null;
+  const entries = [...loaded.entries].reverse();
+  for (const entry of entries) {
+    const change = loggedChange(entry);
+    const snap = (entry.summary.before ?? entry.summary.row) as Record<string, unknown> | undefined;
+    if (change === "insert") {
+      if (!entry.recordId) throw new Error("Die letzte Anlage hat keine ID im Protokoll.");
+      const current = await loadRows(sb, table, [String(entry.recordId)]);
+      if (!current.length) throw new Error("Die angelegte Zeile ist nicht mehr da.");
+      const del = await sb.from(table).delete().eq("id", entry.recordId).select("id");
+      if (del.error) throw new Error(dbErr(del.error.message));
+      const w = await logRow(sb, ws, userId, table, String(entry.recordId), "restore", {
+        tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, current[0]), table, before: current[0], after: null,
+      });
+      if (w) warning = w;
+      continue;
+    }
+    if (!snap || typeof snap !== "object") throw new Error("Im Protokoll fehlt der vorherige Stand.");
+    if (snap.workspace_id && String(snap.workspace_id) !== ws) throw new Error("Die Zeile gehört zu einem anderen Bereich.");
+    const columns = columnsFromSnapshot(table, snap);
+    const id = String(snap.id ?? entry.recordId ?? "");
+    if (change === "delete") {
+      const next: Record<string, unknown> = { ...columns, id, workspace_id: ws };
+      if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
+      const ins = await sb.from(table).insert(next).select("*").single();
+      if (ins.error) throw new Error(dbErr(ins.error.message));
+      const w = await logRow(sb, ws, userId, table, id, "restore", {
+        tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, ins.data as Record<string, unknown>), table, before: null, after: ins.data,
+      });
+      if (w) warning = w;
+      continue;
+    }
+    const current = await loadRows(sb, table, [id]);
+    if (!current.length) throw new Error("Die geänderte Zeile ist nicht mehr da.");
+    const next = { ...columns };
+    if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
+    const upd = await sb.from(table).update(next).eq("id", id).select("*").single();
+    if (upd.error) throw new Error(dbErr(upd.error.message));
+    const w = await logRow(sb, ws, userId, table, id, "restore", {
+      tool: "crm_undo", kind: "crm_undo", batch: fresh, undo: true, titel: rowTitle(table, current[0]), table, before: current[0], after: upd.data,
+    });
+    if (w) warning = w;
+  }
+  return crmResult(plan, String(entries[0]?.recordId ?? ""), entries.length, warning);
+}
+
+async function readUndoBatch(sb: SupabaseClient, expected: string | null): Promise<{ batch: string; entries: UndoEntry[] }> {
+  const latest = await sb.from("jarvis_actions").select("id, action, table_name, record_id, summary").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (latest.error) throw new Error(dbErr(latest.error.message));
+  if (!latest.data) throw new Error("Es gibt keine protokollierte Änderung zum Rückgängigmachen.");
+  const summary = (latest.data.summary ?? {}) as Record<string, unknown>;
+  const batch = typeof summary.batch === "string" ? summary.batch : String(latest.data.id);
+  if (expected && batch !== expected) throw new Error("Das ist nicht mehr die letzte Änderung.");
+  let rows = [latest.data];
+  if (typeof summary.batch === "string") {
+    const all = await sb.from("jarvis_actions").select("id, action, table_name, record_id, summary").filter("summary->>batch", "eq", batch).order("created_at", { ascending: true }).limit(CRM_MATCH_LIMIT);
+    if (all.error) throw new Error(dbErr(all.error.message));
+    rows = all.data?.length ? all.data : [latest.data];
+  }
+  if (!rows.length) throw new Error("Es gibt keine protokollierte Änderung zum Rückgängigmachen.");
+  return {
+    batch,
+    entries: rows.map((row) => ({
+      action: String(row.action),
+      table: String(row.table_name),
+      recordId: row.record_id ? String(row.record_id) : null,
+      summary: (row.summary ?? {}) as Record<string, unknown>,
+    })),
+  };
+}
+
+async function loadRows(sb: SupabaseClient, table: string, ids: string[]): Promise<Array<Record<string, unknown>>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < ids.length; i += AUFGABE_CHUNK) {
+    const chunk = ids.slice(i, i + AUFGABE_CHUNK);
+    const { data, error } = await sb.from(table).select("*").in("id", chunk);
+    if (error) throw new Error(dbErr(error.message));
+    for (const row of data ?? []) out.push(row as Record<string, unknown>);
+  }
+  return out;
+}
+
+function crmResult(plan: Plan, id: string, n: number, warning: string | null): Record<string, unknown> {
+  return {
+    ok: true,
+    id,
+    table: plan.table,
+    action: plan.action,
+    summary: spoken(plan.summary),
+    lines: plan.lines,
+    bot: null,
+    panel: areaForTable(plan.table),
+    logged: n,
+    log_warning: warning,
+  };
+}
+
+function spoken(summary: string): string {
+  return summary
+    .replace(/wieder löschen$/, "wieder gelöscht")
+    .replace(/wiederherstellen$/, "wiederhergestellt")
+    .replace(/setzen$/, "gesetzt")
+    .replace(/löschen$/, "gelöscht")
+    .replace(/ändern: /, "geändert: ")
+    .replace(/ ändern$/, " geändert")
+    .replace(/anlegen: /, "angelegt: ")
+    .replace(/ anlegen$/, " angelegt");
+}
+
 function logAction(sb: SupabaseClient, ws: string, userId: string, plan: Plan, recordId: string): Promise<string | null> {
   return logRow(sb, ws, userId, plan.table, recordId, plan.action, {
     tool: plan.tool,
@@ -687,7 +1281,7 @@ async function logRow(
   userId: string,
   table: string,
   recordId: string,
-  action: "insert" | "update",
+  action: "insert" | "update" | "delete" | "restore",
   summary: Record<string, unknown>,
 ): Promise<string | null> {
   const { error } = await sb.from("jarvis_actions").insert({
@@ -699,6 +1293,19 @@ async function logRow(
     summary,
   });
   if (!error) return null;
+  const msg = `${error.code ?? ""} ${error.message ?? ""}`;
+  const file = "20261017230000_jarvis_actions_restore";
+  const verb = action === "delete" ? "Gelöscht" : action === "restore" ? "Wiederhergestellt" : "Gespeichert";
+  if (/23514|check constraint|action_check|table_chk/i.test(msg)) {
+    if (/table_chk|table_name/i.test(msg)) {
+      return `${verb}, aber das Protokoll kennt die Tabelle „${table}“ noch nicht. Migration ${file} anwenden.`;
+    }
+    if (action === "delete" || action === "restore") {
+      return `${verb}, aber das Protokoll akzeptiert action „${action}“ noch nicht. Migration ${file} anwenden.`;
+    }
+  }
+  if (action === "delete") return "Gelöscht, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
+  if (action === "restore") return "Wiederhergestellt, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
   return "Gespeichert, aber das Protokoll jarvis_actions fehlt noch. Migration anwenden.";
 }
 
@@ -718,14 +1325,17 @@ function runRead(
   if (name === "open_area") return openArea(sb, userId, o, ctx);
   if (name === "morning_briefing") return morningBriefing(sb, userId, ctx);
   if (name === "customer_file") return customerFile(sb, o, ctx);
+  if (name === "list_tasks") return listTasks(sb, o, ctx);
   throw new Error("Unbekanntes Lesewerkzeug.");
 }
 
 async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
   const limit = Math.min(25, Math.max(1, Number(o.limit) || 12));
+  const newest = o.newest === true || String(o.newest).toLowerCase() === "true";
   let q = sb.from("contacts")
-    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert")
+    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert, created_at")
     .limit(limit);
+  if (newest) q = q.order("created_at", { ascending: false });
   const query = likeSafe(o.query);
   if (query) q = q.or(`firma.ilike.%${query}%,person.ilike.%${query}%,email.ilike.%${query}%,ort.ilike.%${query}%`);
   const st = typeof o.status === "string" ? o.status.toLowerCase() : "";
@@ -750,7 +1360,9 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
   return {
     ui,
     forModel: {
-      hinweis: rows.length ? "Suchergebnis, nicht die ganze Pipeline." : "Keine passenden Kontakte.",
+      hinweis: rows.length
+        ? (newest ? "Neueste Kontakte, created_at absteigend. Nicht die ganze Pipeline." : "Suchergebnis, nicht die ganze Pipeline.")
+        : "Keine passenden Kontakte.",
       anzahl: rows.length,
       kontakte: rows.map((c) => ({
         id: c.id,
@@ -762,6 +1374,7 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
         deal_wert_netto: c.deal_wert,
         naechster_schritt: c.naechster_schritt,
         naechster_schritt_text: c.naechster_schritt_text,
+        created_at: c.created_at || null,
       })),
     },
   };
