@@ -5,6 +5,7 @@ import {
   BOT_META,
   type BotId,
   allowedOrigin,
+  aufgabeBelongsToWorkspace,
   aufgabeBeschreibung,
   corsHeaders,
   isBotId,
@@ -66,6 +67,14 @@ Deno.serve(async (req) => {
     const kontaktId = kontaktIn && UUID.test(kontaktIn) ? kontaktIn : null;
     const createAufgabe = !ping && !aufgabeId && body.create_aufgabe !== false;
     if (!ping && !title) return json({ error: "Titel fehlt." }, 400, headers);
+
+    if (aufgabeId) {
+      const found = await sb.from("aufgaben").select("id, workspace_id").eq("id", aufgabeId).eq("workspace_id", workspaceId).maybeSingle();
+      if (found.error) return json({ error: "Aufgabe nicht prüfbar." }, 500, headers);
+      if (!aufgabeBelongsToWorkspace(found.data, workspaceId)) {
+        return json({ error: "Aufgabe gehört nicht zu diesem Workspace." }, 403, headers);
+      }
+    }
 
     let admin: SupabaseClient;
     try {

@@ -5,7 +5,7 @@ import {
   type BotId,
   allowedOrigin,
   beginBotRequest,
-  clientIpFromForwarded,
+  clientIpForLimit,
   noteInvalidAttempt,
   noteValidToken,
   appendBotResult,
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   if (req.method !== "GET" && req.method !== "POST") return json({ error: "Nur GET oder POST." }, 405, headers);
 
   const now = Date.now();
-  const ip = clientIpFromForwarded(req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip"));
+  const ip = clientIpForLimit(req.headers);
   if (!beginBotRequest(rates, ip, now).ok) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
 
   const token = bearerToken(req.headers.get("authorization"));
