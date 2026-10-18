@@ -131,9 +131,19 @@ Nicht automatisch anwenden. Nach dem Leitstand-Go-live:
 
 Ohne Schritt 2 kann ein neuer Auftrag den Lauf nicht mehr auf `sent` setzen, weil das Nutzer-JWT `status` und `events` nicht mehr schreiben darf. `jarvis-chat` bleibt unverändert. `bot_tokens` bleibt für `anon` und `authenticated` zu. Ein späteres `GRANT` an diese Rollen zieht der Event-Trigger wieder ein. Spaltennamen bleiben.
 
+### Härtung nach dem Review
+
+Nicht automatisch anwenden. `20261018010000` liegt schon auf der Live-Datenbank.
+
+1. `supabase/migrations/20261018020000_bot_leitstand_review.sql` anwenden.
+2. `supabase functions deploy jarvis-dispatch` ohne `--no-verify-jwt`.
+3. `supabase functions deploy bot-api` ohne `--no-verify-jwt`.
+
+Der Event-Trigger schließt `bot_tokens` bei jedem Tabellen-`GRANT` erneut, weil `pg_event_trigger_ddl_commands()` dafür keine `object_identity` liefert. `bot_tokens_revoke_clients` ist für `public`, `anon` und `authenticated` nicht aufrufbar. Die Limit-IP ist `cf-connecting-ip`, sonst `x-real-ip`, sonst der letzte Hop von `x-forwarded-for`. Ohne gültige Adresse landen die Versuche in einem gemeinsamen Topf. Zusätzlich sperrt ein Deckel von 200 ungültigen Versuchen pro Minute die Instanz, und die Map bleibt auf 256 Adressen begrenzt. Eine mitgeschickte `aufgabe_id` muss im Workspace des Nutzers liegen, sonst 403. `bot` an einem bestehenden Lauf bleibt für eingeloggte Nutzer stehen. `jarvis-chat` bleibt unverändert.
+
 ### Was der Bot nicht darf
 
-`bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Ein Hash landet erst nach gültigem Token in der Limit-Map: mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Ungültige Versuche zählen pro IP, höchstens 20 pro Minute und höchstens 256 Adressen; abgelaufene Einträge fallen weg. Danach antwortet diese IP mit 429, bevor erneut die Datenbank gefragt wird. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.
+`bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Ein Hash landet erst nach gültigem Token in der Limit-Map: mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Ungültige Versuche zählen pro vertrauenswürdiger IP (`cf-connecting-ip`, sonst `x-real-ip`, sonst der letzte Hop von `x-forwarded-for`), höchstens 20 pro Minute. Ohne gültige Adresse gilt ein gemeinsamer Topf. Mehr als 200 ungültige Versuche pro Minute sperren die Instanz, die Map bleibt auf 256 Adressen begrenzt, abgelaufene Einträge fallen weg. Danach antwortet der Aufruf mit 429, bevor erneut die Datenbank gefragt wird. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.
 
 ## Bestätigung
 

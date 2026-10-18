@@ -12,7 +12,11 @@ import {
   performDispatch,
   planMirror,
   publicError,
+  GLOBAL_INVALID_KEY,
+  GLOBAL_INVALID_LIMIT,
+  aufgabeBelongsToWorkspace,
   beginBotRequest,
+  clientIpForLimit,
   noteInvalidAttempt,
   noteValidToken,
   rateAllow,
@@ -251,6 +255,41 @@ Deno.test("Rate-Limit erst nach gültigem Token, ungültige Versuche pro IP gede
   }
   if (noteValidToken(tables, hash, 9_000)) throw new Error("Token-Limit");
   if (validCount() !== 1 || !tables.valid.has(hash)) throw new Error("gültige Map");
+});
+
+Deno.test("Limit-IP nimmt den Plattform-Header, nicht den ersten Forwarded-Eintrag", () => {
+  const headers = (record: Record<string, string>) => ({
+    get: (name: string) => record[name.toLowerCase()] ?? null,
+  });
+  const spoofed = "198.51.100.9, 203.0.113.8";
+  if (clientIpForLimit(headers({ "cf-connecting-ip": "203.0.113.10", "x-real-ip": "203.0.113.11", "x-forwarded-for": spoofed })) !== "203.0.113.10") {
+    throw new Error("cf-connecting-ip");
+  }
+  if (clientIpForLimit(headers({ "x-real-ip": "203.0.113.11", "x-forwarded-for": spoofed })) !== "203.0.113.11") {
+    throw new Error("x-real-ip");
+  }
+  if (clientIpForLimit(headers({ "x-forwarded-for": spoofed })) !== "203.0.113.8") throw new Error("letzter Hop");
+  if (clientIpForLimit(headers({ "x-forwarded-for": "198.51.100.9" })) !== "198.51.100.9") throw new Error("ein Hop");
+  if (clientIpForLimit(headers({ "cf-connecting-ip": "vom-aufrufer", "x-forwarded-for": spoofed })) !== "203.0.113.8") {
+    throw new Error("ungültiger Plattform-Header");
+  }
+  if (clientIpForLimit(headers({ "x-forwarded-for": "nicht-ip" })) !== GLOBAL_INVALID_KEY) throw new Error("topf");
+  if (clientIpForLimit(headers({ "cf-connecting-ip": "2001:db8::1" })) !== "2001:db8::1") throw new Error("ipv6");
+  const tables = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
+  for (let i = 0; i < GLOBAL_INVALID_LIMIT; i++) {
+    const ip = `203.0.113.${i % 40}`;
+    if (!beginBotRequest(tables, ip, 7_000).ok) throw new Error(`global zu früh ${i}`);
+    noteInvalidAttempt(tables, ip, 7_000);
+  }
+  if (beginBotRequest(tables, "192.0.2.55", 7_000).ok) throw new Error("globaler Deckel offen");
+});
+
+Deno.test("Aufgabe muss im Workspace des Nutzers liegen", () => {
+  const ws = "11111111-1111-4111-8111-111111111111";
+  if (!aufgabeBelongsToWorkspace({ id: "a1", workspace_id: ws }, ws)) throw new Error("eigen");
+  if (aufgabeBelongsToWorkspace({ id: "a1", workspace_id: "22222222-2222-4222-8222-222222222222" }, ws)) throw new Error("fremd");
+  if (aufgabeBelongsToWorkspace(null, ws)) throw new Error("fehlt");
+  if (aufgabeBelongsToWorkspace({ id: "a1", workspace_id: null }, ws)) throw new Error("ohne workspace");
 });
 
 Deno.test("Rate-Limit und Verbindung aus dem letzten Lauf", () => {

@@ -32,6 +32,8 @@ export const INVALID_LIMIT = 20;
 export const INVALID_WINDOW_MS = 60_000;
 export const INVALID_MAP_CAP = 256;
 export const VALID_MAP_CAP = 64;
+export const GLOBAL_INVALID_LIMIT = 200;
+export const GLOBAL_INVALID_KEY = "*";
 
 export type TokenRow = {
   bot: string;
@@ -116,10 +118,41 @@ export function rateAllow(hits: number[], now: number, limit = RATE_LIMIT, windo
   return { ok: true, hits: fresh };
 }
 
-export function clientIpFromForwarded(header: string | null): string {
-  const raw = String(header || "").split(",")[0].trim();
-  if (!raw || raw.length > 64 || /[\s\r\n]/.test(raw)) return "unknown";
-  return raw;
+export type HeaderSource = { get(name: string): string | null };
+
+function parseIp(value: string | null | undefined): string | null {
+  let raw = String(value ?? "").trim();
+  if (!raw || raw.length > 64 || /[\s\r\n]/.test(raw)) return null;
+  if (raw.startsWith("[") && raw.endsWith("]")) raw = raw.slice(1, -1);
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) {
+    if (!raw.split(".").every((part) => Number(part) <= 255)) return null;
+    return raw;
+  }
+  if (!raw.includes(":") || !/^[0-9a-fA-F:.]+$/.test(raw)) return null;
+  const halves = raw.split("::");
+  if (halves.length > 2) return null;
+  const groups = raw.split(":").filter((group) => group.length > 0);
+  if (halves.length === 1 && groups.length !== 8) return null;
+  if (groups.length > 8) return null;
+  if (groups.some((group) => group.length > 4 && !group.includes("."))) return null;
+  return raw.toLowerCase();
+}
+
+// Supabase Edge hängt hinter Cloudflare. Die API-Logs führen cf-connecting-ip
+// und x-real-ip; Cloudflare setzt cf-connecting-ip und ersetzt einen vom Aufrufer
+// gesetzten Wert. x-real-ip setzt das Gateway davor. Sb-Forwarded-For gilt nur
+// für Auth mit eigenem Schalter, nicht für Edge Functions. Der erste Eintrag von
+// x-forwarded-for ist vom Aufrufer. Nur der letzte Hop zählt, und nur wenn die
+// Plattform-Header keine Adresse liefern. Sonst ein gemeinsamer Topf.
+export function clientIpForLimit(headers: HeaderSource): string {
+  const cf = parseIp(headers.get("cf-connecting-ip"));
+  if (cf) return cf;
+  const real = parseIp(headers.get("x-real-ip"));
+  if (real) return real;
+  const parts = String(headers.get("x-forwarded-for") || "").split(",");
+  const last = parseIp(parts[parts.length - 1]);
+  if (last) return last;
+  return GLOBAL_INVALID_KEY;
 }
 
 export function sweepRateMap(map: Map<string, number[]>, now: number, windowMs: number): void {
@@ -173,9 +206,16 @@ export function admitRate(
 
 export type RateTables = { valid: Map<string, number[]>; invalid: Map<string, number[]> };
 
+function rateMapCount(map: Map<string, number[]>): number {
+  let total = 0;
+  for (const hits of map.values()) total += hits.length;
+  return total;
+}
+
 export function beginBotRequest(tables: RateTables, ip: string, now: number): { ok: true } | { ok: false } {
   sweepRateMap(tables.valid, now, RATE_WINDOW_MS);
   sweepRateMap(tables.invalid, now, INVALID_WINDOW_MS);
+  if (rateMapCount(tables.invalid) >= GLOBAL_INVALID_LIMIT) return { ok: false };
   evictOldest(tables.invalid, INVALID_MAP_CAP);
   if (rateBlocked(tables.invalid, ip, now, INVALID_LIMIT, INVALID_WINDOW_MS)) return { ok: false };
   return { ok: true };
@@ -187,6 +227,14 @@ export function noteInvalidAttempt(tables: RateTables, ip: string, now: number):
 
 export function noteValidToken(tables: RateTables, hash: string, now: number): boolean {
   return admitRate(tables.valid, hash, now, RATE_LIMIT, RATE_WINDOW_MS, VALID_MAP_CAP);
+}
+
+export function aufgabeBelongsToWorkspace(
+  row: { id?: string | null; workspace_id?: string | null } | null | undefined,
+  workspaceId: string,
+): boolean {
+  if (!row?.id || row.workspace_id == null || !workspaceId) return false;
+  return String(row.workspace_id) === workspaceId;
 }
 
 export function secretNames(bot: string): { url: string; key: string } {
