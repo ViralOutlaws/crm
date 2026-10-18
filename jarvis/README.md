@@ -119,9 +119,21 @@ Das ausgegebene `INSERT` im SQL-Editor ausführen. Widerruf steht als `update` u
 
 Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v9`.
 
+### Härtung
+
+Die Oberfläche schreibt `bot_runs` nicht. „Abbrechen“ verwirft nur die Karte oder das Formular. `status`, `result` und `events` setzen `jarvis-dispatch` (Service-Role, nach geprüftem Nutzer-JWT, Workspace aus dem Profil) und `bot-api`. `created_by` beim Insert durch `authenticated` ist immer `auth.uid()`.
+
+Nicht automatisch anwenden. Nach dem Leitstand-Go-live:
+
+1. `supabase/migrations/20261018010000_bot_leitstand_harden.sql` anwenden.
+2. `supabase functions deploy jarvis-dispatch` ohne `--no-verify-jwt`.
+3. `supabase functions deploy bot-api` ohne `--no-verify-jwt`.
+
+Ohne Schritt 2 kann ein neuer Auftrag den Lauf nicht mehr auf `sent` setzen, weil das Nutzer-JWT `status` und `events` nicht mehr schreiben darf. `jarvis-chat` bleibt unverändert. `bot_tokens` bleibt für `anon` und `authenticated` zu. Ein späteres `GRANT` an diese Rollen zieht der Event-Trigger wieder ein. Spaltennamen bleiben.
+
 ### Was der Bot nicht darf
 
-`bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.
+`bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Ein Hash landet erst nach gültigem Token in der Limit-Map: mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Ungültige Versuche zählen pro IP, höchstens 20 pro Minute und höchstens 256 Adressen; abgelaufene Einträge fallen weg. Danach antwortet diese IP mit 429, bevor erneut die Datenbank gefragt wird. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.
 
 ## Bestätigung
 

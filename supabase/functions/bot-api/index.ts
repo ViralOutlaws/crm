@@ -3,9 +3,11 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   type BotId,
-  RATE_LIMIT,
-  RATE_WINDOW_MS,
   allowedOrigin,
+  beginBotRequest,
+  clientIpFromForwarded,
+  noteInvalidAttempt,
+  noteValidToken,
   appendBotResult,
   authorizeRunUpdate,
   bearerToken,
@@ -16,11 +18,10 @@ import {
   planMirror,
   publicError,
   pushEvent,
-  rateAllow,
   sha256Hex,
 } from "../_shared/bot_leitstand.ts";
 
-const hits = new Map<string, number[]>();
+const rates = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -29,8 +30,15 @@ Deno.serve(async (req) => {
   if (origin && !allowedOrigin(origin)) return json({ error: "Origin nicht erlaubt." }, 403, headers);
   if (req.method !== "GET" && req.method !== "POST") return json({ error: "Nur GET oder POST." }, 405, headers);
 
+  const now = Date.now();
+  const ip = clientIpFromForwarded(req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip"));
+  if (!beginBotRequest(rates, ip, now).ok) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
+
   const token = bearerToken(req.headers.get("authorization"));
-  if (!token) return json({ error: "Token ungültig." }, 401, headers);
+  if (!token) {
+    noteInvalidAttempt(rates, ip, now);
+    return json({ error: "Token ungültig." }, 401, headers);
+  }
 
   let admin: SupabaseClient;
   try {
@@ -43,17 +51,18 @@ Deno.serve(async (req) => {
   try {
     hash = await sha256Hex(token);
   } catch {
+    noteInvalidAttempt(rates, ip, now);
     return json({ error: "Token ungültig." }, 401, headers);
   }
-  const now = Date.now();
-  const gate = rateAllow(hits.get(hash) || [], now, RATE_LIMIT, RATE_WINDOW_MS);
-  hits.set(hash, gate.hits);
-  if (!gate.ok) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
 
   const tokenRes = await admin.from("bot_tokens").select("bot, workspace_id, token_hash, revoked_at").eq("token_hash", hash).maybeSingle();
   if (tokenRes.error) return json({ error: "Token nicht prüfbar." }, 500, headers);
   const matched = matchToken(hash, tokenRes.data ? [tokenRes.data] : []);
-  if (!matched.ok) return json({ error: "Token ungültig." }, 401, headers);
+  if (!matched.ok) {
+    noteInvalidAttempt(rates, ip, now);
+    return json({ error: "Token ungültig." }, 401, headers);
+  }
+  if (!noteValidToken(rates, hash, now)) return json({ error: "Zu viele Anfragen. Kurz warten." }, 429, headers);
   const scope = { bot: matched.bot, workspace_id: matched.workspace_id };
 
   try {

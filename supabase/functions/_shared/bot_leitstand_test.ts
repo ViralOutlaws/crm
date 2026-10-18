@@ -12,8 +12,12 @@ import {
   performDispatch,
   planMirror,
   publicError,
+  beginBotRequest,
+  noteInvalidAttempt,
+  noteValidToken,
   rateAllow,
   runInScope,
+  sweepRateMap,
   secretNames,
   sha256Hex,
   webhookBody,
@@ -221,6 +225,32 @@ Deno.test("Spiegel-Notiz hängt an und lässt die Zuständig-Zeile stehen", () =
   }
   if (!bad) throw new Error("script-link");
   if (normLinks(["https://ok.example"])[0] !== "https://ok.example") throw new Error("link");
+});
+
+Deno.test("Rate-Limit erst nach gültigem Token, ungültige Versuche pro IP gedeckelt", () => {
+  const tables = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
+  const validCount = () => tables.valid.size;
+  const invalidCount = () => tables.invalid.size;
+  const ip = "203.0.113.8";
+  for (let i = 0; i < 20; i++) {
+    if (!beginBotRequest(tables, ip, 5_000).ok) throw new Error("zu früh gesperrt");
+    noteInvalidAttempt(tables, ip, 5_000);
+    if (validCount() !== 0) throw new Error("Hash vor der Prüfung gespeichert");
+  }
+  if (beginBotRequest(tables, ip, 5_000).ok) throw new Error("IP nicht gedeckelt");
+  if (validCount() !== 0) throw new Error("ungültiger Hash in der Token-Map");
+  for (let i = 0; i < 300; i++) noteInvalidAttempt(tables, `198.51.100.${i}`, 5_000);
+  if (invalidCount() > 256) throw new Error(`Map wächst: ${invalidCount()}`);
+  noteInvalidAttempt(tables, "198.51.100.9", 5_000);
+  sweepRateMap(tables.invalid, 5_000 + 60_001, 60_000);
+  if (invalidCount() !== 0) throw new Error("alte Einträge bleiben");
+  const hash = "ab".repeat(32);
+  for (let i = 0; i < 60; i++) {
+    if (!beginBotRequest(tables, "2001:db8::1", 9_000).ok) throw new Error("gültig blockiert");
+    if (!noteValidToken(tables, hash, 9_000)) throw new Error("gültig nicht gezählt");
+  }
+  if (noteValidToken(tables, hash, 9_000)) throw new Error("Token-Limit");
+  if (validCount() !== 1 || !tables.valid.has(hash)) throw new Error("gültige Map");
 });
 
 Deno.test("Rate-Limit und Verbindung aus dem letzten Lauf", () => {
