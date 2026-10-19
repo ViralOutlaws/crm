@@ -143,6 +143,22 @@ Deno.test("Dublettenfilter nennt E-Mail, Domain und PLZ, nicht die ganze Tabelle
   assertEquals(lookup.emptyPlz, true);
   assertEquals(orIlike("email", lookup.emails.map(likePattern)), 'email.ilike."alt@beispiel.de"');
   assertEquals(orIlike("web", [`%${likePattern("foo_bar.com")}%`]), 'web.ilike."%foo\\_bar.com%"');
+  assertEquals(orIlike("email", ['a"b@x.de']), 'email.ilike."a\\"b@x.de"');
+});
+
+Deno.test("E-Mail oder Domain mit Anführungszeichen, Komma, Klammer oder Backslash überspringt nur den Eintrag", () => {
+  const plans = planContactBatch([
+    { firma: "Kaputt Mail", email: 'a"b@x.de' },
+    { firma: "Komma", email: "a,b@x.de" },
+    { firma: "Klammer", web: "https://bad(site).de/pfad" },
+    { firma: "Slash", web: "https://bad\\site.de" },
+    { firma: "Bleibt" },
+  ], [], "Saley", () => "neu", DAY);
+  assertEquals(plans.map((p) => p.kind), ["error", "error", "error", "error", "insert"]);
+  assertEquals(plans[0], { kind: "error", error: "E-Mail ungültig." });
+  assertEquals(plans[2], { kind: "error", error: "Domain ungültig." });
+  if (plans[4].kind !== "insert") return;
+  assertEquals(plans[4].row.firma, "Bleibt");
 });
 
 Deno.test("Body über 32.000 nur für create_contacts bis 240.000", () => {
