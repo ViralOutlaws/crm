@@ -3359,6 +3359,20 @@ function setContactFilter(f, btn) {
   renderContacts();
 }
 
+function contactSortKey(c) {
+  const firma = String(c && c.firma || '').trim();
+  const person = String(c && c.person || '').trim();
+  return firma || person;
+}
+function compareContacts(a, b) {
+  const ka = contactSortKey(a);
+  const kb = contactSortKey(b);
+  if (!ka && !kb) return 0;
+  if (!ka) return 1;
+  if (!kb) return -1;
+  return ka.localeCompare(kb, 'de', { sensitivity: 'base' });
+}
+
 function renderContacts() {
   const q = (document.getElementById('contact-search')?.value||'').toLowerCase();
   let list = DB.contacts.filter(c => {
@@ -3366,6 +3380,7 @@ function renderContacts() {
     const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q);
     return matchF && matchQ;
   });
+  list.sort(compareContacts);
   document.getElementById('contacts-count').textContent = list.length;
   const tbody = document.getElementById('contacts-tbody');
   if(!list.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="emo">👥</div><p>Keine Kontakte gefunden.<br>Klicke auf "+ Neuer Kontakt".</p></div></td></tr>`; return; }
@@ -3406,7 +3421,7 @@ function populateKundenSelect(selId) {
   const sel = document.getElementById(selId);
   const cur = sel.value;
   sel.innerHTML = '<option value="">— Kunde wählen —</option>';
-  DB.contacts.forEach(c => {
+  DB.contacts.slice().sort(compareContacts).forEach(c => {
     const opt = document.createElement('option');
     opt.value = c.id; opt.textContent = c.firma + (c.person ? ` (${c.person})` : '');
     sel.appendChild(opt);
@@ -5957,7 +5972,7 @@ function renderKanban() {
   if(sel){
     const cur=sel.value;
     sel.innerHTML='<option value="">Alle Kontakte</option>';
-    DB.contacts.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.firma;sel.appendChild(o);});
+    DB.contacts.slice().sort(compareContacts).forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.firma;sel.appendChild(o);});
     sel.value=cur;
   }
   const cols=[{id:'todo',label:'📋 Offen',color:'var(--blue)'},{id:'doing',label:'⚡ In Arbeit',color:'var(--yellow2)'},{id:'done',label:'✅ Erledigt',color:'var(--green)'}];
@@ -6640,7 +6655,7 @@ function initKonfigurator() {
   const sel = document.getElementById('konf-kunde');
   if(sel) {
     sel.innerHTML = '<option value="">-- Kontakt waehlen oder manuell --</option>';
-    DB.contacts.forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.firma; sel.appendChild(o); });
+    DB.contacts.slice().sort(compareContacts).forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.firma; sel.appendChild(o); });
   }
   const gueltig = document.getElementById('konf-gueltig');
   if(gueltig && !gueltig.value) gueltig.value = addDays(today(), 30);
