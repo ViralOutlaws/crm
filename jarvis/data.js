@@ -162,6 +162,23 @@ function base(title, crm, rows, columns, kpis, filters = []) {
   return { title, meta: "CRM", crm, wide: true, rows, columns, kpis, filters, note: "" };
 }
 
+/** Firma, sonst der angezeigte Name. Leer bleibt leer und sortiert ans Ende. */
+export function contactSortKey(row) {
+  const src = row?.cells ? row.cells : (row || {});
+  const firma = String(src.firma || "").trim();
+  const person = String(src.person || "").trim();
+  return firma || person;
+}
+
+export function compareContacts(a, b) {
+  const ka = contactSortKey(a);
+  const kb = contactSortKey(b);
+  if (!ka && !kb) return 0;
+  if (!ka) return 1;
+  if (!kb) return -1;
+  return ka.localeCompare(kb, "de", { sensitivity: "base" });
+}
+
 const STAGE_LABEL = { lead: "Lead", erstgespraech: "Erstgespräch", angebot: "Angebot", gewonnen: "Gewonnen", verloren: "Verloren" };
 
 export function filterRows(view, filter = {}) {
@@ -294,6 +311,7 @@ async function contactsView(sb, filter, today) {
     },
     badge: { text: PHASE[c.status] || "", tone: c.status === "gewonnen" ? "f" : c.status === "verloren" ? "o" : "w" },
   }));
+  rows.sort(compareContacts);
   return base("Kontakte", "contacts", rows, [
     { key: "firma", label: "Firma" }, { key: "person", label: "Person" }, { key: "ort", label: "Ort" },
     { key: "phase", label: "Phase" }, { key: "quelle", label: "Quelle" }, { key: "deal", label: "Deal netto", align: "r" },
@@ -714,7 +732,7 @@ function contactRows() {
     search: `${c.firma} ${c.person} ${c.ort}`.toLowerCase(),
     cells: { firma: c.firma, person: c.person, ort: c.ort, phase: PHASE[c.status], quelle: c.quelle, deal: c.deal ? eur(c.deal) : "", naechster: c.naechster },
     badge: { text: PHASE[c.status], tone: c.status === "gewonnen" ? "f" : "w" },
-  }));
+  })).sort(compareContacts);
 }
 
 function demoViews() {
