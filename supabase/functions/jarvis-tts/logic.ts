@@ -34,6 +34,20 @@ export function resolveSpeed(raw: string | undefined): number {
   return Math.round(clamped * 100) / 100;
 }
 
+export function prepareContext(input: unknown, max = 500): string {
+  if (typeof input !== "string" || !input.trim()) return "";
+  let text = "";
+  for (const ch of input) {
+    const c = ch.charCodeAt(0);
+    if (c === 0 || (c < 32 && c !== 9 && c !== 10 && c !== 13)) continue;
+    text += ch;
+  }
+  text = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const chars = [...text];
+  if (chars.length > max) text = chars.slice(0, max).join("");
+  return text;
+}
+
 export function prepareText(input: unknown, max = MAX_TEXT): string {
   if (typeof input !== "string") throw new Error("Text fehlt.");
   let text = "";

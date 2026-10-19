@@ -12,6 +12,7 @@ import {
   isStopCommand,
   prefAfterGrant,
   SILENCE_MS,
+  STALL_MS,
   voiceCardAction,
   withEntityContext,
 } from "./listen.js";
@@ -41,18 +42,15 @@ function clock() {
   };
 }
 
-test("Pause nach dem letzten finalen Ergebnis", () => {
+test("Pause nach dem letzten Ergebnis, auch beim Zwischenstand", () => {
   const c = clock();
-  const u = createUtterance({ silenceMs: SILENCE_MS, schedule: c.schedule, cancel: c.cancel });
+  const u = createUtterance({ silenceMs: SILENCE_MS, stallMs: 10000, schedule: c.schedule, cancel: c.cancel });
   const sent = [];
   u.sync("", "Hal", (t) => sent.push(t));
-  c.advance(5000);
-  assert.deepEqual(sent, []);
-  u.sync("Hallo Kim", "", (t) => sent.push(t));
-  c.advance(1199);
+  c.advance(SILENCE_MS - 1);
   assert.deepEqual(sent, []);
   c.advance(1);
-  assert.deepEqual(sent, ["Hallo Kim"]);
+  assert.deepEqual(sent, ["Hal"]);
 });
 
 test("Weiterreden setzt die Pause zurück", () => {
@@ -63,13 +61,42 @@ test("Weiterreden setzt die Pause zurück", () => {
   u.sync("Pipeline", "", flush);
   c.advance(500);
   u.sync("Pipeline", "bitte", flush);
-  c.advance(2000);
+  c.advance(1199);
   assert.deepEqual(sent, []);
   u.sync("Pipeline bitte", "", flush);
   c.advance(1199);
   assert.deepEqual(sent, []);
   c.advance(1);
   assert.deepEqual(sent, ["Pipeline bitte"]);
+});
+
+test("Lange Aussage: Sitzungen zusammenführen, gleiche Erkennung setzt die Pause nicht neu", () => {
+  const c = clock();
+  const u = createUtterance({ silenceMs: 1400, stallMs: 2000, schedule: c.schedule, cancel: c.cancel });
+  const sent = [];
+  const flush = (t) => sent.push(t);
+  u.sync("Ich möchte", "eine lange", flush);
+  c.advance(1000);
+  u.seal();
+  u.sync("Pipeline Erklärung", "", flush);
+  assert.equal(u.preview(), "Ich möchte eine lange Pipeline Erklärung");
+  c.advance(400);
+  u.sync("Pipeline Erklärung", "", flush);
+  c.advance(1000);
+  assert.deepEqual(sent, ["Ich möchte eine lange Pipeline Erklärung"]);
+});
+
+test("Ohne neues Ergebnis sendet der Deckel nach 2 Sekunden genau einmal", () => {
+  const c = clock();
+  const u = createUtterance({ silenceMs: 10000, stallMs: STALL_MS, schedule: c.schedule, cancel: c.cancel });
+  const sent = [];
+  u.sync("", "hängt im Feld", (t) => sent.push(t));
+  c.advance(STALL_MS - 1);
+  assert.deepEqual(sent, []);
+  c.advance(1);
+  assert.deepEqual(sent, ["hängt im Feld"]);
+  c.advance(5000);
+  assert.deepEqual(sent, ["hängt im Feld"]);
 });
 
 test("flushNow sendet auch den Zwischenstand und stoppt die Pause", () => {
@@ -93,25 +120,35 @@ test("Stopp ist nur das einzelne Wort", () => {
   assert.equal(isStopCommand(""), false);
 });
 
-test("Freisprechen: iOS aus, ohne API aus, Chrome an", () => {
-  assert.equal(handsFreeSupport({
+test("Freisprechen: iOS mit API in Abschnitten, ohne API aus, Chrome dauerhaft", () => {
+  const iphone = handsFreeSupport({
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/120.0 Mobile",
     SpeechRecognition: function SR() {},
-  }).reason, "ios");
-  assert.equal(handsFreeSupport({
+  });
+  assert.equal(iphone.ok, true);
+  assert.equal(iphone.continuous, false);
+  const safari = handsFreeSupport({
     navigator: {
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Version/17.5 Mobile/15E148 Safari/604.1",
       platform: "iPhone",
       maxTouchPoints: 5,
     },
     webkitSpeechRecognition: function SR() {},
-  }).reason, "ios");
+  });
+  assert.equal(safari.ok, true);
+  assert.equal(safari.continuous, false);
   assert.equal(handsFreeSupport({
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)",
+    platform: "iPhone",
+  }).reason, "ios");
+  const ipad = handsFreeSupport({
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X)",
     platform: "MacIntel",
     maxTouchPoints: 5,
     webkitSpeechRecognition: function SR() {},
-  }).ok, false);
+  });
+  assert.equal(ipad.ok, true);
+  assert.equal(ipad.continuous, false);
   assert.equal(handsFreeSupport({
     userAgent: "Mozilla/5.0 (Windows NT 10.0)",
     platform: "Win32",
@@ -123,6 +160,12 @@ test("Freisprechen: iOS aus, ohne API aus, Chrome an", () => {
     maxTouchPoints: 0,
     webkitSpeechRecognition: function SR() {},
   }).ok, true);
+  assert.equal(handsFreeSupport({
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0",
+    platform: "Linux x86_64",
+    maxTouchPoints: 0,
+    webkitSpeechRecognition: function SR() {},
+  }).continuous, true);
   assert.equal(handsFreeSupport({
     navigator: {
       userAgent: "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0",
