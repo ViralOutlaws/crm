@@ -596,7 +596,7 @@ export async function loadBriefing(sb) {
     agenda: { date: today, events, tasks: taskRows, reminders, invoices: overdueInvoices, nextSteps },
     kpis: [
       { label: "Termine", value: String(events.length) },
-      { label: "Aufgaben fällig", value: String(taskRows.length), tone: overdue ? "red" : "" },
+      { label: "Aufgaben fällig", value: String(taskRows.length), tone: taskRows.some((t) => t.overdue) ? "red" : "" },
       { label: "Rechnungen überfällig", value: String(overdueInvoices.length), tone: overdueInvoices.length ? "red" : "" },
       { label: "Nächste Schritte", value: String(nextSteps.length), tone: "gold" },
     ],
