@@ -208,7 +208,7 @@ Auf dem Handy füllt Jarvis den Bildschirm (`100dvh`, Safe-Area, kein horizontal
 
 `create_aufgabe` und `set_aufgaben_status` speichern sofort, ohne Bestätigungskarte. `jarvis_actions.summary` trägt dann `status: ausgeführt` und `auto: true`. Löschen und die übrigen Bereiche behalten die Karte. Der Jarvis-Cache dafür heißt `jarvis-v12`.
 
-Das iPhone abonniert den Kalender per `webcal://…/functions/v1/calendar-feed?t=…`. Token erzeugen: `node scripts/calendar-token.mjs <workspace-uuid>`, optional `--out pfad` (Datei mit Rechten 600). Der Token kommt nicht ins Repo. In `calendar_feed_tokens` liegt nur der SHA-256-Hash. Widerruf setzt `revoked_at`.
+Das iPhone abonniert den Kalender per `webcal://…/functions/v1/calendar-feed?t=…`. Token erzeugen: `node scripts/calendar-token.mjs <workspace-uuid>`, optional `--out pfad` (Datei mit Rechten 600). Der Token kommt nicht ins Repo. In `calendar_feed_tokens` liegt nur der SHA-256-Hash. Widerruf setzt `revoked_at`. Beim Abonnieren auf dem iPhone „Hinweise entfernen“ ausschalten, sonst zeigt iOS die zwei Erinnerungen nicht (zum Zeitpunkt und eine Stunde davor, ganztägig um 9:00 und 8:00 Europe/Berlin).
 
 ## Folgepunkte
 

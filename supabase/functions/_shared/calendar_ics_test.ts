@@ -57,3 +57,32 @@ Deno.test("Aufgabe ganztägig, Termin mit Zeit und ohne, außerhalb des Fensters
   assertEquals(ics.includes("DTEND;TZID=Europe/Berlin:20261024T003000"), true);
   assertEquals(ics.endsWith("\r\n"), true);
 });
+
+Deno.test("Jedes Event hat zwei DISPLAY-Alarme", () => {
+  const ics = buildCalendar({
+    from,
+    to,
+    tasks: [{ id: "t1", titel: "Angebot, Café", faellig: "2026-10-20", status: "todo" }],
+    events: [
+      { id: "e1", titel: "Erstgespräch", datum: "2026-10-21", zeit: "09:30" },
+      { id: "e2", titel: "Ganzer Tag", datum: "2026-10-22", zeit: null },
+    ],
+  });
+  const blocks = ics.split("BEGIN:VEVENT").slice(1);
+  assertEquals(blocks.length, 3);
+  const task = blocks[0];
+  assertEquals(task.includes("TRIGGER:PT9H"), true);
+  assertEquals(task.includes("TRIGGER:PT8H"), true);
+  assertEquals(task.includes("ACTION:DISPLAY"), true);
+  assertEquals(task.split("BEGIN:VALARM").length - 1, 2);
+  assertEquals(task.includes("DESCRIPTION:Angebot\\, Café"), true);
+  const timed = blocks[1];
+  assertEquals(timed.includes("TRIGGER:PT0M"), true);
+  assertEquals(timed.includes("TRIGGER:-PT1H"), true);
+  assertEquals(timed.includes("DESCRIPTION:Erstgespräch"), true);
+  assertEquals(timed.split("BEGIN:VALARM").length - 1, 2);
+  const allday = blocks[2];
+  assertEquals(allday.includes("TRIGGER:PT9H"), true);
+  assertEquals(allday.includes("TRIGGER:PT8H"), true);
+  assertEquals(allday.includes("TRIGGER:PT0M"), false);
+});

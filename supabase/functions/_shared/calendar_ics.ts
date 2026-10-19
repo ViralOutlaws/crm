@@ -129,6 +129,19 @@ function vevent(lines: string[]): string {
   return ["BEGIN:VEVENT", ...lines, "END:VEVENT"].map(foldLine).join("\r\n");
 }
 
+/** Ganztägig: 09:00 und 08:00 Europe/Berlin, relativ zum Tagesbeginn. Sonst zum Zeitpunkt und eine Stunde davor. */
+function alarms(title: string, allDay: boolean): string[] {
+  const description = `DESCRIPTION:${icsText(title || "Termin")}`;
+  const triggers = allDay ? ["PT9H", "PT8H"] : ["PT0M", "-PT1H"];
+  return triggers.flatMap((trigger) => [
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    `TRIGGER:${trigger}`,
+    description,
+    "END:VALARM",
+  ]);
+}
+
 export function buildCalendar(input: {
   now?: Date;
   from: string;
@@ -151,6 +164,7 @@ export function buildCalendar(input: {
       `SUMMARY:${icsText(task.titel || "Aufgabe")}`,
     ];
     if (task.beschreibung) lines.push(`DESCRIPTION:${icsText(task.beschreibung)}`);
+    lines.push(...alarms(task.titel || "Aufgabe", true));
     parts.push(vevent(lines));
   }
   const events = [...input.events].filter((e) => e.datum && inWindow(e.datum, input.from, input.to));
@@ -172,6 +186,7 @@ export function buildCalendar(input: {
     }
     lines.push(`SUMMARY:${icsText(event.titel || "Termin")}`);
     if (event.notiz) lines.push(`DESCRIPTION:${icsText(event.notiz)}`);
+    lines.push(...alarms(event.titel || "Termin", !time));
     parts.push(vevent(lines));
   }
   const body = [
