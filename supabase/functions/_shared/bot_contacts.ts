@@ -7,6 +7,17 @@ export const CONTACT_BATCH_MAX = 50;
 export const CONTACT_STATUS_DEFAULT = "lead";
 export const CONTACT_STATUSES = ["lead", "erstgespraech", "angebot", "gewonnen", "verloren"] as const;
 
+/** Schlüssel aus index.html QUELLEN und #c-quelle. Leer oder unbekannt wird sonstiges. */
+export const CONTACT_QUELLEN = ["website", "ki-check", "empfehlung", "instagram", "google", "kaltakquise", "sonstiges"] as const;
+export const CONTACT_QUELLE_DEFAULT = "sonstiges";
+
+/** Alle Operationen 32.000 Zeichen, nur create_contacts 240.000. */
+export const BODY_LIMIT = 32_000;
+export const CONTACT_BODY_LIMIT = 240_000;
+
+/** PostgREST-Filter: PLZ leer oder null, ohne die ganze Tabelle zu laden. */
+export const EMPTY_PLZ_FILTER = 'plz.is.null,plz.eq.""';
+
 export const CONTACT_FIELDS = [
   "firma", "person", "branche", "str", "plz", "ort", "tel", "email", "web", "status", "quelle", "ana", "notes",
 ] as const;
@@ -117,6 +128,112 @@ export function webDomain(input: string): string {
   return s;
 }
 
+const QUELLE_BY_LOWER = new Map(CONTACT_QUELLEN.map((value) => [value.toLowerCase(), value]));
+
+export function berlinDay(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+export function canonStatus(input: string): string {
+  const value = input.trim().toLowerCase();
+  if ((CONTACT_STATUSES as readonly string[]).includes(value)) return value;
+  return CONTACT_STATUS_DEFAULT;
+}
+
+export function canonQuelle(input: string): { value: string; rejected: string | null } {
+  const trimmed = input.trim().replace(/\s+/g, " ");
+  if (!trimmed) return { value: CONTACT_QUELLE_DEFAULT, rejected: null };
+  const hit = QUELLE_BY_LOWER.get(trimmed.toLowerCase());
+  if (hit) return { value: hit, rejected: null };
+  return { value: CONTACT_QUELLE_DEFAULT, rejected: trimmed };
+}
+
+function botNote(botName: string, day: string, rejected: string | null): string {
+  const source = rejected ? ` (Quelle: ${rejected})` : "";
+  return `[${day}] Angelegt von Bot ${botName}${source}`.slice(0, LIMITS.notes);
+}
+
+function mergeNotes(userNotes: string, line: string): string {
+  if (!userNotes) return line;
+  const room = LIMITS.notes - line.length - 1;
+  if (room <= 0) return line;
+  return `${userNotes.slice(0, room)}\n${line}`;
+}
+
+export function plzVariants(input: string): string[] {
+  const trimmed = input.trim();
+  const compact = trimmed.replace(/\s+/g, "");
+  const out: string[] = [];
+  const add = (value: string) => {
+    if (value && !out.includes(value)) out.push(value);
+  };
+  add(trimmed);
+  add(compact);
+  if (/^\d{5}$/.test(compact)) add(`${compact.slice(0, 2)} ${compact.slice(2)}`);
+  return out;
+}
+
+export type ContactLookup = {
+  emails: string[];
+  domains: string[];
+  plz: string[];
+  emptyPlz: boolean;
+};
+
+export function contactLookup(candidates: Array<{ firma: string; plz: string | null; email: string | null; web: string | null }>): ContactLookup {
+  const emails = new Set<string>();
+  const domains = new Set<string>();
+  const plz = new Set<string>();
+  let emptyPlz = false;
+  for (const row of candidates) {
+    const email = normEmail(row.email || "");
+    if (email) emails.add(email);
+    const domain = webDomain(row.web || "");
+    if (domain) domains.add(domain);
+    if (!normFirma(row.firma || "")) continue;
+    if (!normPlz(row.plz || "")) {
+      emptyPlz = true;
+      continue;
+    }
+    for (const variant of plzVariants(row.plz || "")) plz.add(variant);
+  }
+  return {
+    emails: [...emails].sort(),
+    domains: [...domains].sort(),
+    plz: [...plz].sort(),
+    emptyPlz,
+  };
+}
+
+/** LIKE-Wildcards im Suchwert entschärfen. Die umgebenden % setzt der Aufrufer. */
+export function likePattern(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** PostgREST-or-Filter. Werte stehen in Anführungszeichen, Punkte in E-Mail und Domain bleiben Werte. */
+export function orIlike(column: string, patterns: string[]): string {
+  return patterns.map((pattern) => `${column}.ilike."${pattern.replace(/"/g, '""')}"`).join(",");
+}
+
+export function requestTooLarge(length: number, op: string): boolean {
+  if (op === "create_contacts") return length > CONTACT_BODY_LIMIT;
+  return length > BODY_LIMIT;
+}
+
+const workspaceLocks = new Map<string, Promise<void>>();
+
+/** Serialisiert create_contacts pro Workspace in dieser Instanz. Ein Fehler reißt die Kette nicht ab. */
+export function withWorkspaceLock<T>(workspaceId: string, task: () => Promise<T>): Promise<T> {
+  const prev = workspaceLocks.get(workspaceId) ?? Promise.resolve();
+  const run = prev.then(task, task);
+  const tracked = run.then(() => undefined, () => undefined);
+  workspaceLocks.set(workspaceId, tracked);
+  tracked.then(() => {
+    if (workspaceLocks.get(workspaceId) === tracked) workspaceLocks.delete(workspaceId);
+  });
+  return run;
+}
+
 export function duplicateId(candidate: { firma: string; plz: string | null; email: string | null; web: string | null }, existing: ContactKey[]): string | null {
   const email = normEmail(candidate.email || "");
   const domain = webDomain(candidate.web || "");
@@ -140,7 +257,7 @@ export function duplicateId(candidate: { firma: string; plz: string | null; emai
   return null;
 }
 
-export function prepareContact(raw: unknown, botName: string): { ok: true; row: ContactRow } | { ok: false; error: string } {
+export function prepareContact(raw: unknown, botName: string, day: string): { ok: true; row: ContactRow } | { ok: false; error: string } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "Kontakt muss ein Objekt sein." };
   const src = raw as Record<string, unknown>;
   const values: Record<string, string> = {};
@@ -155,10 +272,8 @@ export function prepareContact(raw: unknown, botName: string): { ok: true; row: 
   }
   if (!values.firma) return { ok: false, error: "Firma fehlt." };
   if (values.email && !normEmail(values.email)) return { ok: false, error: "E-Mail ungültig." };
-  let status = values.status.toLowerCase();
-  if (!status) status = CONTACT_STATUS_DEFAULT;
-  else if (!(CONTACT_STATUSES as readonly string[]).includes(status)) return { ok: false, error: "Status unbekannt." };
-  const quelle = values.quelle || `Bot: ${botName}`;
+  const status = canonStatus(values.status);
+  const quelle = canonQuelle(values.quelle);
   const empty = (key: string) => values[key] || null;
   return {
     ok: true,
@@ -173,18 +288,18 @@ export function prepareContact(raw: unknown, botName: string): { ok: true; row: 
       email: empty("email"),
       web: empty("web"),
       status,
-      quelle,
+      quelle: quelle.value,
       ana: empty("ana"),
-      notes: empty("notes"),
+      notes: mergeNotes(values.notes, botNote(botName, day, quelle.rejected)),
     },
   };
 }
 
-export function planContactBatch(items: unknown[], existing: ContactKey[], botName: string, newId: () => string): ContactPlan[] {
+export function planContactBatch(items: unknown[], existing: ContactKey[], botName: string, newId: () => string, day: string): ContactPlan[] {
   const index = existing.map((row) => ({ ...row }));
   const plans: ContactPlan[] = [];
   for (const item of items) {
-    const prepared = prepareContact(item, botName);
+    const prepared = prepareContact(item, botName, day);
     if (!prepared.ok) {
       plans.push({ kind: "error", error: prepared.error });
       continue;
