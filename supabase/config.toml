@@ -19,3 +19,7 @@ verify_jwt = false
 # Rückkanal der Bots. Auth ist der Bot-Token gegen bot_tokens, nicht das Nutzer-JWT.
 [functions.bot-api]
 verify_jwt = false
+
+# iPhone-Kalenderabo. Auth ist der Token in ?t= gegen calendar_feed_tokens, nicht das Nutzer-JWT.
+[functions.calendar-feed]
+verify_jwt = false

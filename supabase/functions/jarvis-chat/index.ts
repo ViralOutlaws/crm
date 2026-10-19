@@ -1,5 +1,6 @@
 // Jarvis-Chat: prüft das Nutzer-JWT, liest und schreibt im CRM nur mit diesem JWT (RLS).
 // Schreibwerkzeuge werden nicht ausgeführt, sondern als Bestätigung an die Oberfläche gegeben.
+// Ausnahme: Aufgabe anlegen und als erledigt oder offen markieren läuft sofort und wird protokolliert.
 // Bestätigte Pläne prüft revalidate() erneut. Danach darf Jarvis in den CRM-Tabellen anlegen, ändern und löschen.
 // Einstellungen und Geheimnisse bleiben tabu. Mails und Datei-Uploads gibt es nicht.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -21,6 +22,7 @@ import {
   planAufgabeChange,
   planFromTool,
   revalidate,
+  runsWithoutCard,
   type AufgabeRow,
   type AufgabeSelector,
   socialUpdateAllowed,
@@ -123,7 +125,7 @@ Deno.serve(async (req) => {
         } catch { /* client gone */ }
       };
       try {
-        await runChat(sb, user.id, displayName, ctx, messages, send);
+        await runChat(sb, user.id, displayName, workspaceId, jwt, ctx, messages, send);
         send("done", { ok: true });
       } catch (e) {
         send("error", { message: e instanceof Error ? e.message : "Jarvis ist gerade nicht erreichbar." });
@@ -152,6 +154,8 @@ async function runChat(
   sb: SupabaseClient,
   userId: string,
   name: string,
+  workspaceId: string | null,
+  jwt: string,
   ctx: Ctx,
   history: Array<{ role: "user" | "assistant"; content: string }>,
   send: Send,
@@ -203,21 +207,51 @@ async function runChat(
             : tool.name === "crm_insert" || tool.name === "crm_update" || tool.name === "crm_delete" || tool.name === "crm_undo"
             ? await planCrmWrite(sb, tool.name, input, ctx)
             : planFromTool(tool.name, input, ctx);
-          send("confirm", plan);
-          if (plan.bot) send("bot", { id: plan.bot, task: plan.summary, pending: true });
-          const hinweis = plan.kind === "aufgabe" && plan.bot
-            ? "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung. Nach dem Speichern bietet die Oberfläche den Versand an diesen Bot an. dispatch_to_bot jetzt nicht zusätzlich aufrufen."
-            : "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung.";
-          results.push({
-            type: "tool_result",
-            tool_use_id: tool.id,
-            content: JSON.stringify({
-              status: "awaiting_confirmation",
-              summary: plan.summary,
-              lines: plan.lines,
-              hinweis,
-            }),
-          });
+          if (runsWithoutCard(plan)) {
+            if (!workspaceId) throw new Error("Kein Workspace im Profil.");
+            const saved = await executeConfirm(sb, workspaceId, userId, {
+              kind: plan.kind,
+              tool: plan.tool,
+              bot: plan.bot,
+              data: plan.data,
+            }, ctx, jwt, true);
+            send("ui", { panel: "aufgaben", data: taskHud(plan, saved) });
+            if (saved.offer_dispatch && typeof saved.offer_dispatch === "object") {
+              send("confirm", dispatchOffer(saved.offer_dispatch as Record<string, unknown>));
+            }
+            const hinweis = saved.offer_dispatch
+              ? "Gespeichert. Sag in einem kurzen Satz, dass die Aufgabe angelegt ist. Die Oberfläche bietet den Versand an den Bot an. dispatch_to_bot nicht zusätzlich aufrufen. Nicht um Bestätigung für die Aufgabe bitten."
+              : "Gespeichert. Sag in einem kurzen Satz, dass die Aufgabe angelegt, erledigt oder wieder offen ist. Keine Bestätigungskarte und keine Bitte um Bestätigung.";
+            results.push({
+              type: "tool_result",
+              tool_use_id: tool.id,
+              content: JSON.stringify({
+                status: "ausgeführt",
+                auto: true,
+                id: saved.id ?? null,
+                summary: saved.summary || plan.summary,
+                lines: plan.lines,
+                log_warning: saved.log_warning ?? null,
+                hinweis,
+              }),
+            });
+          } else {
+            send("confirm", plan);
+            if (plan.bot) send("bot", { id: plan.bot, task: plan.summary, pending: true });
+            const hinweis = plan.kind === "aufgabe" && plan.bot
+              ? "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung. Nach dem Speichern bietet die Oberfläche den Versand an diesen Bot an. dispatch_to_bot jetzt nicht zusätzlich aufrufen."
+              : "Noch NICHT gespeichert. Bitte Kim um Bestätigung. Keine Erfolgsmeldung.";
+            results.push({
+              type: "tool_result",
+              tool_use_id: tool.id,
+              content: JSON.stringify({
+                status: "awaiting_confirmation",
+                summary: plan.summary,
+                lines: plan.lines,
+                hinweis,
+              }),
+            });
+          }
         } else {
           const out = await runRead(sb, userId, tool.name, tool.input, ctx);
           if (out.ui) send("ui", out.ui);
@@ -345,14 +379,15 @@ async function executeConfirm(
   body: Record<string, unknown>,
   ctx: Ctx,
   jwt: string,
+  auto = false,
 ): Promise<Record<string, unknown>> {
   const plan = revalidate({ kind: body.kind, tool: body.tool, bot: body.bot, data: body.data }, ctx);
   if (plan.kind === "bot_dispatch") return await forwardDispatch(jwt, plan);
   if (plan.kind === "crm_insert" || plan.kind === "crm_update" || plan.kind === "crm_delete" || plan.kind === "crm_undo") {
-    return await executeCrm(sb, workspaceId, userId, plan, ctx);
+    return await executeCrm(sb, workspaceId, userId, plan, ctx, auto);
   }
   if (plan.kind === "aufgabe_status" || plan.kind === "aufgabe_delete") {
-    return await executeAufgabeChange(sb, workspaceId, userId, plan);
+    return await executeAufgabeChange(sb, workspaceId, userId, plan, auto);
   }
   if (plan.kind === "meeting") {
     const written = await writeMeeting(sb, workspaceId, plan, ctx);
@@ -375,7 +410,7 @@ async function executeConfirm(
     };
   }
   const id = await writePlan(sb, workspaceId, plan, ctx);
-  const warning = await logAction(sb, workspaceId, userId, plan, id);
+  const warning = await logAction(sb, workspaceId, userId, plan, id, auto);
   const offer_dispatch = plan.kind === "aufgabe" && plan.bot
     ? {
       bot: plan.bot,
@@ -983,6 +1018,7 @@ async function executeAufgabeChange(
   ws: string,
   userId: string,
   plan: Plan,
+  auto = false,
 ): Promise<Record<string, unknown>> {
   const ids = Array.isArray(plan.data.ids) ? plan.data.ids.map((id) => String(id)) : [];
   const loaded = await loadAufgabenByIds(sb, ids);
@@ -1001,7 +1037,7 @@ async function executeAufgabeChange(
     }
     let warning: string | null = null;
     for (const row of rows) {
-      const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "update", {
+      const w = await logRow(sb, ws, userId, "aufgaben", String(row.id), "update", executed({
         tool: plan.tool,
         kind: plan.kind,
         titel: row.titel ?? null,
@@ -1009,7 +1045,7 @@ async function executeAufgabeChange(
         to: status,
         before: row,
         after: { ...row, status, updated_at: now },
-      });
+      }, auto));
       if (w) warning = w;
     }
     const n = rows.length;
@@ -1120,13 +1156,14 @@ async function executeCrm(
   userId: string,
   plan: Plan,
   ctx: Ctx,
+  auto = false,
 ): Promise<Record<string, unknown>> {
   if (plan.kind === "crm_undo") return await executeUndo(sb, ws, userId, plan, ctx);
   const table = String(plan.data.table);
   const batch = crypto.randomUUID();
   let warning: string | null = null;
   const remember = async (action: "insert" | "update" | "delete", id: string, titel: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null) => {
-    const w = await logRow(sb, ws, userId, table, id, action, {
+    const w = await logRow(sb, ws, userId, table, id, action, executed({
       tool: plan.tool,
       kind: plan.kind,
       batch,
@@ -1134,7 +1171,7 @@ async function executeCrm(
       table,
       before,
       after,
-    });
+    }, auto));
     if (w) warning = w;
   };
 
@@ -1317,13 +1354,78 @@ function spoken(summary: string): string {
     .replace(/ anlegen$/, " angelegt");
 }
 
-function logAction(sb: SupabaseClient, ws: string, userId: string, plan: Plan, recordId: string): Promise<string | null> {
-  return logRow(sb, ws, userId, plan.table, recordId, plan.action, {
+function logAction(sb: SupabaseClient, ws: string, userId: string, plan: Plan, recordId: string, auto = false): Promise<string | null> {
+  return logRow(sb, ws, userId, plan.table, recordId, plan.action, executed({
     tool: plan.tool,
     kind: plan.kind,
     lines: plan.lines.slice(0, 12),
     bot: plan.bot,
-  });
+  }, auto));
+}
+
+function executed(summary: Record<string, unknown>, auto: boolean): Record<string, unknown> {
+  return auto ? { ...summary, status: "ausgeführt", auto: true } : summary;
+}
+
+function taskHud(plan: Plan, saved: Record<string, unknown>): Record<string, unknown> {
+  const rows = Array.isArray(plan.data.rows) ? plan.data.rows as Array<Record<string, unknown>> : [];
+  const first = rows[0] || {};
+  const titles = Array.isArray(plan.data.titles) && plan.data.titles.length
+    ? plan.data.titles.map((t) => String(t))
+    : [String(plan.data.titel || first.titel || "Aufgabe")];
+  const ids = Array.isArray(plan.data.ids) ? plan.data.ids.map((id) => String(id)) : [];
+  const status = String(plan.data.status || first.status || "todo");
+  const titel = titles[0] || "Aufgabe";
+  if (titles.length === 1) {
+    return {
+      title: "Aufgabe",
+      meta: titel,
+      crm: "aufgaben",
+      spoken: `${titel}, ${status === "done" ? "erledigt" : "offen"}.`,
+      task: {
+        id: String(saved.id || ids[0] || ""),
+        titel,
+        status,
+        prioritaet: String(plan.data.prioritaet || first.prioritaet || "normal"),
+        faellig: String(plan.data.faellig || first.faellig || ""),
+        beschreibung: String(plan.data.beschreibung || first.beschreibung || ""),
+        bot: plan.bot,
+      },
+    };
+  }
+  return {
+    title: "Aufgaben",
+    meta: String(saved.summary || plan.summary),
+    crm: "aufgaben",
+    columns: [{ key: "titel", label: "Aufgabe" }],
+    rows: titles.slice(0, 12).map((name, i) => ({
+      id: ids[i] || (i === 0 ? String(saved.id || "") : ""),
+      open: "task",
+      cells: { titel: name },
+      badge: { text: status === "done" ? "Erledigt" : "Offen", tone: status === "done" ? "f" : "w" },
+    })),
+    note: String(saved.summary || plan.summary),
+  };
+}
+
+function dispatchOffer(d: Record<string, unknown>): Record<string, unknown> {
+  const linked = typeof d.aufgabe_id === "string" && d.aufgabe_id.length > 0;
+  return {
+    kind: "bot_dispatch",
+    tool: "dispatch_to_bot",
+    table: "bot_runs",
+    action: "insert",
+    bot: d.bot,
+    summary: "Auftrag an den Bot",
+    lines: [`Auftrag: ${d.title || ""}`],
+    data: {
+      bot: d.bot,
+      title: d.title || "",
+      instructions: d.instructions || "",
+      aufgabe_id: linked ? d.aufgabe_id : null,
+      create_aufgabe: false,
+    },
+  };
 }
 
 async function logRow(
