@@ -187,9 +187,9 @@ export function contactLookup(candidates: Array<{ firma: string; plz: string | n
   let emptyPlz = false;
   for (const row of candidates) {
     const email = normEmail(row.email || "");
-    if (email) emails.add(email);
+    if (email && !unsafeLookupValue(email)) emails.add(email);
     const domain = webDomain(row.web || "");
-    if (domain) domains.add(domain);
+    if (domain && !unsafeLookupValue(domain)) domains.add(domain);
     if (!normFirma(row.firma || "")) continue;
     if (!normPlz(row.plz || "")) {
       emptyPlz = true;
@@ -210,9 +210,16 @@ export function likePattern(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-/** PostgREST-or-Filter. Werte stehen in Anführungszeichen, Punkte in E-Mail und Domain bleiben Werte. */
+const UNSAFE_FILTER = /[",()\\]/;
+
+/** PostgREST zerlegt , ( ) und \ im or-Filter. Solche E-Mails und Domains sind hier ungültig. */
+export function unsafeLookupValue(value: string): boolean {
+  return UNSAFE_FILTER.test(value);
+}
+
+/** PostgREST-or-Filter. Anführungszeichen im Wert sind \", nicht "". */
 export function orIlike(column: string, patterns: string[]): string {
-  return patterns.map((pattern) => `${column}.ilike."${pattern.replace(/"/g, '""')}"`).join(",");
+  return patterns.map((pattern) => `${column}.ilike."${pattern.replace(/"/g, '\\"')}"`).join(",");
 }
 
 export function requestTooLarge(length: number, op: string): boolean {
@@ -272,6 +279,9 @@ export function prepareContact(raw: unknown, botName: string, day: string): { ok
   }
   if (!values.firma) return { ok: false, error: "Firma fehlt." };
   if (values.email && !normEmail(values.email)) return { ok: false, error: "E-Mail ungültig." };
+  if (values.email && unsafeLookupValue(normEmail(values.email))) return { ok: false, error: "E-Mail ungültig." };
+  const domain = webDomain(values.web);
+  if (domain && unsafeLookupValue(domain)) return { ok: false, error: "Domain ungültig." };
   const status = canonStatus(values.status);
   const quelle = canonQuelle(values.quelle);
   const empty = (key: string) => values[key] || null;
