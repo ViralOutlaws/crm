@@ -381,16 +381,11 @@ function askTaskToggle(task, anchor) {
     toast("Aufgabe", "Diese Zeile hat keine ID.", "!");
     return;
   }
-  document.querySelectorAll(".inline-confirm").forEach((n) => n.remove());
   const next = task.status === "done" ? "todo" : "done";
   const box = document.createElement("div");
-  box.className = "inline-confirm";
-  box.setAttribute("role", "group");
-  box.innerHTML = `<span>${esc(next === "done" ? "Erledigen" : "Wieder öffnen")}: ${esc(task.x || task.titel)}</span><button type="button" class="yes">Ja</button><button type="button" class="no">Nein</button>`;
+  box.hidden = true;
   anchor.insertAdjacentElement("afterend", box);
-  box.querySelector(".no").onclick = () => box.remove();
-  box.querySelector(".yes").onclick = () => confirmPlan(taskStatusPlan(task, next), box);
-  box.querySelector(".yes").focus();
+  confirmPlan(taskStatusPlan(task, next), box);
 }
 
 function taskHtml(t) {
@@ -925,14 +920,8 @@ function engine(raw) {
   if (has(q, "aufgabe", "kanban") && has(q, "erledig", "abhake", "abhaken", "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt")) {
     const reopen = has(q, "wieder öffnen", "wieder oeffnen", "wieder offen", "unerledigt");
     return {
-      say: reopen ? "Ich öffne die Aufgabe wieder, sobald du bestätigst." : "Ich markiere die Aufgabe als erledigt, sobald du bestätigst.",
-      cardPlan: {
-        kind: "aufgabe_status",
-        tool: "set_aufgaben_status",
-        summary: reopen ? "Aufgabe wieder öffnen: Angebot nachfassen" : "Aufgabe erledigen: Angebot nachfassen",
-        lines: ["Anzahl: 1", reopen ? "Status: Offen" : "Status: Erledigt", "Angebot nachfassen"],
-        data: { status: reopen ? "todo" : "done", count: 1 },
-      },
+      say: reopen ? "Erledigt. Die Aufgabe ist wieder offen." : "Erledigt. Die Aufgabe ist abgehakt.",
+      area: "aufgaben",
     };
   }
   if (has(q, "social", "content", "instagram", "posts")) return { area: "social", say: "Hier ist der Social-Plan. Entwürfe haben den Status Idee." };

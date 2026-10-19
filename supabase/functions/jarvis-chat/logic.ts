@@ -67,6 +67,24 @@ export function isWriteTool(name: string): boolean {
   return WRITE_TOOLS.has(name);
 }
 
+/** Anlegen und Status todo/done laufen sofort. Löschen und jeder andere Bereich bleiben eine Karte. */
+export function runsWithoutCard(plan: { tool: string; kind: string; table: string; data?: Record<string, unknown> }): boolean {
+  if (plan.tool === "delete_aufgaben" || plan.kind === "aufgabe_delete" || plan.kind === "crm_delete") return false;
+  if (plan.tool === "create_aufgabe" && plan.kind === "aufgabe") return true;
+  if (plan.tool === "set_aufgaben_status" && plan.kind === "aufgabe_status") return true;
+  if (plan.kind === "crm_insert" && plan.table === "aufgaben") return true;
+  if (plan.kind === "crm_update" && plan.table === "aufgaben") {
+    const data = plan.data || {};
+    const patch = data.patch && typeof data.patch === "object" && !Array.isArray(data.patch) ? data.patch as Record<string, unknown> : null;
+    const virtual = data.virtual && typeof data.virtual === "object" && !Array.isArray(data.virtual) ? data.virtual as Record<string, unknown> : {};
+    if (!patch || Object.keys(virtual).length) return false;
+    const keys = Object.keys(patch);
+    if (keys.length !== 1 || keys[0] !== "status") return false;
+    return patch.status === "todo" || patch.status === "done";
+  }
+  return false;
+}
+
 export function openPanelFor(tool: string): string | null {
   switch (tool) {
     case "list_social_posts":
@@ -207,22 +225,23 @@ export function botFromText(s: unknown): string | null {
 const SYSTEM = `Du bist Jarvis, der Assistent von Kim bei Viral Outlaws, einer Performance-Marketing-Agentur.
 Du sprichst Deutsch, knapp und klar, wie ein HUD-Copilot. Über die Agentur sprichst du immer als „wir“, nie als Außenstehender.
 Jede Anfrage ist genau eines: handeln, antworten, zeigen oder plaudern.
-Handeln: Kim will Daten ändern. Lege sofort die Bestätigungskarte vor, mit sinnvollen Vorgaben (Entwurf, pausiert, todo, Datum aus dem Tagesblock). Frag nur, wenn ein Pflichtwert wirklich fehlt. Die Karte ist die Bestätigung, frag nicht doppelt. „Lösche alle Aufgaben“ ruft delete_aufgaben mit all und confirm true auf, ohne Rückfrage.
+Handeln: Kim will Daten ändern. Eine Aufgabe anlegen oder als erledigt bzw. offen markieren speichert sofort, ohne Bestätigungskarte: create_aufgabe und set_aufgaben_status. Danach ein kurzer Satz, dass sie angelegt, erledigt oder wieder offen ist. Löschen bleibt eine Karte. Für alles andere lege sofort die Bestätigungskarte vor, mit sinnvollen Vorgaben (Entwurf, pausiert, todo, Datum aus dem Tagesblock). Frag nur, wenn ein Pflichtwert wirklich fehlt. Die Karte ist die Bestätigung, frag nicht doppelt. „Lösche alle Aufgaben“ ruft delete_aufgaben mit all und confirm true auf, ohne Rückfrage.
 Antworten: Kim fragt nach Daten. Lies das passende Werkzeug und antworte nur daraus.
 Zeigen: Kim will etwas sehen. Nutze open_area und beantworte die Frage aus den mitgelieferten Zeilen.
 Plaudern: kurz, ohne Werkzeug.
 Du erfindest niemals Zahlen, Namen, Beträge, Termine, Status oder Zitate. Nur was ein Werkzeug zurückgibt, darfst du als Tatsache sagen.
 Wenn ein Werkzeug nichts liefert, ein Feld leer ist oder eine Abfrage scheitert, sagst du ausdrücklich, dass die Daten fehlen.
-Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Bestätigung vor und antworten mit awaiting_confirmation.
-Solange das so ist, sagst du nicht, etwas sei angelegt, gespeichert, gelöscht oder erledigt. Bitte um Bestätigung.
+create_aufgabe und set_aufgaben_status speichern sofort. Ihr Werkzeug antwortet mit ausgeführt. Sag dann in einem kurzen Satz, dass die Aufgabe angelegt, erledigt oder wieder offen ist. Bitte dabei nicht um Bestätigung.
+Alle anderen Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Bestätigung vor und antworten mit awaiting_confirmation.
+Solange eine solche Karte offen ist, sagst du nicht, etwas sei angelegt, gespeichert oder gelöscht. Bitte um Bestätigung.
 Sprich in kurzen Sätzen, ohne Markdown, ohne Aufzählungszeichen und ohne IDs. Ein Datum sprichst du als „Samstag, 17. Oktober“, einen Betrag als „1.250 Euro“.
-Sag nie, etwas sei erledigt, bevor die Karte bestätigt wurde.
+Sag nie, ein Löschen oder eine andere Karte sei schon ausgeführt, bevor sie bestätigt wurde. Eine Aufgabe, die create_aufgabe oder set_aufgaben_status gerade gespeichert hat, darfst du als angelegt oder erledigt bezeichnen.
 Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand.
-Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, immer mit Bestätigungskarte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
+Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, mit Bestätigungskarte. Ausnahme: eine neue Zeile in aufgaben und eine Statusänderung dort auf todo oder done speichern sofort, ohne Karte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
 crm_delete zeigt Anzahl und Titel, die Karte ist rot. Eine einzelne Zeile braucht confirm nicht. Mehrere oder alle nur, wenn Kim das ausdrücklich sagt, dann confirm true. crm_update und crm_insert zeigen bei mehreren Zeilen Anzahl und Vorschau. all braucht ebenfalls confirm true.
 Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bezahlt, ueberfaellig. Angebot: entwurf, gesendet, akzeptiert, abgelehnt. Aufgabe: todo, doing, done. Ein Bot steht als Zeile „Zuständig: Name (Rolle).“ in der Beschreibung, ein Termin-Ende als „Bis: HH:MM“ in der Notiz.
 „Rückgängig“ ruft crm_undo auf. Das macht die letzte protokollierte Änderung nach einer weiteren Karte rückgängig.
-Die älteren Werkzeuge create_angebot und create_rechnung legen weiter nur Entwürfe an. Für einen anderen Status nimm crm_insert oder crm_update. set_aufgaben_status und delete_aufgaben bleiben für Aufgaben gültig.
+Die älteren Werkzeuge create_angebot und create_rechnung legen weiter nur Entwürfe an. Für einen anderen Status nimm crm_insert oder crm_update. Aufgaben anlegen und erledigen geht über create_aufgabe und set_aufgaben_status, sofort und ohne Karte. delete_aufgaben bleibt mit Karte.
 Wenn eine Aktion nicht unterstützt ist oder ein Werkzeug einen Fehler meldet, sagst du das in einem klaren Satz. Du öffnest dann nicht ersatzweise ein Panel.
 Fehlt der Status, bleiben Angebote und Rechnungen ein Entwurf und Social-Posts eine Idee. Sagt Kim einen anderen CRM-Status, übernimmst du ihn mit crm_insert oder crm_update.
 Bots: Webby ist Website und Tech, Marky Marketing und Social, Saley Vertrieb und Leads, Cashy Finanzen und Rechnungen, Developy Software und Jarvis. „Webby soll eine Website für ein Yogastudio bauen“ ist dispatch_to_bot an Webby, eine Karte mit Bot und Auftrag, kein stiller Versand. route_to_bot und create_aufgabe mit Bot legen nur die CRM-Aufgabe an. Danach bietet die Oberfläche den Versand an. dispatch_to_bot nicht zusätzlich in derselben Runde aufrufen. list_bot_runs und get_bot_run lesen den Stand. Fehlt die Verbindung, bleibt der Lauf auf queued. Spracherkennung: Marki, Markie und Marky sind Marky. Sally und Sali sind Saley. Kashy und Cashi sind Cashy. Webbi und Weby sind Webby. Developi ist Developy.
@@ -402,7 +421,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_aufgabe",
-    description: "Legt eine Aufgabe im Kanban an, Status immer Offen. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erst nach Bestätigung. Erledigen geht über set_aufgaben_status, Löschen über delete_aufgaben.",
+    description: "Legt eine Aufgabe sofort im Kanban an, Status immer Offen, ohne Bestätigungskarte. Optional einem Bot zuweisen (webby, marky, saley, cashy, developy). Erledigen geht über set_aufgaben_status, Löschen über delete_aufgaben und bleibt eine Karte.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -692,7 +711,7 @@ const EXTRA_TOOLS: ToolDef[] = [
   },
   {
     name: "set_aufgaben_status",
-    description: "Markiert Aufgaben als erledigt (done) oder wieder offen (todo), eine oder mehrere. Filter: id, ids, query (Titel), only (open|done|doing|overdue), all. Erst die Bestätigungskarte, nichts ist vorher gespeichert. Kein Löschen.",
+    description: "Markiert Aufgaben sofort als erledigt (done) oder wieder offen (todo), eine oder mehrere, ohne Bestätigungskarte. Filter: id, ids, query (Titel), only (open|done|doing|overdue), all. Kein Löschen.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -725,7 +744,7 @@ const EXTRA_TOOLS: ToolDef[] = [
   },
   {
     name: "crm_insert",
-    description: "Legt eine oder mehrere CRM-Zeilen an (rows, höchstens 30). table: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. Kein workspace_id, keine settings, keine Geheimnisse, keine Datei-Uploads. Aufgaben: bot webby|marky|saley|cashy|developy. Termine: bis als HH:MM. Status nur die CRM-Werte, Rechnung gesendet heißt offen-rg. Erst die Bestätigungskarte.",
+    description: "Legt eine oder mehrere CRM-Zeilen an (rows, höchstens 30). table: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. Kein workspace_id, keine settings, keine Geheimnisse, keine Datei-Uploads. Aufgaben: bot webby|marky|saley|cashy|developy, und eine neue Aufgabe speichert sofort ohne Karte. Termine: bis als HH:MM. Status nur die CRM-Werte, Rechnung gesendet heißt offen-rg. Außer bei aufgaben erst die Bestätigungskarte.",
     input_schema: {
       type: "object",
       additionalProperties: false,

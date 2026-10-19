@@ -12,6 +12,7 @@ import {
   planFromTool,
   resolveDayPhrase,
   revalidate,
+  runsWithoutCard,
   speakDate,
   upcomingDays,
   sumNetto,
@@ -32,6 +33,25 @@ Deno.test("Systemprompt ist deutsch, cached und spricht als wir", () => {
     if (!text.includes(part)) throw new Error(`Prompt ohne ${part}`);
   }
   if (!blocks[1].text.includes("Kim")) throw new Error("Name fehlt");
+  if (!text.includes("ohne Bestätigungskarte")) throw new Error("Aufgaben sollen ohne Karte laufen");
+  if (!text.includes("ausgeführt")) throw new Error("Sofortiges Speichern fehlt im Prompt");
+  const tools = anthropicTools();
+  const create = tools.find((t) => t.name === "create_aufgabe");
+  const status = tools.find((t) => t.name === "set_aufgaben_status");
+  const wipe = tools.find((t) => t.name === "delete_aufgaben");
+  if (!create || !status || !wipe) throw new Error("Aufgaben-Werkzeuge fehlen");
+  if (!create.description.includes("ohne Bestätigungskarte") || !status.description.includes("ohne Bestätigungskarte")) {
+    throw new Error("Aufgaben-Werkzeuge sprechen noch von einer Karte");
+  }
+  if (!wipe.description.includes("Karte")) throw new Error("Löschen behält die Karte");
+  if (!runsWithoutCard({ tool: "create_aufgabe", kind: "aufgabe", table: "aufgaben" })) throw new Error("anlegen");
+  if (!runsWithoutCard({ tool: "set_aufgaben_status", kind: "aufgabe_status", table: "aufgaben" })) throw new Error("status");
+  if (!runsWithoutCard({ tool: "crm_insert", kind: "crm_insert", table: "aufgaben" })) throw new Error("crm anlegen");
+  if (!runsWithoutCard({ tool: "crm_update", kind: "crm_update", table: "aufgaben", data: { patch: { status: "done" } } })) throw new Error("crm status");
+  if (runsWithoutCard({ tool: "delete_aufgaben", kind: "aufgabe_delete", table: "aufgaben" })) throw new Error("löschen bleibt Karte");
+  if (runsWithoutCard({ tool: "route_to_bot", kind: "aufgabe", table: "aufgaben" })) throw new Error("Bot-Karte bleibt");
+  if (runsWithoutCard({ tool: "crm_update", kind: "crm_update", table: "aufgaben", data: { patch: { titel: "Neu" } } })) throw new Error("Titel bleibt Karte");
+  if (runsWithoutCard({ tool: "crm_insert", kind: "crm_insert", table: "contacts" })) throw new Error("Kontakt bleibt Karte");
 });
 
 Deno.test("Begrüßung folgt der Berliner Uhr und Daten sind deutsch", () => {
@@ -239,7 +259,7 @@ Deno.test("Gespräch hängt eine Notiz an und bündelt Aufgaben plus Wiedervorla
   if (ret.data.status !== "pausiert" || ret.table !== "retainer") throw new Error(JSON.stringify(ret.data));
 });
 
-Deno.test("Aufgaben löschen und erledigen laufen über die Karte", () => {
+Deno.test("Aufgaben löschen braucht Bestätigung, erledigte fallen aus dem Statuswechsel", () => {
   const a = "11111111-1111-4111-8111-111111111111";
   const b = "22222222-2222-4222-8222-222222222222";
   let all = false;
