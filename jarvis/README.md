@@ -149,6 +149,18 @@ Keine Migration.
 
 `jarvis-dispatch` und `jarvis-chat` bleiben. Ab 200 ungültigen Versuchen pro Minute prüft `bot-api` nur noch Hashes, die in der letzten Minute schon gültig waren. Unbekannte Hashes bekommen 429 mit `Retry-After`, ohne die Token-Tabelle zu fragen. Die Sperre einer einzelnen IP bleibt davor. Die Grok-Routinen warten `Retry-After` ab und wiederholen mit Backoff.
 
+### Kontakte anlegen
+
+Keine Migration. `supabase functions deploy bot-api` ohne `--no-verify-jwt`. `jarvis-chat` und `jarvis-dispatch` bleiben.
+
+`POST /functions/v1/bot-api` mit `Authorization: Bearer <Bot-Token>`. `workspace_id` kommt nur aus dem Token. Ein Wert im Body wird ignoriert. Das Rate-Limit gilt wie bei den anderen Operationen.
+
+`{"op":"create_contacts","contacts":[...]}` legt bis zu 50 Kontakte an. `{"op":"create_contact","contact":{...}}` ist derselbe Weg für ein Objekt, die Felder dürfen auch direkt neben `op` stehen. Optional `run_id` eines eigenen Laufs: dann hängt ein Ereignis an den Lauf (`Kontakte: n angelegt, n Dubletten, n Fehler.`). Fehlt der Lauf, werden die Kontakte trotzdem angelegt.
+
+Nur INSERT in `contacts`. Kein Update, kein Löschen. Felder: `firma` (Pflicht), `person`, `branche`, `str`, `plz`, `ort`, `tel`, `email`, `web`, `status`, `quelle`, `ana`, `notes`. Unbekannte Felder fallen weg. Strings werden getrimmt und gekürzt. `status` ist leer die erste Pipeline-Phase aus `index.html`, das ist `lead`, sonst nur `lead`, `erstgespraech`, `angebot`, `gewonnen`, `verloren`. Leere `quelle` wird `Bot: ` plus der Name des Tokens, bei Saley also `Bot: Saley`.
+
+Vor dem Insert prüft der Bot denselben Workspace. Eine Dublette ist dieselbe E-Mail, oder dieselbe Website-Domain ohne `www` und ohne Pfad, oder dieselbe Firma (klein, eine Leerstelle, ohne GmbH, UG, e.K. und die üblichen weiteren Formen) plus dieselbe PLZ. Treffer im selben Aufruf zählen mit. Antwort je Eintrag, in derselben Reihenfolge: `{"created":true,"id"}`, `{"duplicate":true,"existing_id"}` oder `{"error"}`. Nichts wird überschrieben. Derselbe Aufruf noch einmal liefert die vorhandenen IDs.
+
 ### Was der Bot nicht darf
 
 `bot-api` liest und ändert nur Läufe mit demselben `bot` und derselben `workspace_id` wie der Token. Ein fremder Lauf antwortet mit 404. Ein unbekannter oder widerrufener Token ist 401. Ein Hash landet erst nach gültigem Token in der Limit-Map: mehr als 60 Anfragen pro Minute und Token sind 429, gezählt pro Instanz. Ungültige Versuche zählen pro vertrauenswürdiger IP (`cf-connecting-ip`, sonst `x-real-ip`, sonst der letzte Hop von `x-forwarded-for`), höchstens 20 pro Minute, und diese Sperre liegt vor dem Nachschlagen. Ohne gültige Adresse gilt ein gemeinsamer Topf. Mehr als 200 ungültige Versuche pro Minute sperren unbekannte Hashes; ein Hash, der in der letzten Minute schon gültig war, wird weiter gegen `bot_tokens` geprüft. Die ungültige Map bleibt auf 256 Adressen begrenzt, die gültige Map auf 64 Hashes, abgelaufene Einträge fallen weg. Jede 429-Antwort enthält `Retry-After` in Sekunden. Die Routine wartet diese Zeit, verdoppelt sie bei erneutem 429 bis höchstens 60 Sekunden und setzt den Lauf nach wenigen Versuchen auf `blockiert`. Erlaubte Wechsel: `queued` nach `sent`, `in_arbeit` oder `fehler`; `sent` nach `in_arbeit`, `erledigt`, `blockiert` oder `fehler`; `in_arbeit` nach `erledigt`, `blockiert` oder `fehler`; `blockiert` zurück nach `in_arbeit`, `erledigt` oder `fehler`; `fehler` nach `queued` oder `in_arbeit`. `erledigt` ist das Ende. Derselbe Status bleibt erlaubt, damit ein Ergebnis nachgetragen werden kann. `queued` direkt nach `erledigt` ist nicht erlaubt. `crm_insert` fasst `bot_runs` und `bot_tokens` nicht an.

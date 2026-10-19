@@ -22,7 +22,15 @@ import {
   publicError,
   pushEvent,
   sha256Hex,
+  BOT_META,
 } from "../_shared/bot_leitstand.ts";
+import {
+  contactBatchSummary,
+  contactInputs,
+  contactResult,
+  planContactBatch,
+  type ContactKey,
+} from "../_shared/bot_contacts.ts";
 
 const rates = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
 
@@ -88,7 +96,7 @@ Deno.serve(async (req) => {
     } catch {
       return json({ error: "Anfrage leer." }, 400, headers);
     }
-    if (raw.length > 32_000) return json({ error: "Anfrage zu groß." }, 413, headers);
+    if (raw.length > 240_000) return json({ error: "Anfrage zu groß." }, 413, headers);
     let body: Record<string, unknown>;
     try {
       const parsed = JSON.parse(raw);
@@ -102,6 +110,7 @@ Deno.serve(async (req) => {
     if (op === "get") return json(await getRun(admin, scope, String(body.run_id || "")), 200, headers);
     if (op === "update") return json(await updateRun(admin, scope, body), 200, headers);
     if (op === "mirror") return json(await mirrorRun(admin, scope, String(body.run_id || "")), 200, headers);
+    if (op === "create_contacts" || op === "create_contact") return json(await createContacts(admin, scope, body, op), 200, headers);
     return json({ error: "Unbekannte Operation." }, 400, headers);
   } catch (e) {
     const msg = publicError(e);
@@ -205,6 +214,96 @@ async function mirrorRun(admin: SupabaseClient, scope: { bot: BotId; workspace_i
     .eq("bot", scope.bot)
     .eq("workspace_id", scope.workspace_id);
   return { ok: true, aufgabe_id: aufgabeId, status: "done" };
+}
+
+async function loadContactKeys(admin: SupabaseClient, workspaceId: string): Promise<ContactKey[]> {
+  const out: ContactKey[] = [];
+  const page = 1000;
+  for (let from = 0; from < 8000; from += page) {
+    const { data, error } = await admin.from("contacts")
+      .select("id, firma, plz, email, web")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true })
+      .range(from, from + page - 1);
+    if (error) throw new Error("Kontakte nicht prüfbar.");
+    for (const row of data || []) {
+      out.push({
+        id: String(row.id),
+        firma: row.firma == null ? null : String(row.firma),
+        plz: row.plz == null ? null : String(row.plz),
+        email: row.email == null ? null : String(row.email),
+        web: row.web == null ? null : String(row.web),
+      });
+    }
+    if (!data || data.length < page) return out;
+  }
+  throw new Error("Zu viele Kontakte für die Dublettenprüfung.");
+}
+
+async function createContacts(
+  admin: SupabaseClient,
+  scope: { bot: BotId; workspace_id: string },
+  body: Record<string, unknown>,
+  op: string,
+) {
+  const parsed = contactInputs(op, body);
+  if (!parsed.ok) throw new Error(parsed.error);
+  const index = await loadContactKeys(admin, scope.workspace_id);
+  const botName = BOT_META[scope.bot].name;
+  const results: Record<string, unknown>[] = [];
+  for (const item of parsed.items) {
+    const plan = planContactBatch([item], index, botName, () => crypto.randomUUID())[0];
+    if (plan.kind !== "insert") {
+      results.push(contactResult(plan));
+      continue;
+    }
+    const { error } = await admin.from("contacts").insert({
+      ...plan.row,
+      id: plan.id,
+      workspace_id: scope.workspace_id,
+      archiviert: false,
+      notizen: [],
+      dokumente: [],
+      checks: [],
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      results.push({ error: "Kontakt nicht angelegt." });
+      continue;
+    }
+    index.push({
+      id: plan.id,
+      firma: plan.row.firma,
+      plz: plan.row.plz,
+      email: plan.row.email,
+      web: plan.row.web,
+    });
+    results.push({ created: true, id: plan.id });
+  }
+  await noteContactBatch(admin, scope, body.run_id, results);
+  return { ok: true, results };
+}
+
+async function noteContactBatch(
+  admin: SupabaseClient,
+  scope: { bot: BotId; workspace_id: string },
+  runIdRaw: unknown,
+  results: Record<string, unknown>[],
+) {
+  const runId = typeof runIdRaw === "string" ? runIdRaw : "";
+  if (!UUID.test(runId)) return;
+  try {
+    const row = await loadOwn(admin, scope, runId);
+    const events = pushEvent(row.events, {
+      at: new Date().toISOString(),
+      status: String(row.status),
+      message: contactBatchSummary(results),
+    });
+    await admin.from("bot_runs").update({ events, updated_at: new Date().toISOString() })
+      .eq("id", runId)
+      .eq("bot", scope.bot)
+      .eq("workspace_id", scope.workspace_id);
+  } catch { /* Nachweis am Lauf ist optional und blockiert das Anlegen nicht. */ }
 }
 
 function publicRun(row: Record<string, unknown>) {
