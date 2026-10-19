@@ -1,6 +1,7 @@
 // Freisprechen. Kein Mikrofon, kein Netz: nur die Regeln für Pause, Speicher und Browser.
 
-export const SILENCE_MS = 1200;
+export const SILENCE_MS = 1400;
+export const STALL_MS = 2000;
 export const HANDSFREE_KEY = "jarvis_handsfree";
 export const WAKE_WINDOW_MS = 15000;
 export const HISTORY_IDLE_MS = 30 * 60 * 1000;
@@ -28,9 +29,8 @@ export function handsFreeSupport(nav) {
   const platform = String(agent.platform || "");
   const touch = Number(agent.maxTouchPoints || 0);
   const iOS = /iPad|iPhone|iPod/.test(ua) || (platform === "MacIntel" && touch > 1);
-  if (iOS) return { ok: false, reason: "ios" };
-  if (!SR) return { ok: false, reason: "unsupported" };
-  return { ok: true, reason: "" };
+  if (!SR) return { ok: false, reason: iOS ? "ios" : "unsupported", continuous: false };
+  return { ok: true, reason: "", continuous: !iOS };
 }
 
 export function handsFreeHint(reason) {
@@ -44,56 +44,81 @@ export function isStopCommand(text) {
 }
 
 /**
- * finalText ist der bisher fertige Satz, interimText das, was noch läuft.
- * Die Pause startet nur, wenn etwas fertig ist und nichts mehr läuft.
- * Weiterreden (neues final oder ein Zwischenstand) setzt sie zurück.
+ * Eine Sitzung der Web Speech API liefert finalText und interimText nur für sich.
+ * seal() hängt die Sitzung an den bisherigen Text, damit ein Neustart nach onend
+ * nichts verwirft. Jedes neue Ergebnis, auch ein Zwischenstand, startet die Pause
+ * neu. Nach STALL_MS ohne neues Ergebnis geht der Text trotzdem raus.
  * schedule(fn, ms) liefert eine ID, cancel(id) verwirft sie.
  */
 export function createUtterance(opts = {}) {
   const silenceMs = opts.silenceMs ?? SILENCE_MS;
+  const stallMs = opts.stallMs ?? STALL_MS;
   const schedule = opts.schedule || ((fn, ms) => setTimeout(fn, ms));
   const cancel = opts.cancel || ((id) => clearTimeout(id));
+  let committed = "";
   let finals = "";
   let interim = "";
-  let timer = null;
+  let silenceTimer = null;
+  let stallTimer = null;
   let generation = 0;
 
-  function clearTimer() {
-    if (timer == null) return;
-    cancel(timer);
-    timer = null;
+  function clearTimers() {
+    if (silenceTimer != null) cancel(silenceTimer);
+    if (stallTimer != null) cancel(stallTimer);
+    silenceTimer = null;
+    stallTimer = null;
+  }
+
+  function preview() {
+    return `${committed} ${finals} ${interim}`.replace(/\s+/g, " ").trim();
+  }
+
+  function arm(onFlush) {
+    clearTimers();
+    if (!preview()) return;
+    const mine = ++generation;
+    const fire = () => {
+      if (mine !== generation) return;
+      generation += 1;
+      clearTimers();
+      const text = preview();
+      committed = "";
+      finals = "";
+      interim = "";
+      if (text) onFlush(text);
+    };
+    silenceTimer = schedule(fire, silenceMs);
+    stallTimer = schedule(fire, stallMs);
   }
 
   return {
     reset() {
+      committed = "";
       finals = "";
       interim = "";
       generation += 1;
-      clearTimer();
+      clearTimers();
     },
     sync(finalText, interimText, onFlush) {
-      finals = String(finalText || "").trim();
-      interim = String(interimText || "").trim();
-      clearTimer();
-      const mine = ++generation;
-      if (!finals || interim) return;
-      const pending = finals;
-      timer = schedule(() => {
-        if (mine !== generation) return;
-        timer = null;
-        if (finals !== pending || interim) return;
-        finals = "";
-        interim = "";
-        onFlush(pending);
-      }, silenceMs);
+      const nextFinal = String(finalText || "").trim();
+      const nextInterim = String(interimText || "").trim();
+      if (nextFinal === finals && nextInterim === interim) return;
+      finals = nextFinal;
+      interim = nextInterim;
+      arm(onFlush);
     },
-    preview() {
-      return `${finals} ${interim}`.trim();
+    seal() {
+      const chunk = `${finals} ${interim}`.replace(/\s+/g, " ").trim();
+      if (chunk) committed = `${committed} ${chunk}`.replace(/\s+/g, " ").trim();
+      finals = "";
+      interim = "";
     },
+    preview,
     flushNow() {
       generation += 1;
-      clearTimer();
-      const text = `${finals} ${interim}`.trim();
+      clearTimers();
+      const text = preview();
+      committed = "";
       finals = "";
       interim = "";
       return text;

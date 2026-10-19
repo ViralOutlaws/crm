@@ -1,10 +1,13 @@
 // Sprachausgabe. createSpeech ist die Browserstimme.
-// createElevenLabsSpeech spricht Satz für Satz über jarvis-tts und fällt bei Fehlern darauf zurück.
+// createElevenLabsSpeech bündelt kurze Sätze, lädt mehrere Blöcke voraus und spielt sie in Reihenfolge.
 
 const SENTENCE_CAP = 1400;
 // Zusätzliches Tempo nur für die ElevenLabs-Wiedergabe. 1 = Dateitempo.
 // 1.2 klingt bei dieser Stimme verzerrt, deshalb Dateitempo. Hier später änderbar.
 export const ELEVEN_PLAYBACK_RATE = 1.0;
+export const FIRST_BLOCK = 120;
+export const BLOCK_MAX = 250;
+export const LOOKAHEAD = 2;
 
 export function pullSentences(buffer, flush) {
   const ready = [];
@@ -50,6 +53,162 @@ function splitLong(sentence) {
     i += SENTENCE_CAP;
   }
   return out;
+}
+
+export function foldBlocks(rest, emitted, sentences, flush) {
+  let buf = String(rest || "").trim();
+  let count = emitted || 0;
+  const blocks = [];
+  const take = (text) => {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    if (t.length <= 1) return;
+    blocks.push(t);
+    count += 1;
+  };
+  for (const raw of sentences || []) {
+    const piece = String(raw || "").replace(/\s+/g, " ").trim();
+    if (piece.length <= 1) continue;
+    const max = count === 0 ? FIRST_BLOCK : BLOCK_MAX;
+    if (!buf) {
+      buf = piece;
+      if (piece.length >= max) {
+        take(buf);
+        buf = "";
+      }
+      continue;
+    }
+    const joined = `${buf} ${piece}`;
+    if (joined.length <= max) {
+      buf = joined;
+      continue;
+    }
+    take(buf);
+    const nextMax = count === 0 ? FIRST_BLOCK : BLOCK_MAX;
+    if (piece.length >= nextMax) take(piece);
+    else buf = piece;
+  }
+  if (buf && (flush || sentences?.length)) {
+    take(buf);
+    buf = "";
+  }
+  return { blocks, rest: buf, count };
+}
+
+export function planSpeech(text) {
+  const { ready } = pullSentences(String(text || ""), true);
+  const folded = foldBlocks("", 0, ready, true);
+  return folded.blocks.map((block, i, all) => ({
+    text: block,
+    previous_text: i > 0 ? all[i - 1] : "",
+    next_text: i + 1 < all.length ? all[i + 1] : "",
+  }));
+}
+
+export function createLoadQueue(hooks) {
+  const items = [];
+  const ends = [];
+  let started = 0;
+  let cursor = 0;
+  let pumping = false;
+  let closed = false;
+  let done = false;
+  const lookahead = hooks.lookahead ?? LOOKAHEAD;
+  const alive = hooks.alive || (() => true);
+
+  const finish = () => {
+    if (done) return;
+    done = true;
+    hooks.ondone?.();
+  };
+
+  const fail = (error, index) => {
+    if (done) return;
+    done = true;
+    hooks.onerror?.({ error, index });
+  };
+
+  const pump = async () => {
+    if (pumping || done) return;
+    pumping = true;
+    try {
+      while (alive() && !done) {
+        const target = Math.min(items.length, cursor + lookahead + 1);
+        while (started < target) {
+          const item = items[started++];
+          item.promise = Promise.resolve()
+            .then(() => hooks.load(item.spec))
+            .then((audio) => ({ audio }))
+            .catch((error) => ({ error }));
+        }
+        if (cursor >= items.length) break;
+        const item = items[cursor];
+        if (!item?.promise) break;
+        const loaded = await item.promise;
+        if (!alive() || done) return;
+        if (loaded.error) {
+          pumping = false;
+          fail(loaded.error, cursor);
+          return;
+        }
+        const audio = loaded.audio;
+        if (audio != null) {
+          const ended = hooks.play(audio, item.spec, cursor);
+          if (ended && typeof ended.then === "function") ends.push(ended);
+        }
+        cursor += 1;
+      }
+    } catch (error) {
+      pumping = false;
+      if (alive()) fail(error, cursor);
+      return;
+    }
+    pumping = false;
+    if (!alive() || done) return;
+    if (cursor < items.length) {
+      pump();
+      return;
+    }
+    if (closed) {
+      try {
+        await Promise.all(ends);
+      } catch { /* Abbruch der Wiedergabe */ }
+      if (!alive() || done) return;
+      finish();
+    }
+  };
+
+  return {
+    push(specs) {
+      if (done || !alive()) return;
+      for (const spec of specs || []) items.push({ spec, promise: null });
+      pump();
+    },
+    close() {
+      closed = true;
+      if (!pumping && cursor >= items.length) {
+        Promise.all(ends).then(() => {
+          if (alive() && !done) finish();
+        });
+        return;
+      }
+      pump();
+    },
+  };
+}
+
+export function runPrefetch(blocks, hooks) {
+  return new Promise((resolve, reject) => {
+    const queue = createLoadQueue({
+      load: hooks.load,
+      play: hooks.play,
+      alive: hooks.alive,
+      lookahead: hooks.lookahead,
+      ondone: () => resolve(true),
+      onerror: (info) => reject(info.error || info),
+    });
+    queue.push(blocks);
+    queue.close();
+  });
 }
 
 export function createSpeech() {
@@ -128,9 +287,11 @@ export function createElevenLabsSpeech(opts = {}) {
   let audioCtx = null;
   let analyserNode = null;
   let levelData = null;
-  let stopSource = null;
-  let abort = null;
   let settle = null;
+  let playhead = 0;
+  let activeSources = 0;
+  const aborts = new Set();
+  const stops = new Set();
 
   function finishWait() {
     const done = settle;
@@ -139,17 +300,17 @@ export function createElevenLabsSpeech(opts = {}) {
   }
 
   function stopAudio() {
-    if (abort) {
-      try { abort.abort(); } catch { /* ignore */ }
-      abort = null;
+    for (const ctrl of aborts) {
+      try { ctrl.abort(); } catch { /* ignore */ }
     }
-    if (stopSource) {
-      const stop = stopSource;
-      stopSource = null;
+    aborts.clear();
+    for (const stop of stops) {
       try { stop(); } catch { /* ignore */ }
     }
+    stops.clear();
+    activeSources = 0;
+    playhead = 0;
     hearing = false;
-    analyserNode = null;
     finishWait();
   }
 
@@ -182,102 +343,123 @@ export function createElevenLabsSpeech(opts = {}) {
     });
   }
 
-  function playBuffer(buffer, mine) {
+  function attachAnalyser(ctx) {
+    if (analyserNode) return analyserNode;
+    const an = ctx.createAnalyser();
+    an.fftSize = 1024;
+    an.smoothingTimeConstant = 0.65;
+    levelData = new Uint8Array(an.fftSize);
+    an.connect(ctx.destination);
+    analyserNode = an;
+    return an;
+  }
+
+  function scheduleBuffer(buffer, mine) {
     return new Promise((resolve, reject) => {
       if (mine !== token || muted) return resolve();
       const ctx = audioCtx;
       if (!ctx) return reject(new Error("Kein Audio."));
       const src = ctx.createBufferSource();
-      const an = ctx.createAnalyser();
-      an.fftSize = 1024;
-      an.smoothingTimeConstant = 0.65;
-      levelData = new Uint8Array(an.fftSize);
-      analyserNode = an;
+      const an = attachAnalyser(ctx);
       src.buffer = buffer;
       src.playbackRate.value = ELEVEN_PLAYBACK_RATE;
       src.preservesPitch = true;
       src.connect(an);
-      an.connect(ctx.destination);
+      const startAt = Math.max(ctx.currentTime + 0.02, playhead);
+      const dur = buffer.duration / (ELEVEN_PLAYBACK_RATE || 1);
+      playhead = startAt + dur;
+      activeSources += 1;
+      hearing = true;
       let settled = false;
       const done = (err) => {
         if (settled) return;
         settled = true;
-        hearing = false;
-        if (analyserNode === an) analyserNode = null;
-        if (stopSource === stop) stopSource = null;
+        activeSources = Math.max(0, activeSources - 1);
+        if (!activeSources) hearing = false;
+        stops.delete(stop);
         try { src.disconnect(); } catch { /* ignore */ }
         if (err) reject(err);
         else resolve();
       };
-      const stop = () => { try { src.stop(); } catch { /* ignore */ } };
-      stopSource = stop;
+      const stop = () => {
+        try { src.stop(); } catch { /* ignore */ }
+      };
+      stops.add(stop);
       src.onended = () => done();
-      hearing = true;
       try {
-        src.start();
+        src.start(startAt);
       } catch (err) {
         done(err instanceof Error ? err : new Error("Audio startet nicht."));
       }
     });
   }
 
-  async function playEleven(sentence, mine) {
+  async function loadAudio(spec, mine) {
     const ctx = ensureCtx();
     if (!ctx) throw new Error("Kein Audio.");
     const access = typeof opts.token === "function" ? await opts.token() : "";
-    if (mine !== token || muted) return;
+    if (mine !== token || muted) return null;
     if (!access) throw new Error("Anmeldung fehlt.");
     const ctrl = new AbortController();
-    abort = ctrl;
-    const endpoint = typeof opts.url === "function" ? opts.url() : opts.url;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: {
-        Authorization: `Bearer ${access}`,
-        apikey: opts.apikey || "",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: sentence }),
-    });
-    if (abort === ctrl) abort = null;
-    if (mine !== token || muted) return;
-    const type = res.headers.get("content-type") || "";
-    if (!res.ok || !type.includes("audio")) throw new Error("Sprachausgabe fehlgeschlagen.");
-    const bytes = await res.arrayBuffer();
-    if (mine !== token || muted) return;
-    const copy = bytes.slice(0);
-    const audio = await ctx.decodeAudioData(copy);
-    if (mine !== token || muted) return;
-    await playBuffer(audio, mine);
+    aborts.add(ctrl);
+    try {
+      const endpoint = typeof opts.url === "function" ? opts.url() : opts.url;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          Authorization: `Bearer ${access}`,
+          apikey: opts.apikey || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: spec.text,
+          previous_text: spec.previous_text || "",
+          next_text: spec.next_text || "",
+        }),
+      });
+      if (mine !== token || muted) return null;
+      const type = res.headers.get("content-type") || "";
+      if (!res.ok || !type.includes("audio")) throw new Error("Sprachausgabe fehlgeschlagen.");
+      const bytes = await res.arrayBuffer();
+      if (mine !== token || muted) return null;
+      return await ctx.decodeAudioData(bytes.slice(0));
+    } finally {
+      aborts.delete(ctrl);
+    }
   }
 
-  async function runQueue(sentences, mine, hooks) {
+  function openQueue(mine, hooks, specs) {
     let started = false;
-    let elevenFailed = false;
-    speaking = true;
-    for (const sentence of sentences) {
-      if (mine !== token || muted) return;
-      if (!started) {
-        started = true;
-        hooks.onstart?.();
-      }
-      hooks.onboundary?.();
-      try {
-        if (elevenFailed || !canEleven()) throw new Error("fallback");
-        await playEleven(sentence, mine);
-      } catch (err) {
-        if (mine !== token || err?.name === "AbortError") return;
-        if (!elevenFailed && canEleven()) {
-          elevenFailed = true;
-          hooks.onfallback?.();
+    const queue = createLoadQueue({
+      alive: () => mine === token && !muted,
+      load: (spec) => loadAudio(spec, mine),
+      play: (audio) => {
+        if (!started) {
+          started = true;
+          hooks.onstart?.();
         }
-        await playBrowser(sentence, mine);
-      }
-    }
-    if (mine !== token) return;
-    speaking = false;
-    hooks.onend?.();
+        hooks.onboundary?.();
+        return scheduleBuffer(audio, mine);
+      },
+      onerror: ({ error, index }) => {
+        if (mine !== token || error?.name === "AbortError") return;
+        stopAudio();
+        hooks.onfallback?.();
+        const rest = specs.slice(index).map((spec) => spec.text).join(" ");
+        playBrowser(rest, mine).then(() => {
+          if (mine !== token) return;
+          speaking = false;
+          hooks.onend?.();
+        });
+      },
+      ondone: () => {
+        if (mine !== token) return;
+        speaking = false;
+        hooks.onend?.();
+      },
+    });
+    return queue;
   }
 
   return {
@@ -318,63 +500,79 @@ export function createElevenLabsSpeech(opts = {}) {
       const mine = ++token;
       stopAudio();
       fallback.cancel();
-      const { ready } = pullSentences(String(text || ""), true);
-      if (!ready.length || muted) {
+      const specs = planSpeech(text);
+      if (!specs.length || muted) {
         speaking = false;
         hooks.onend?.();
         return;
       }
       if (!canEleven()) {
-        fallback.speak(ready.join(" "), hooks);
+        fallback.speak(specs.map((spec) => spec.text).join(" "), hooks);
         return;
       }
       speaking = true;
-      runQueue(ready, mine, hooks);
+      playhead = 0;
+      const queue = openQueue(mine, hooks, specs);
+      queue.push(specs);
+      queue.close();
     },
     openStream(hooks = {}) {
       const mine = ++token;
       stopAudio();
       fallback.cancel();
       let buf = "";
+      let rest = "";
+      let count = 0;
       let closed = false;
-      let pumping = false;
-      let started = false;
-      let elevenFailed = false;
-      const queue = [];
+      let elevenDead = false;
+      let ended = false;
+      let browserChain = Promise.resolve();
+      const specs = [];
       speaking = !muted;
-
-      const pump = async () => {
-        if (pumping || mine !== token) return;
-        pumping = true;
-        while (queue.length && mine === token && !muted) {
-          const sentence = queue.shift();
-          if (!started) {
-            started = true;
-            hooks.onstart?.();
-          }
-          hooks.onboundary?.();
-          try {
-            if (elevenFailed || !canEleven()) throw new Error("fallback");
-            await playEleven(sentence, mine);
-          } catch (err) {
-            if (mine !== token || err?.name === "AbortError") break;
-            if (!elevenFailed && canEleven()) {
-              elevenFailed = true;
-              hooks.onfallback?.();
-            }
-            await playBrowser(sentence, mine);
-          }
-        }
-        pumping = false;
-        if (mine !== token) return;
-        if (queue.length && !muted) {
-          pump();
-          return;
-        }
-        if (closed) {
+      playhead = 0;
+      const sayBrowser = (text) => {
+        const line = String(text || "").trim();
+        if (!line || mine !== token) return;
+        browserChain = browserChain.then(() => playBrowser(line, mine));
+      };
+      const finish = () => {
+        if (ended || mine !== token) return;
+        ended = true;
+        browserChain.then(() => {
+          if (mine !== token) return;
           speaking = false;
           hooks.onend?.();
+        });
+      };
+      const queue = openQueue(mine, {
+        onstart: () => hooks.onstart?.(),
+        onboundary: () => hooks.onboundary?.(),
+        onfallback: () => {
+          elevenDead = true;
+          hooks.onfallback?.();
+        },
+        onend: () => {
+          if (mine !== token || !closed) return;
+          finish();
+        },
+      }, specs);
+
+      const take = (sentences, flush) => {
+        const folded = foldBlocks(rest, count, sentences, flush);
+        rest = folded.rest;
+        count = folded.count;
+        if (!folded.blocks.length) return;
+        const batch = folded.blocks.map((text) => {
+          const spec = { text, previous_text: specs.length ? specs[specs.length - 1].text : "", next_text: "" };
+          if (specs.length) specs[specs.length - 1].next_text = text;
+          specs.push(spec);
+          return spec;
+        });
+        if (elevenDead || !canEleven()) {
+          sayBrowser(batch.map((spec) => spec.text).join(" "));
+          return;
         }
+        queue.push(batch);
       };
 
       return {
@@ -383,22 +581,19 @@ export function createElevenLabsSpeech(opts = {}) {
           buf += String(text || "");
           const pulled = pullSentences(buf, false);
           buf = pulled.rest;
-          if (!pulled.ready.length) return;
-          queue.push(...pulled.ready);
-          pump();
+          take(pulled.ready, false);
         },
         close() {
           if (mine !== token || closed) return;
           closed = true;
           const pulled = pullSentences(buf, true);
           buf = "";
-          queue.push(...pulled.ready);
-          if (!queue.length && !pumping) {
-            speaking = false;
-            hooks.onend?.();
+          take(pulled.ready, true);
+          if (elevenDead || !specs.length) {
+            finish();
             return;
           }
-          pump();
+          queue.close();
         },
       };
     },

@@ -23,17 +23,17 @@ supabase secrets set ELEVENLABS_SPEED=1.2
 
 ## Stimme
 
-Live spricht Jarvis Satz für Satz, sobald der Chat einen Satz geliefert hat. Die Anfrage geht an `jarvis-tts` mit `{text}` (höchstens 1500 Zeichen). ElevenLabs bekommt `voice_settings.speed` 1.2, sofern `ELEVENLABS_SPEED` nichts anderes setzt (geklemmt auf 0.7 bis 1.2). Die Datei spielt der Browser mit `playbackRate` 1.0 und `preservesPitch` (`ELEVEN_PLAYBACK_RATE` in `jarvis/speech.js`, dort änderbar). Ein höheres Wiedergabetempo klingt bei dieser Stimme verzerrt; das Tempo kommt vom Server. Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
+Live spricht Jarvis in Blöcken, sobald ein Satz da ist. Kurze Sätze, die schon zusammen vorliegen, werden bis etwa 120 Zeichen im ersten Block und danach bis 250 Zeichen gebündelt. Der erste Block geht sofort raus. Mindestens die zwei folgenden Blöcke werden geladen, während der aktuelle läuft, und schließen nahtlos an (`playbackRate` 1.0, `preservesPitch`). Die Anfrage an `jarvis-tts` ist `{text, previous_text, next_text}` (Text höchstens 1500 Zeichen, Kontext höchstens 500). ElevenLabs bleibt am Stream-Endpunkt. `voice_settings.speed` ist 1.2, sofern `ELEVENLABS_SPEED` nichts anderes setzt (geklemmt auf 0.7 bis 1.2). Ein höheres Wiedergabetempo klingt bei dieser Stimme verzerrt; das Tempo kommt vom Server. Bricht Kim ab, stoppen die laufende Wiedergabe und alle vorgeladenen Audios. Die Core-Animation folgt der laufenden Wiedergabe über einen Web-Audio-Analyser. Schlägt ElevenLabs fehl, spricht der Browser weiter. Die Stummschaltung bleibt. Die Demo (`?demo=1`) ruft ElevenLabs nicht auf.
 
 Ein lokales `localStorage.jarvis_fn` auf `http://localhost` oder `http://127.0.0.1` … `/jarvis-chat` lenkt die Stimme auf dasselbe Ziel mit `/jarvis-tts`.
 
 ## Freisprechen
 
-Der Kopfhörer neben dem Mikrofon schaltet dauerhaftes Zuhören ein. Nach der ersten Mikrofonfreigabe ist es an und bleibt in `localStorage` unter `jarvis_handsfree` (`1` an, `0` aus). Die Web Speech API läuft auf `de-DE`, `continuous`, und startet nach `end` oder einem harmlosen Fehler neu. Ein finales Ergebnis plus etwa 1,2 Sekunden Ruhe (`SILENCE_MS` in `jarvis/listen.js`) sendet den Satz. Tippt man dabei auf das Mikrofon, geht ein angefangener Satz sofort raus. Ist Freisprechen aus, bleibt die Taste das Antippen zum Sprechen.
+Der Kopfhörer neben dem Mikrofon schaltet dauerhaftes Zuhören ein. Nach der ersten Mikrofonfreigabe ist es an und bleibt in `localStorage` unter `jarvis_handsfree` (`1` an, `0` aus). Die Web Speech API läuft auf `de-DE`. Chrome bleibt bei `continuous`. Auf iPhone und iPad ignoriert Safari das oft, dort ist `continuous` aus und jede beendete Sitzung startet neu. Fertige Stücke und Zwischenstände werden aneinandergehängt, auch wenn die Erkennung unterwegs neu ansetzt. Etwa 1,4 Sekunden nach dem letzten Ergebnis (`SILENCE_MS`, auch ein Zwischenstand) geht der Text raus, unabhängig von der Länge. Liegt Text im Feld und kommt 2 Sekunden kein neues Ergebnis (`STALL_MS`), geht er ebenfalls raus. Tippt man dabei auf das Mikrofon, geht ein angefangener Satz sofort raus. Ist Freisprechen aus, bleibt die Taste das Antippen zum Sprechen und sammelt lange Aussagen auf dieselbe Art.
 
 Während Jarvis spricht oder eine Antwort holt, ist die Erkennung aus, damit die Lautsprecher nicht als Frage zurückkommen. Danach geht das Mikrofon wieder an. „Stopp“, „Stop“ oder „Halt“ als eigener Satz bricht die Ausgabe ab und geht nicht ans Modell. Mitsprechen während der Antwort ist aus: die Erkennung würde Jarvis selbst hören. Die Mikrofontaste bricht die Ausgabe ab und hört danach wieder zu.
 
-iPhone und iPad sowie Browser ohne Web Speech API bleiben beim Tippen auf das Mikrofon. Dort steht ein Hinweis unter der Eingabe. Chrome schickt die Erkennung an Google; die Demo ruft dabei weder Supabase noch ElevenLabs auf und öffnet das Mikrofon nicht von selbst.
+Ohne Web Speech API bleibt es beim Tippen auf das Mikrofon, mit einem Hinweis unter der Eingabe. iPhone und iPad mit Spracherkennung hören in Abschnitten zu und setzen selbst wieder an. Chrome schickt die Erkennung an Google; die Demo ruft dabei weder Supabase noch ElevenLabs auf und öffnet das Mikrofon nicht von selbst.
 
 ## Lokal testen
 
@@ -60,7 +60,7 @@ Nicht automatisch gegen die Live-Datenbank ausführen. Reihenfolge:
 3. `supabase/migrations/20261017230000_jarvis_actions_restore.sql`. Sie setzt den Action-Check auf `insert`, `update`, `delete` und `restore`, nimmt `pakete` und `ziele` in den Tabellen-Check auf und setzt die Insert-Policy neu (`user_id = auth.uid()` und `workspace_id = get_my_workspace_id()`). Kein Update- und kein Delete-Recht auf dem Protokoll. Bestehende Zeilen bleiben gültig.
 4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`. Ohne diesen Redeploy kennt die laufende Funktion Anlegen, Ändern, Löschen und Rückgängig nicht.
 
-`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v9`. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` brauchen den Redeploy in Schritt 4. Der Leitstand braucht zusätzlich die Schritte im nächsten Abschnitt.
+`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v10`. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` brauchen den Redeploy in Schritt 4. Der Leitstand braucht zusätzlich die Schritte im nächsten Abschnitt.
 
 Ohne Schritt 3 schlägt nur der Logeintrag für Löschen und Rückgängig fehl. Die CRM-Änderung bleibt, die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion ebenfalls erhalten und die Antwort enthält `log_warning`.
 
@@ -117,7 +117,7 @@ Das ausgegebene `INSERT` im SQL-Editor ausführen. Widerruf steht als `update` u
 
 7. Pro Bot eine Grok-Bot-Routine mit Webhook-Trigger. Kim kopiert die Webhook-URL in `BOT_WEBHOOK_<BOT>_URL` und den Sender-Key in `BOT_WEBHOOK_<BOT>_KEY` (Schritt 5). Der Body ist JSON `{run_id, bot, title, instructions, aufgabe_id, crm_url, callback_url}` und bei einem Verbindungstest zusätzlich `ping: true`. Die Routine arbeitet den Auftrag und ruft `callback_url` auf, das ist `/functions/v1/bot-api`, mit `Authorization: Bearer <Bot-Token>` aus Schritt 6. `POST {"op":"update","run_id","status":"in_arbeit"}`, später `status` `erledigt` mit `result` und `links`, danach `POST {"op":"mirror","run_id"}`. Spiegeln setzt die verknüpfte Aufgabe auf `done` und hängt einen Block `[YYYY-MM-DD] Bot-Ergebnis (Name):` an. Die Zeile `Zuständig:` bleibt. `blockiert` und `fehler` setzen die Aufgabe nicht auf erledigt. `GET` ohne `run_id` listet nur die eigenen Läufe dieses Bots in seinem Workspace. Antwortet `bot-api` mit 429, steht `Retry-After` in Sekunden. Die Routine wartet mindestens so lange und ruft erneut. Kommt wieder 429, verdoppelt sie die Wartezeit, höchstens 60 Sekunden, und hört nach wenigen Versuchen auf. Den Lauf dann auf `blockiert` setzen.
 
-Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v9`.
+Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v10`.
 
 ### Härtung
 
@@ -188,7 +188,7 @@ Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Bef
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v9`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v10`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
 
 Auf dem Handy füllt Jarvis den Bildschirm (`100dvh`, Safe-Area, kein horizontales Scrollen). `manifest.json` verlangt `fullscreen` und fällt auf `standalone` zurück, `start_url` und `scope` sind `/jarvis/`. iOS nutzt `apple-mobile-web-app-capable` und `black-translucent`. Ein einmaliger Hinweis im mobilen Browser erklärt „Zum Home-Bildschirm“. `maximum-scale` bleibt offen, damit Zoomen geht; das Eingabefeld ist auf dem Handy 16px, damit iOS beim Fokussieren nicht selbst hineinzoomt.
 

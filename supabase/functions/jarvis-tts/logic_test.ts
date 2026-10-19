@@ -1,4 +1,4 @@
-import { allowedOrigin, DEFAULT_MODEL, DEFAULT_SPEED, DEFAULT_VOICE, FAST_MODEL, MAX_TEXT, prepareText, resolveModel, resolveSpeed, resolveVoice } from "./logic.ts";
+import { allowedOrigin, DEFAULT_MODEL, DEFAULT_SPEED, DEFAULT_VOICE, FAST_MODEL, MAX_TEXT, prepareContext, prepareText, resolveModel, resolveSpeed, resolveVoice } from "./logic.ts";
 
 function eq(actual: unknown, expected: unknown, label: string) {
   if (actual !== expected) throw new Error(`${label}: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
@@ -57,4 +57,12 @@ Deno.test("Text wird geprüft und leer abgelehnt", () => {
   try { prepareText("a".repeat(MAX_TEXT + 1)); } catch { long = true; }
   if (!long) throw new Error("zu lang");
   eq([...prepareText("ä".repeat(MAX_TEXT))].length, MAX_TEXT, "grenze");
+});
+
+Deno.test("Kontext für den Übergang ist optional und gekürzt", () => {
+  eq(prepareContext(undefined), "", "fehlt");
+  eq(prepareContext(""), "", "leer");
+  eq(prepareContext("  Hallo.  "), "Hallo.", "trim");
+  eq(prepareContext("a".repeat(800)).length, 500, "grenze");
+  eq(prepareContext(12), "", "zahl");
 });

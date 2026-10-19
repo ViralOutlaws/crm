@@ -1292,29 +1292,46 @@ function heardText(results) {
   return { finalText, interimText };
 }
 
-function startContinuous(ticket, seenEpoch) {
-  if (!SR || ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return false;
+function deliverHands(text) {
+  const cleaned = cleanTranscript(text);
+  const openCard = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
+  if (openCard && voiceCardAction(cleaned, openCard.classList.contains("danger"))) {
+    ask(cleaned);
+    return;
+  }
+  const gated = wake.accept(cleaned);
+  if (!gated.take) return;
+  ask(gated.text);
+}
+
+function openRecognizer(mode, ticket, seenEpoch) {
+  if (!SR || ticket !== activeTicket || epoch !== seenEpoch) return false;
+  if (mode === "hands" && (!armed || ptt || !handsOn())) return false;
+  if (mode === "ptt" && !ptt) return false;
   let session;
   try { session = new SR(); } catch { return false; }
   let recError = "";
   rec = session;
   session.lang = "de-DE";
-  session.continuous = true;
   session.interimResults = true;
+  session.continuous = !!listenSupport.continuous;
+  const alive = () => {
+    if (ticket !== activeTicket || epoch !== seenEpoch) return false;
+    if (mode === "ptt") return ptt;
+    return armed && handsOn() && !ptt;
+  };
   session.onresult = (e) => {
-    if (ticket !== activeTicket || epoch !== seenEpoch || ptt) return;
+    if (!alive()) return;
     const heard = heardText(e.results);
     utterance.sync(heard.finalText, heard.interimText, (text) => {
-      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
-      const cleaned = cleanTranscript(text);
-      const openCard = document.querySelector("#confirms .confirm") || document.querySelector(".inline-confirm");
-      if (openCard && voiceCardAction(cleaned, openCard.classList.contains("danger"))) {
-        ask(cleaned);
+      if (!alive()) return;
+      if (mode === "ptt") {
+        const said = cleanTranscript(text);
+        stopPtt({ keepMode: true });
+        ask(said);
         return;
       }
-      const gated = wake.accept(cleaned);
-      if (!gated.take) return;
-      ask(gated.text);
+      deliverHands(text);
     });
     const field = $("#inp");
     if (field) field.value = cleanTranscript(utterance.preview());
@@ -1322,8 +1339,13 @@ function startContinuous(ticket, seenEpoch) {
   session.onerror = (ev) => { recError = ev?.error || "error"; };
   session.onend = () => {
     if (rec === session) rec = null;
-    if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt || !handsOn()) return;
+    if (!alive()) return;
     if (recError === "not-allowed" || recError === "service-not-allowed") {
+      if (mode === "ptt") {
+        stopPtt();
+        toast("Mikrofon", "Kein Zugriff. Bitte tippen.", "!");
+        return;
+      }
       armed = false;
       handsPending = true;
       paintListen();
@@ -1333,9 +1355,12 @@ function startContinuous(ticket, seenEpoch) {
     }
     if (recError === "audio-capture" && micStream) closeMicMeter();
     recError = "";
+    utterance.seal();
+    const field = $("#inp");
+    if (field) field.value = cleanTranscript(utterance.preview());
     setTimeout(() => {
-      if (ticket !== activeTicket || epoch !== seenEpoch || !armed || ptt) return;
-      startContinuous(ticket, seenEpoch);
+      if (!alive()) return;
+      openRecognizer(mode, ticket, seenEpoch);
     }, 280);
   };
   try {
@@ -1345,6 +1370,10 @@ function startContinuous(ticket, seenEpoch) {
     if (rec === session) rec = null;
     return false;
   }
+}
+
+function startContinuous(ticket, seenEpoch) {
+  return openRecognizer("hands", ticket, seenEpoch);
 }
 
 function armHandsFree(opts = {}) {
@@ -1397,26 +1426,9 @@ async function startPtt() {
     setTimeout(() => { if (ptt) stopPtt(); }, 4000);
     return;
   }
-  let session;
-  try { session = new SR(); } catch { stopPtt(); return; }
-  rec = session;
-  session.lang = "de-DE";
-  session.interimResults = true;
-  session.continuous = false;
-  session.onresult = (e) => {
-    if (!ptt || rec !== session) return;
-    let said = "";
-    for (let i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
-    said = cleanTranscript(said);
-    $("#inp").value = said;
-    if (e.results[e.results.length - 1].isFinal) {
-      stopPtt({ keepMode: true });
-      ask(said);
-    }
-  };
-  session.onerror = () => {};
-  session.onend = () => { if (ptt && rec === session) stopPtt(); };
-  try { session.start(); } catch { /* ignore */ }
+  const seenEpoch = epoch;
+  const ticket = activeTicket;
+  if (!openRecognizer("ptt", ticket, seenEpoch)) stopPtt();
 }
 
 function stopPtt(opts = {}) {
@@ -1471,7 +1483,7 @@ $("#mic").onclick = async () => {
     return;
   }
   if (ptt) {
-    const pending = $("#inp").value.trim();
+    const pending = cleanTranscript(utterance.flushNow());
     stopPtt({ keepMode: !!pending });
     if (pending) ask(pending);
     return;
