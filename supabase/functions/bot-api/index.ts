@@ -25,10 +25,19 @@ import {
   BOT_META,
 } from "../_shared/bot_leitstand.ts";
 import {
+  berlinDay,
+  CONTACT_BODY_LIMIT,
   contactBatchSummary,
   contactInputs,
+  contactLookup,
   contactResult,
+  EMPTY_PLZ_FILTER,
+  likePattern,
+  orIlike,
   planContactBatch,
+  prepareContact,
+  requestTooLarge,
+  withWorkspaceLock,
   type ContactKey,
 } from "../_shared/bot_contacts.ts";
 
@@ -96,7 +105,7 @@ Deno.serve(async (req) => {
     } catch {
       return json({ error: "Anfrage leer." }, 400, headers);
     }
-    if (raw.length > 240_000) return json({ error: "Anfrage zu groß." }, 413, headers);
+    if (raw.length > CONTACT_BODY_LIMIT) return json({ error: "Anfrage zu groß." }, 413, headers);
     let body: Record<string, unknown>;
     try {
       const parsed = JSON.parse(raw);
@@ -106,6 +115,7 @@ Deno.serve(async (req) => {
       return json({ error: "Ungültiges JSON." }, 400, headers);
     }
     const op = String(body.op || "update");
+    if (requestTooLarge(raw.length, op)) return json({ error: "Anfrage zu groß." }, 413, headers);
     if (op === "list") return json(await listRuns(admin, scope), 200, headers);
     if (op === "get") return json(await getRun(admin, scope, String(body.run_id || "")), 200, headers);
     if (op === "update") return json(await updateRun(admin, scope, body), 200, headers);
@@ -216,28 +226,62 @@ async function mirrorRun(admin: SupabaseClient, scope: { bot: BotId; workspace_i
   return { ok: true, aufgabe_id: aufgabeId, status: "done" };
 }
 
-async function loadContactKeys(admin: SupabaseClient, workspaceId: string): Promise<ContactKey[]> {
+function toContactKey(row: { id?: unknown; firma?: unknown; plz?: unknown; email?: unknown; web?: unknown }): ContactKey {
+  return {
+    id: String(row.id),
+    firma: row.firma == null ? null : String(row.firma),
+    plz: row.plz == null ? null : String(row.plz),
+    email: row.email == null ? null : String(row.email),
+    web: row.web == null ? null : String(row.web),
+  };
+}
+
+async function collectContactKeys(
+  admin: SupabaseClient,
+  workspaceId: string,
+  filter: (query: any) => any,
+): Promise<ContactKey[]> {
   const out: ContactKey[] = [];
   const page = 1000;
-  for (let from = 0; from < 8000; from += page) {
-    const { data, error } = await admin.from("contacts")
-      .select("id, firma, plz, email, web")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true })
-      .range(from, from + page - 1);
+  for (let from = 0; ; from += page) {
+    const query = admin.from("contacts").select("id, firma, plz, email, web").eq("workspace_id", workspaceId).order("id", { ascending: true });
+    const { data, error } = await filter(query).range(from, from + page - 1);
     if (error) throw new Error("Kontakte nicht prüfbar.");
-    for (const row of data || []) {
-      out.push({
-        id: String(row.id),
-        firma: row.firma == null ? null : String(row.firma),
-        plz: row.plz == null ? null : String(row.plz),
-        email: row.email == null ? null : String(row.email),
-        web: row.web == null ? null : String(row.web),
-      });
-    }
+    for (const row of data || []) out.push(toContactKey(row));
     if (!data || data.length < page) return out;
   }
-  throw new Error("Zu viele Kontakte für die Dublettenprüfung.");
+}
+
+async function loadMatchingContacts(
+  admin: SupabaseClient,
+  workspaceId: string,
+  items: unknown[],
+  botName: string,
+  day: string,
+): Promise<ContactKey[]> {
+  const candidates: Array<{ firma: string; plz: string | null; email: string | null; web: string | null }> = [];
+  for (const item of items) {
+    const prepared = prepareContact(item, botName, day);
+    if (prepared.ok) candidates.push(prepared.row);
+  }
+  const lookup = contactLookup(candidates);
+  const found = new Map<string, ContactKey>();
+  const add = (rows: ContactKey[]) => {
+    for (const row of rows) found.set(row.id, row);
+  };
+  if (lookup.emails.length) {
+    add(await collectContactKeys(admin, workspaceId, (query) => query.or(orIlike("email", lookup.emails.map(likePattern)))));
+  }
+  if (lookup.domains.length) {
+    add(await collectContactKeys(admin, workspaceId, (query) => query.or(orIlike("web", lookup.domains.map((domain) => `%${likePattern(domain)}%`)))));
+  }
+  if (lookup.plz.length) {
+    add(await collectContactKeys(admin, workspaceId, (query) => query.in("plz", lookup.plz)));
+  }
+  if (lookup.emptyPlz) {
+    add(await collectContactKeys(admin, workspaceId, (query) => query.or(EMPTY_PLZ_FILTER)));
+  }
+  return [...found.values()];
 }
 
 async function createContacts(
@@ -248,11 +292,21 @@ async function createContacts(
 ) {
   const parsed = contactInputs(op, body);
   if (!parsed.ok) throw new Error(parsed.error);
-  const index = await loadContactKeys(admin, scope.workspace_id);
+  return await withWorkspaceLock(scope.workspace_id, () => writeContacts(admin, scope, body, parsed.items));
+}
+
+async function writeContacts(
+  admin: SupabaseClient,
+  scope: { bot: BotId; workspace_id: string },
+  body: Record<string, unknown>,
+  items: unknown[],
+) {
+  const day = berlinDay();
   const botName = BOT_META[scope.bot].name;
+  const index = await loadMatchingContacts(admin, scope.workspace_id, items, botName, day);
   const results: Record<string, unknown>[] = [];
-  for (const item of parsed.items) {
-    const plan = planContactBatch([item], index, botName, () => crypto.randomUUID())[0];
+  for (const item of items) {
+    const plan = planContactBatch([item], index, botName, () => crypto.randomUUID(), day)[0];
     if (plan.kind !== "insert") {
       results.push(contactResult(plan));
       continue;
