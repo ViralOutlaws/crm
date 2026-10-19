@@ -60,7 +60,7 @@ Nicht automatisch gegen die Live-Datenbank ausführen. Reihenfolge:
 3. `supabase/migrations/20261017230000_jarvis_actions_restore.sql`. Sie setzt den Action-Check auf `insert`, `update`, `delete` und `restore`, nimmt `pakete` und `ziele` in den Tabellen-Check auf und setzt die Insert-Policy neu (`user_id = auth.uid()` und `workspace_id = get_my_workspace_id()`). Kein Update- und kein Delete-Recht auf dem Protokoll. Bestehende Zeilen bleiben gültig.
 4. `supabase functions deploy jarvis-chat` ohne `--no-verify-jwt`. Ohne diesen Redeploy kennt die laufende Funktion Anlegen, Ändern, Löschen und Rückgängig nicht.
 
-`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v9`. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` brauchen den Redeploy in Schritt 4. Der Leitstand braucht zusätzlich die Schritte im nächsten Abschnitt.
+`jarvis-tts` braucht dafür keinen Redeploy. Der Jarvis-Cache heißt `jarvis-v10`. Begrüßung, Tagesliste und das Verständnis in `jarvis-chat` brauchen den Redeploy in Schritt 4. Der Leitstand braucht zusätzlich die Schritte im nächsten Abschnitt.
 
 Ohne Schritt 3 schlägt nur der Logeintrag für Löschen und Rückgängig fehl. Die CRM-Änderung bleibt, die Antwort enthält `log_warning`. Solange die Tabelle fehlt, bleibt jede andere Schreibaktion ebenfalls erhalten und die Antwort enthält `log_warning`.
 
@@ -117,7 +117,7 @@ Das ausgegebene `INSERT` im SQL-Editor ausführen. Widerruf steht als `update` u
 
 7. Pro Bot eine Grok-Bot-Routine mit Webhook-Trigger. Kim kopiert die Webhook-URL in `BOT_WEBHOOK_<BOT>_URL` und den Sender-Key in `BOT_WEBHOOK_<BOT>_KEY` (Schritt 5). Der Body ist JSON `{run_id, bot, title, instructions, aufgabe_id, crm_url, callback_url}` und bei einem Verbindungstest zusätzlich `ping: true`. Die Routine arbeitet den Auftrag und ruft `callback_url` auf, das ist `/functions/v1/bot-api`, mit `Authorization: Bearer <Bot-Token>` aus Schritt 6. `POST {"op":"update","run_id","status":"in_arbeit"}`, später `status` `erledigt` mit `result` und `links`, danach `POST {"op":"mirror","run_id"}`. Spiegeln setzt die verknüpfte Aufgabe auf `done` und hängt einen Block `[YYYY-MM-DD] Bot-Ergebnis (Name):` an. Die Zeile `Zuständig:` bleibt. `blockiert` und `fehler` setzen die Aufgabe nicht auf erledigt. `GET` ohne `run_id` listet nur die eigenen Läufe dieses Bots in seinem Workspace. Antwortet `bot-api` mit 429, steht `Retry-After` in Sekunden. Die Routine wartet mindestens so lange und ruft erneut. Kommt wieder 429, verdoppelt sie die Wartezeit, höchstens 60 Sekunden, und hört nach wenigen Versuchen auf. Den Lauf dann auf `blockiert` setzen.
 
-Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v9`.
+Der statische Stand unter `/jarvis/` muss aus diesem Branch liegen. Der Cache heißt `jarvis-v10`.
 
 ### Härtung
 
@@ -182,13 +182,13 @@ Jede Schreibaktion erscheint zuerst als Karte (Zusammenfassung, Bestätigen, Abb
 
 ## Bereiche
 
-Kontakte, Pipeline, Angebote, Rechnungen, Retainer, Pakete, Aufgaben, Wiedervorlagen, Kalender, Social (Woche/Monat, Medien über signierte Storage-URLs), Ausgaben, ROI und Ziele. Jedes Panel hat einen Link „Im CRM öffnen“ (`/?page=…`). Der Launcher „Bereiche“ und Sprache oder Text öffnen dieselben Panels. Filter wie „nur überfällige“ oder „nur Leads aus Instagram“ laufen über die Panel-Daten.
+Die Kontaktliste sortiert nach Firma, sonst nach dem angezeigten Namen: deutsch, ohne Unterschied der Großschreibung, leere Namen am Ende. Pipeline, Angebote, Rechnungen, Retainer, Pakete, Aufgaben, Wiedervorlagen, Kalender, Social (Woche/Monat, Medien über signierte Storage-URLs), Ausgaben, ROI und Ziele bleiben in ihrer eigenen Ordnung. Jedes Panel hat einen Link „Im CRM öffnen“ (`/?page=…`). Der Launcher „Bereiche“ und Sprache oder Text öffnen dieselben Panels. Filter wie „nur überfällige“ oder „nur Leads aus Instagram“ laufen über die Panel-Daten.
 
 Das Morgen-Briefing läuft live einmal am Tag beim Öffnen und immer auf den Befehl „Briefing“. Die Kunden-Akte öffnet sich über „Was ist der Stand bei …“. Ein Gespräch wird als eine Karte aus Notiz, Aufgaben und Wiedervorlage vorgeschlagen.
 
 ## Service Worker
 
-`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v5`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v9`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
+`/sw.js` fasst `/jarvis/` nicht an. Der CRM-Cache heißt `vo-crm-v6`, damit bestehende Installationen das neue `index.html` laden. Der Jarvis-Worker (`jarvis/sw.js`, Cache `jarvis-v10`) gilt nur für `/jarvis/`. Auf schmalen Screens liegen Bereiche, Zum CRM und Abmelden in einem Menü, der Untertitel unter dem Logo entfällt unter 420px, der Platzhalter ist „Sag oder schreib etwas…“.
 
 Auf dem Handy füllt Jarvis den Bildschirm (`100dvh`, Safe-Area, kein horizontales Scrollen). `manifest.json` verlangt `fullscreen` und fällt auf `standalone` zurück, `start_url` und `scope` sind `/jarvis/`. iOS nutzt `apple-mobile-web-app-capable` und `black-translucent`. Ein einmaliger Hinweis im mobilen Browser erklärt „Zum Home-Bildschirm“. `maximum-scale` bleibt offen, damit Zoomen geht; das Eingabefeld ist auf dem Handy 16px, damit iOS beim Fokussieren nicht selbst hineinzoomt.
 
