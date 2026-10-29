@@ -594,7 +594,30 @@ td.mono,.kpi-val,.pl-col-sum,.pipe-count{font-family:var(--font-sans)!important;
 #sidebar-logo{padding:18px 16px 14px}
 #sidebar-logo-sub{display:none}
 .nav-item-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center}
-.vo-ico{display:block;flex-shrink:0}
+.vo-ico{display:inline-block;vertical-align:middle;flex-shrink:0;width:14px;height:14px}
+.nav-item-icon .vo-ico,.bni .vo-ico{width:18px;height:18px}
+.filter-chip,.header-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;box-sizing:border-box}
+.filter-chip>span,.header-btn>span,.btn-ghost>span,.btn-primary>span,.btn-yellow>span{display:inline-flex;align-items:center;gap:6px}
+.filters-bar{align-items:center;gap:8px;margin-bottom:16px}
+.filters-bar .search-box{margin-left:auto;display:flex;align-items:center}
+.filters-bar .search-box input{height:28px;box-sizing:border-box}
+.filters-bar .btn-primary,.filters-bar .btn-yellow{height:28px;margin-left:8px;white-space:nowrap}
+.sec-header{margin-bottom:8px}
+.dash-card h3{font-size:13px;font-weight:600;letter-spacing:-.01em;text-transform:none;color:var(--ink)}
+#page-dashboard .dash-card{border-left:1px solid var(--border)!important}
+@media(max-width:768px){
+  #contacts-tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px}
+  #contacts-tbody td{display:block;padding:0;border:none;width:auto}
+  #contacts-tbody td:before{display:none}
+  #contacts-tbody td[data-label="Firma"]{flex:1 1 auto;order:1}
+  #contacts-tbody td[data-label="Status"]{order:2}
+  #contacts-tbody td[data-label="PLZ / Ort"]{order:3;font-size:13px;color:var(--ink2)}
+  #contacts-tbody td[data-label="Telefon"]{order:4;font-size:13px}
+  #contacts-tbody td[data-label="Telefon"]:before{content:"·";display:inline;min-width:0;margin-right:8px;font-size:13px;letter-spacing:0;text-transform:none;font-weight:400;color:var(--muted)}
+  #contacts-tbody td[data-label="Branche"]{order:5}
+  #contacts-tbody td[data-label="Umsatz"],#contacts-tbody td[data-label="Zuletzt"]{display:none}
+  #contacts-tbody td.actions{order:6;flex-basis:100%;border-top:1px solid var(--border);margin-top:4px;padding-top:8px}
+}
 .badge{background:var(--bg);color:var(--ink2);border:none;font-size:12px;font-weight:500;letter-spacing:0;padding:3px 8px 3px 7px;gap:6px}
 .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 .badge-kunde,.badge-akzeptiert,.badge-bezahlt{color:#1f7a45;background:#eef8f2}
@@ -623,6 +646,52 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
 .search-box::before{content:none}
 #fab{display:none}
 @media(max-width:768px){#fab{display:block}td.actions{opacity:1}}
+@media(max-width:768px){
+  html,body{overflow-x:hidden;max-width:100%}
+  #main-content,.page{overflow-x:hidden;max-width:100vw;min-width:0}
+  .page{padding:12px 12px calc(104px + env(safe-area-inset-bottom))}
+  #top-header{padding-top:env(safe-area-inset-top);min-height:calc(52px + env(safe-area-inset-top));height:auto}
+  #bottom-nav{padding:6px 8px calc(8px + env(safe-area-inset-bottom));min-height:calc(56px + env(safe-area-inset-bottom))}
+  .bottom-nav-item{min-height:44px;font-size:10px;letter-spacing:0;text-transform:none}
+  #mobile-menu-btn{min-width:44px;min-height:44px}
+  #fab{bottom:calc(76px + env(safe-area-inset-bottom));right:16px}
+  #haptik-toasts{bottom:calc(88px + env(safe-area-inset-bottom))}
+  input,select,textarea{font-size:16px!important}
+  .filter-chip,.header-btn,.btn-primary,.btn-yellow,.btn-ghost,.icon-btn,.bottom-nav-item{min-height:44px}
+  .filters-bar{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x mandatory;max-width:100%;-webkit-overflow-scrolling:touch}
+  .filter-chip,.filters-bar .search-box,.filters-bar .btn-primary,.filters-bar .btn-yellow{scroll-snap-align:start;flex-shrink:0}
+  .pl-board{display:flex!important;overflow-x:auto;scroll-snap-type:x mandatory;width:100%;max-width:100%;min-width:0}
+  .pl-col{flex:0 0 82vw;min-width:0;width:82vw;scroll-snap-align:start}
+  #page-pipeline{overflow-x:clip;max-width:100vw;width:100%}
+  .modal,.modal-body,.form-grid,.positions-wrap{width:100%;max-width:100%;min-width:0}
+  .pos-header{display:none}
+  .pos-row{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0}
+  .pos-row input,.pos-row select,.pos-row textarea{width:100%;min-width:0;max-width:100%}
+  #page-settings,#page-settings .dash-card,#page-users,#page-social,#page-konfigurator{max-width:100%;min-width:0;overflow-x:hidden}
+  #fab{width:56px;height:56px;overflow:visible}
+  #fab-menu{right:0;left:auto;max-width:calc(100vw - 32px)}
+  .overlay{align-items:flex-end;padding:0}
+  .modal{width:100%;max-width:100%;max-height:92dvh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;transform:none}
+  .overlay.open .modal{transform:none}
+  .modal::before{content:'';display:block;width:36px;height:4px;border-radius:4px;background:var(--border2);margin:8px auto 0;flex-shrink:0}
+  .modal-body{flex:1 1 auto;overflow-y:auto;max-height:none;-webkit-overflow-scrolling:touch}
+  .modal-footer{position:sticky;bottom:0;background:var(--paper);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .modal-footer .btn-primary,.modal-footer .btn-yellow,.modal-footer .btn-ghost{min-height:44px}
+  #global-search-overlay.open{align-items:flex-end;padding:0}
+  #global-search-box{max-width:100%;border-radius:16px 16px 0 0;max-height:85dvh}
+  #global-search-input{font-size:16px}
+  #kal-view-month,#kal-view-week{display:none}
+  #page-kalender .sec-header{flex-wrap:nowrap!important;overflow-x:auto;max-width:100%}
+  #kal-grid{overflow-x:hidden!important}
+  .kal-day-block h4{font-size:13px;font-weight:600;margin:14px 0 8px}
+  .kal-agenda-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:var(--paper);border:1px solid var(--border);border-radius:12px;margin:0 0 8px;padding:8px 12px;text-align:left;color:var(--ink)}
+  .kal-agenda-main{display:flex;flex-direction:column;min-width:0}
+  .kal-agenda-main small{color:var(--muted);font-size:12px}
+  .kal-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .page div[style*="grid-template-columns:1fr 1fr"],.page div[style*="grid-template-columns:2fr"],.page div[style*="grid-template-columns:repeat"]{grid-template-columns:1fr!important}
+  .positions-wrap,.table-wrap,#konf-layout,#rechner-layout{max-width:100%;overflow-x:auto}
+  #page-social,#page-users,#page-settings,#page-konfigurator,#page-content{max-width:100vw}
+}
 body.dark-mode{--bg:#0e0e0e;--paper:#161616;--ink:#f4f1ea;--ink2:#c8c4bc;--muted:#8d887f;--hover:#222;--border:#2a2a2a}
 body.dark-mode .kpi{box-shadow:none}
 body.dark-mode .badge-kunde,body.dark-mode .badge-akzeptiert,body.dark-mode .badge-bezahlt{color:#8fd7ad;background:#163024}
@@ -938,10 +1007,10 @@ window._loginFallback = function() {
 <div class="page" id="page-pipeline">
   <div class="sec-header">
     <div class="sec-title">Pipeline</div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span id="pl-total" style="font-size:12px;color:var(--muted)"></span>
-      <button class="btn-yellow" onclick="openContactModal()">+ Neuer Lead</button>
-    </div>
+  </div>
+  <div class="filters-bar">
+    <span id="pl-total" style="font-size:13px;color:var(--muted)"></span>
+    <button class="btn-yellow" onclick="openContactModal()">+ Neuer Lead</button>
   </div>
   <div id="pl-board" class="pl-board"></div>
 </div>
@@ -950,7 +1019,6 @@ window._loginFallback = function() {
   <div class="sec-header">
     <div class="sec-title">Kontakte</div>
     <div class="sec-count" id="contacts-count">0</div>
-    <button class="btn-primary" onclick="openContactModal()">+ Neuer Kontakt</button>
   </div>
   <div class="filters-bar">
     <button class="filter-chip active" data-cf="alle" onclick="setContactFilter('alle',this)">Alle</button>
@@ -962,6 +1030,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-cf="faellig" onclick="setContactFilter('faellig',this)">⏰ Fällig</button>
     <button class="filter-chip" data-cf="archiv" onclick="setContactFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="contact-search" placeholder="Suchen…" oninput="renderContacts()"></div>
+    <button class="btn-primary" onclick="openContactModal()">+ Neuer Kontakt</button>
   </div>
   <div class="table-wrap">
     <table>
@@ -980,7 +1049,6 @@ window._loginFallback = function() {
   <div class="sec-header">
     <div class="sec-title">Angebote</div>
     <div class="sec-count" id="angebote-count">0</div>
-    <button class="btn-primary" onclick="openAngebotModal()">+ Neues Angebot</button>
   </div>
   <!-- Summary strip -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="angebote-summary"></div>
@@ -992,6 +1060,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-af="abgelehnt" onclick="setAngebotFilter('abgelehnt',this)">Abgelehnt</button>
     <button class="filter-chip" data-af="archiv" onclick="setAngebotFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="angebot-search" placeholder="Suchen…" oninput="renderAngebote()"></div>
+    <button class="btn-primary" onclick="openAngebotModal()">+ Neues Angebot</button>
   </div>
   <div class="table-wrap">
     <table>
@@ -1010,7 +1079,6 @@ window._loginFallback = function() {
   <div class="sec-header">
     <div class="sec-title">Rechnungen</div>
     <div class="sec-count" id="rechnungen-count">0</div>
-    <button class="btn-primary" onclick="openRechnungModal()">+ Neue Rechnung</button>
   </div>
   <!-- Summary strip -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="rechnungen-summary"></div>
@@ -1022,6 +1090,7 @@ window._loginFallback = function() {
     <button class="filter-chip" data-rf="ueberfaellig" onclick="setRechnungFilter('ueberfaellig',this)">Überfällig</button>
     <button class="filter-chip" data-rf="archiv" onclick="setRechnungFilter('archiv',this)">📦 Archiv</button>
     <div class="search-box"><input id="rechnung-search" placeholder="Suchen…" oninput="renderRechnungen()"></div>
+    <button class="btn-primary" onclick="openRechnungModal()">+ Neue Rechnung</button>
   </div>
   <div class="table-wrap">
     <table>
@@ -1254,7 +1323,7 @@ window._loginFallback = function() {
       <button class="filter-chip active" id="kal-view-month" onclick="setKalView('month',this)">Monat</button>
       <button class="filter-chip" id="kal-view-week" onclick="setKalView('week',this)">Woche</button>
     </div>
-    <button class="btn-primary" onclick="openKalEventModal()">+ Termin</button>
+    <button class="btn-primary" onclick="openKalEventModal()" style="margin-left:auto">+ Termin</button>
   </div>
 
   <!-- Legend -->
@@ -1288,7 +1357,7 @@ window._loginFallback = function() {
     <select id="kanban-filter-contact" onchange="renderKanban()" style="font-family:'Sora',sans-serif;font-size:12px;border:1.5px solid var(--border);border-radius:4px;padding:6px 10px;background:var(--paper);color:var(--ink);outline:none">
       <option value="">Alle Kontakte</option>
     </select>
-    <button class="btn-primary" onclick="openKanbanTaskModal()">+ Neue Aufgabe</button>
+    <button class="btn-primary" onclick="openKanbanTaskModal()" style="margin-left:auto">+ Neue Aufgabe</button>
   </div>
   <div id="kanban-board" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start"></div>
 </div>
@@ -5870,15 +5939,27 @@ function getAllKalEvents() {
 
 function renderKalender() {
   if(!DB.kalEvents) DB.kalEvents = [];
-  document.getElementById('kal-month-label').textContent =
-    kalView==='week'
-      ? 'Woche ' + getWeekNumber(getWeekStart(kalWeekOffset))
-      : KAL_MONTHS[kalMonth] + ' ' + kalYear;
-
-  if(kalView==='week') renderKalWeek();
+  const narrow = window.innerWidth <= 768;
+  document.getElementById('kal-month-label').textContent = narrow
+    ? 'Nächste Termine'
+    : (kalView==='week' ? 'Woche ' + getWeekNumber(getWeekStart(kalWeekOffset)) : KAL_MONTHS[kalMonth] + ' ' + kalYear);
+  if(narrow) renderKalAgenda();
+  else if(kalView==='week') renderKalWeek();
   else renderKalMonth();
-
   renderKalUpcoming();
+}
+
+function renderKalAgenda() {
+  const grid = document.getElementById('kal-grid');
+  if(!grid) return;
+  const todayStr = today();
+  const all = getAllKalEvents().filter(e => e.datum && e.datum >= addDays(todayStr, -1))
+    .sort((a,b) => (a.datum + (a.zeit||'')).localeCompare(b.datum + (b.zeit||'')));
+  const by = {};
+  all.slice(0, 60).forEach(e => { (by[e.datum] = by[e.datum] || []).push(e); });
+  const days = Object.keys(by);
+  grid.style.overflowX = 'hidden';
+  grid.innerHTML = days.length ? days.map(d => `<section class="kal-day-block"><h4>${d===todayStr?'Heute':fmtDate(d)}</h4>${by[d].map(e => `<button type="button" class="kal-agenda-row" onclick="kalEventClick('${esc(e.id)}','${esc(e.source||'custom')}')"><span class="kal-dot" style="background:${esc(e.color||'#888')}"></span><span class="kal-agenda-main"><b>${esc(e.titel||'Termin')}</b><small>${esc(e.zeit||'Ganztägig')}</small></span></button>`).join('')}</section>`).join('') : '<div class="empty-state"><p>Keine anstehenden Termine.</p></div>';
 }
 
 function getWeekStart(offset) {
@@ -10735,8 +10816,8 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #vo-toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;z-index:10000;box-shadow:0 6px 24px rgba(0,0,0,.25);display:none;align-items:center;gap:10px;max-width:92vw}
 #vo-toast button{background:var(--yellow);color:#111;border:none;border-radius:4px;padding:5px 9px;font-weight:700;cursor:pointer;font-size:12px}
 @media(max-width:768px){
-  .pl-board{grid-template-columns:1fr;overflow:visible}
-  .pl-col{min-height:0}
+  .pl-board{display:flex;grid-template-columns:none;overflow-x:auto;scroll-snap-type:x mandatory;width:100%;max-width:100%;min-width:0}
+  .pl-col{min-height:0;flex:0 0 82vw;width:82vw;scroll-snap-align:start}
   .pl-move{display:block}
   .pl-card{cursor:default}
   #dash-row-followup{grid-template-columns:1fr !important}
