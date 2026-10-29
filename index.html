@@ -575,7 +575,7 @@ tbody tr:hover{background:var(--hover)}
 body,button,input,select,textarea{font-family:var(--font-sans)!important;font-variant-numeric:tabular-nums}
 #page-title,.sec-title,.modal-header h2,#sidebar-logo-name,.kpi-val,.login-btn{font-family:var(--font-sans)!important;letter-spacing:-.02em}
 #page-title{font-size:16px;font-weight:600}
-.sec-title,.sec-count,#angebote-summary,#rechnungen-summary{display:none}
+.sec-title,.sec-count,#angebote-summary,#rechnungen-summary{display:none!important}
 th{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);padding:12px 16px}
 td{padding:14px 16px;font-size:13px}
 td.mono,.kpi-val,.pl-col-sum,.pipe-count{font-family:var(--font-sans)!important;font-variant-numeric:tabular-nums}
@@ -605,19 +605,6 @@ td.mono,.kpi-val,.pl-col-sum,.pipe-count{font-family:var(--font-sans)!important;
 .sec-header{margin-bottom:8px}
 .dash-card h3{font-size:13px;font-weight:600;letter-spacing:-.01em;text-transform:none;color:var(--ink)}
 #page-dashboard .dash-card{border-left:1px solid var(--border)!important}
-@media(max-width:768px){
-  #contacts-tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px}
-  #contacts-tbody td{display:block;padding:0;border:none;width:auto}
-  #contacts-tbody td:before{display:none}
-  #contacts-tbody td[data-label="Firma"]{flex:1 1 auto;order:1}
-  #contacts-tbody td[data-label="Status"]{order:2}
-  #contacts-tbody td[data-label="PLZ / Ort"]{order:3;font-size:13px;color:var(--ink2)}
-  #contacts-tbody td[data-label="Telefon"]{order:4;font-size:13px}
-  #contacts-tbody td[data-label="Telefon"]:before{content:"·";display:inline;min-width:0;margin-right:8px;font-size:13px;letter-spacing:0;text-transform:none;font-weight:400;color:var(--muted)}
-  #contacts-tbody td[data-label="Branche"]{order:5}
-  #contacts-tbody td[data-label="Umsatz"],#contacts-tbody td[data-label="Zuletzt"]{display:none}
-  #contacts-tbody td.actions{order:6;flex-basis:100%;border-top:1px solid var(--border);margin-top:4px;padding-top:8px}
-}
 .badge{background:var(--bg);color:var(--ink2);border:none;font-size:12px;font-weight:500;letter-spacing:0;padding:3px 8px 3px 7px;gap:6px}
 .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 .badge-kunde,.badge-akzeptiert,.badge-bezahlt{color:#1f7a45;background:#eef8f2}
@@ -627,7 +614,13 @@ td.mono,.kpi-val,.pl-col-sum,.pipe-count{font-family:var(--font-sans)!important;
 .badge-entwurf,.badge-offen{color:#5c5c5c;background:#f3f2ef}
 td.actions{opacity:0;gap:2px}
 tr:hover td.actions,tr:focus-within td.actions{opacity:1}
-td.actions .btn-ghost,td.actions .icon-btn{border:none;background:transparent;color:var(--muted);padding:6px;border-radius:8px}
+td.actions .btn-ghost,td.actions .icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;border:none;background:transparent;color:var(--muted);padding:6px;border-radius:8px}
+.vo-act-label{font-size:12px;font-weight:500;line-height:1}
+.kb-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.kb-title{font-weight:600;min-width:0}
+.kb-meta{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:12px;color:var(--muted)}
+.kb-actions{display:flex;align-items:center;gap:4px;margin-top:8px}
+.kb-actions .btn-ghost{display:inline-flex;align-items:center;gap:4px}
 td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);color:var(--ink)}
 .vo-more{position:relative}
 .vo-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--paper);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);padding:4px;z-index:30;min-width:148px}
@@ -642,7 +635,16 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
 .filter-chip.active{background:#111;color:#fff;border-color:#111}
 .field label{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink2)}
 .field input,.field select,.field textarea{border-radius:8px;padding:9px 11px;font-size:14px;background:var(--paper);border-color:var(--border)}
-.field input:focus,.field select:focus,.field textarea:focus,.search-box input:focus{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28);background:var(--paper)}
+.field input:focus,.field select:focus,.field textarea:focus,.search-box input:focus{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28);background-color:var(--paper)}
+:root{--vo-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235c5c5c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]){min-height:40px;height:40px;box-sizing:border-box}
+.field select,select:not([multiple]){-webkit-appearance:none!important;appearance:none!important;background-color:var(--paper)!important;background-image:var(--vo-chevron)!important;background-repeat:no-repeat!important;background-position:right 12px center!important;background-size:16px!important;padding:9px 36px 9px 11px!important;border:1px solid var(--border);border-radius:8px;color:var(--ink);font-size:14px;line-height:1.2;min-height:40px;height:40px;box-sizing:border-box}
+.field select:focus,select:not([multiple]):focus{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28);outline:none}
+.vo-file{position:relative;display:flex;align-items:center;gap:10px;width:100%;max-width:100%;min-height:40px;cursor:pointer}
+.vo-file-input{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+.vo-file-btn{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:600;line-height:1}
+.vo-file-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--muted)}
+.vo-file-input:focus+.vo-file-btn,.vo-file-input:focus-visible+.vo-file-btn{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28)}
 .search-box::before{content:none}
 #fab{display:none}
 @media(max-width:768px){#fab{display:block}td.actions{opacity:1}}
@@ -691,8 +693,56 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
   .page div[style*="grid-template-columns:1fr 1fr"],.page div[style*="grid-template-columns:2fr"],.page div[style*="grid-template-columns:repeat"]{grid-template-columns:1fr!important}
   .positions-wrap,.table-wrap,#konf-layout,#rechner-layout{max-width:100%;overflow-x:auto}
   #page-social,#page-users,#page-settings,#page-konfigurator,#page-content{max-width:100vw}
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+  .field select,select:not([multiple]),.vo-file-btn{min-height:44px;height:44px}
+  #page-contacts .table-wrap,#page-angebote .table-wrap,#page-rechnungen .table-wrap{overflow:hidden}
+  #page-contacts table,#page-angebote table,#page-rechnungen table,
+  #contacts-tbody,#angebote-tbody,#rechnungen-tbody{display:block;width:100%}
+  #contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr{display:grid;width:100%;box-sizing:border-box;align-items:center;justify-items:start;text-align:left;gap:4px 10px;padding:16px;margin:0 0 10px;background:var(--paper);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+  #contacts-tbody tr:has(td[colspan]),#angebote-tbody tr:has(td[colspan]),#rechnungen-tbody tr:has(td[colspan]){display:block;padding:0;border:none;box-shadow:none;background:transparent}
+  #contacts-tbody td,#angebote-tbody td,#rechnungen-tbody td{display:block;width:auto;min-width:0;max-width:100%;padding:0;border:none;text-align:left;font-size:13px}
+  #contacts-tbody td:before,#angebote-tbody td:before,#rechnungen-tbody td:before{content:none;display:none}
+  #contacts-tbody tr{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"firma firma status" "ort tel branche" "actions actions actions"}
+  #contacts-tbody td[data-label="Firma"]{grid-area:firma}
+  #contacts-tbody td[data-label="Firma"]>div{min-width:0;justify-content:flex-start}
+  #contacts-tbody td[data-label="Firma"]>div>div{min-width:0}
+  #contacts-tbody td[data-label="Status"]{grid-area:status;justify-self:end}
+  #contacts-tbody td[data-label="PLZ / Ort"]{grid-area:ort;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #contacts-tbody td[data-label="Telefon"]{grid-area:tel;white-space:nowrap}
+  #contacts-tbody td[data-label="Branche"]{grid-area:branche;justify-self:end}
+  #contacts-tbody td[data-label="Umsatz"],#contacts-tbody td[data-label="Zuletzt"]{display:none}
+  #angebote-tbody tr{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"nr kunde status" "datum betreff betrag" "actions actions actions"}
+  #angebote-tbody td[data-label="Nr."]{grid-area:nr;font-weight:600;white-space:nowrap}
+  #angebote-tbody td[data-label="Kunde"]{grid-area:kunde;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #angebote-tbody td[data-label="Status"]{grid-area:status;justify-self:end}
+  #angebote-tbody td[data-label="Datum"]{grid-area:datum;color:var(--muted);white-space:nowrap}
+  #angebote-tbody td[data-label="Betreff"]{grid-area:betreff;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #angebote-tbody td[data-label="Betrag"]{grid-area:betrag;justify-self:end;font-weight:600;white-space:nowrap}
+  #rechnungen-tbody tr{grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"nr kunde kunde status" "datum faellig betreff betrag" "actions actions actions actions"}
+  #rechnungen-tbody td[data-label="Nr."]{grid-area:nr;font-weight:600;white-space:nowrap}
+  #rechnungen-tbody td[data-label="Kunde"]{grid-area:kunde;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #rechnungen-tbody td[data-label="Status"]{grid-area:status;justify-self:end}
+  #rechnungen-tbody td[data-label="Datum"]{grid-area:datum;color:var(--muted);white-space:nowrap}
+  #rechnungen-tbody td[data-label="Fällig"]{grid-area:faellig;white-space:nowrap}
+  #rechnungen-tbody td[data-label="Betreff"]{grid-area:betreff;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #rechnungen-tbody td[data-label="Betrag"]{grid-area:betrag;justify-self:end;font-weight:600;white-space:nowrap}
+  #contacts-tbody td.actions,#angebote-tbody td.actions,#rechnungen-tbody td.actions{grid-area:actions;display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:0;width:100%;min-width:0;margin:0;padding:0;border:none;overflow:visible}
+  #contacts-tbody td.actions .btn-ghost,#contacts-tbody td.actions .icon-btn,#angebote-tbody td.actions .btn-ghost,#angebote-tbody td.actions .icon-btn,#rechnungen-tbody td.actions .btn-ghost,#rechnungen-tbody td.actions .icon-btn{flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;max-width:44px;padding:0;box-sizing:border-box}
+  #contacts-tbody td.actions .vo-more,#angebote-tbody td.actions .vo-more,#rechnungen-tbody td.actions .vo-more{flex:0 0 44px;margin-left:auto}
+  #contacts-tbody td.actions .vo-ico,#angebote-tbody td.actions .vo-ico,#rechnungen-tbody td.actions .vo-ico{width:18px;height:18px}
+  #contacts-tbody .vo-act-label,#angebote-tbody .vo-act-label,#rechnungen-tbody .vo-act-label,.kb-actions .vo-act-label{display:none}
+  #page-kanban #kanban-board > div{overflow:visible!important}
+  #contacts-tbody .badge,#angebote-tbody .badge,#rechnungen-tbody .badge,.kb-card .badge{font-size:12px!important;padding:3px 8px!important;white-space:nowrap}
+  .kb-card{padding:16px!important;border-radius:12px!important;text-align:left}
+  .kb-top{align-items:center}
+  .kb-title{font-size:14px;margin:0}
+  .kb-meta{margin-top:6px;font-size:13px;color:var(--ink2)}
+  .kb-actions{flex-wrap:nowrap;gap:0;width:100%;margin-top:6px}
+  .kb-actions .btn-ghost,.kb-actions .icon-btn{flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;max-width:44px;padding:0!important;box-sizing:border-box;border:none}
+  .kb-actions .vo-more{margin-left:auto;flex:0 0 44px}
+  .kb-actions .vo-ico{width:18px;height:18px}
 }
-body.dark-mode{--bg:#0e0e0e;--paper:#161616;--ink:#f4f1ea;--ink2:#c8c4bc;--muted:#8d887f;--hover:#222;--border:#2a2a2a}
+body.dark-mode{--bg:#0e0e0e;--paper:#161616;--ink:#f4f1ea;--ink2:#c8c4bc;--muted:#8d887f;--hover:#222;--border:#2a2a2a;--vo-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c8c4bc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
 body.dark-mode .kpi{box-shadow:none}
 body.dark-mode .badge-kunde,body.dark-mode .badge-akzeptiert,body.dark-mode .badge-bezahlt{color:#8fd7ad;background:#163024}
 body.dark-mode .badge-termin,body.dark-mode .badge-gesendet{color:#9ebcf0;background:#17233a}
@@ -3425,7 +3475,7 @@ function voIconify(root) {
 }
 function voRows(root) {
   if(!root) return;
-  root.querySelectorAll('td.actions').forEach(td => {
+  root.querySelectorAll('td.actions, .kb-actions').forEach(td => {
     if(td.dataset.voMenu) return;
     const danger = td.querySelector('.btn-danger');
     if(!danger) { td.dataset.voMenu = '1'; return; }
@@ -3443,12 +3493,37 @@ function voRows(root) {
       wrap.classList.toggle('open');
     };
     danger.classList.add('vo-menu-item');
-    if(!danger.querySelector('.vo-ico')) danger.innerHTML = voSvg('trash', 16) + '<span>Löschen</span>';
+    danger.innerHTML = voSvg('trash', 16) + '<span>Löschen</span>';
     const menu = document.createElement('div');
     menu.className = 'vo-menu';
     menu.appendChild(danger);
     wrap.append(btn, menu);
     td.appendChild(wrap);
+  });
+}
+function voSyncFile(inp) {
+  const name = inp.closest('.vo-file')?.querySelector('.vo-file-name');
+  if(!name) return;
+  const file = inp.files && inp.files[0];
+  name.textContent = file ? file.name : 'Keine Datei';
+}
+function voFiles(root) {
+  if(!root) return;
+  root.querySelectorAll('input[type="file"]').forEach(inp => {
+    if(inp.id === 'import-file' || inp.closest('.vo-file')) return;
+    const label = document.createElement('label');
+    label.className = 'vo-file';
+    const btn = document.createElement('span');
+    btn.className = 'vo-file-btn';
+    btn.innerHTML = voSvg('upload', 16) + '<span>Datei wählen</span>';
+    const name = document.createElement('span');
+    name.className = 'vo-file-name';
+    name.textContent = 'Keine Datei';
+    inp.classList.add('vo-file-input');
+    inp.parentNode.insertBefore(label, inp);
+    label.append(inp, btn, name);
+    inp.addEventListener('change', () => voSyncFile(inp));
+    voSyncFile(inp);
   });
 }
 function voRefresh(root) {
@@ -3458,6 +3533,7 @@ function voRefresh(root) {
   finally { voLock = false; }
 }
 document.addEventListener('DOMContentLoaded', () => {
+  voFiles(document);
   ['sidebar','top-header','bottom-nav','main-content','fab'].forEach(id => voRefresh(document.getElementById(id)));
   const main = document.getElementById('main-content');
   if(!main) return;
@@ -3869,10 +3945,10 @@ function renderContacts() {
       <td data-label="Umsatz" class="mono" style="color:${wert>0?'var(--green)':'var(--muted)'}">${wert>0?fmtEur(wert):'–'}</td>
       <td data-label="Zuletzt" style="color:var(--muted);font-size:11px">${lastUpdate}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        <button class="btn-ghost btn-sm" onclick="openAngebotForContact('${c.id}')">+ Angebot</button>
-        <button class="btn-ghost btn-sm" onclick="openWiedervorlageModal('${c.id}')" title="Erinnerung">🔔</button>
-        <button class="btn-ghost btn-sm" onclick="openContactModal('${c.id}')">✏</button>
-        <button class="btn-ghost btn-sm" onclick="toggleArchivContact('${c.id}')" title="${c.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${c.archiviert?'📤':'📦'}</button>
+        <button class="btn-ghost btn-sm" title="Angebot" aria-label="Angebot" onclick="openAngebotForContact('${c.id}')">${voSvg('file',16)}<span class="vo-act-label">Angebot</span></button>
+        <button class="btn-ghost btn-sm" title="Erinnerung" aria-label="Erinnerung" onclick="openWiedervorlageModal('${c.id}')">${voSvg('bell',16)}<span class="vo-act-label">Erinnerung</span></button>
+        <button class="btn-ghost btn-sm" title="Bearbeiten" aria-label="Bearbeiten" onclick="openContactModal('${c.id}')">${voSvg('pencil',16)}<span class="vo-act-label">Bearbeiten</span></button>
+        <button class="btn-ghost btn-sm" title="${c.archiviert?'Aus Archiv holen':'Archivieren'}" aria-label="${c.archiviert?'Aus Archiv holen':'Archivieren'}" onclick="toggleArchivContact('${c.id}')">${voSvg(c.archiviert?'upload':'archive',16)}<span class="vo-act-label">Archiv</span></button>
         <button class="btn-danger" onclick="deleteContact('${c.id}')">✕</button>
       </td>
     </tr>`;
@@ -3988,10 +4064,10 @@ function renderAngebote() {
       <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td data-label="Status">${getBadge(a.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        <button class="btn-ghost btn-sm" onclick="angebotToRechnung('${a.id}')">→ Rechnung</button>
-        <button class="btn-ghost btn-sm" onclick="printDoc('angebot','${a.id}')">🖨 PDF</button>
-        <button class="btn-ghost btn-sm" onclick="openAngebotModal('${a.id}')">✏</button>
-        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();toggleArchivAngebot('${a.id}')" title="${a.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${a.archiviert?'📤':'📦'}</button>
+        <button class="btn-ghost btn-sm" title="Rechnung" aria-label="Rechnung" onclick="angebotToRechnung('${a.id}')">${voSvg('receipt',16)}<span class="vo-act-label">Rechnung</span></button>
+        <button class="btn-ghost btn-sm" title="PDF" aria-label="PDF" onclick="printDoc('angebot','${a.id}')">${voSvg('print',16)}<span class="vo-act-label">PDF</span></button>
+        <button class="btn-ghost btn-sm" title="Bearbeiten" aria-label="Bearbeiten" onclick="openAngebotModal('${a.id}')">${voSvg('pencil',16)}<span class="vo-act-label">Bearbeiten</span></button>
+        <button class="btn-ghost btn-sm" title="${a.archiviert?'Aus Archiv holen':'Archivieren'}" aria-label="${a.archiviert?'Aus Archiv holen':'Archivieren'}" onclick="event.stopPropagation();toggleArchivAngebot('${a.id}')">${voSvg(a.archiviert?'upload':'archive',16)}<span class="vo-act-label">Archiv</span></button>
         <button class="btn-danger" onclick="deleteAngebot('${a.id}')">✕</button>
       </td>
     </tr>`;
@@ -4418,12 +4494,12 @@ function renderRechnungen(){
       <td data-label="Betrag" class="mono" style="color:var(--green);font-weight:700">${fmtEur(sum.brutto)}</td>
       <td data-label="Status">${getBadge(r.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();markBezahlt('${r.id}')" style="color:var(--green);border-color:var(--green)">✓ Bezahlt</button>`:''}
-        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openZahlungserinnerung('${r.id}')" style="color:var(--blue);border-color:var(--blue)">🔔 Erinnerung</button>`:''}
-        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red);border-color:var(--red)">⚠ Mahnung</button>`:''}
-        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">🖨 PDF</button>
-        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();openRechnungModal('${r.id}')">✏</button>
-        <button class="btn-ghost btn-sm" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" style="color:var(--muted)">${r.archiviert?'📤':'📦'}</button>
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" title="Bezahlt" aria-label="Bezahlt" onclick="event.stopPropagation();markBezahlt('${r.id}')" style="color:var(--green)">${voSvg('check',16)}<span class="vo-act-label">Bezahlt</span></button>`:''}
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" title="Erinnerung" aria-label="Erinnerung" onclick="event.stopPropagation();openZahlungserinnerung('${r.id}')">${voSvg('bell',16)}<span class="vo-act-label">Erinnerung</span></button>`:''}
+        ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" title="Mahnung" aria-label="Mahnung" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red)">${voSvg('alert',16)}<span class="vo-act-label">Mahnung</span></button>`:''}
+        <button class="btn-ghost btn-sm" title="PDF" aria-label="PDF" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">${voSvg('print',16)}<span class="vo-act-label">PDF</span></button>
+        <button class="btn-ghost btn-sm" title="Bearbeiten" aria-label="Bearbeiten" onclick="event.stopPropagation();openRechnungModal('${r.id}')">${voSvg('pencil',16)}<span class="vo-act-label">Bearbeiten</span></button>
+        <button class="btn-ghost btn-sm" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" aria-label="${r.archiviert?'Aus Archiv holen':'Archivieren'}" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')">${voSvg(r.archiviert?'upload':'archive',16)}<span class="vo-act-label">Archiv</span></button>
         <button class="btn-danger" onclick="event.stopPropagation();deleteRechnung('${r.id}')">✕</button>
       </td>
     </tr>`;
@@ -6475,16 +6551,23 @@ function renderKanban() {
           const c=t.kontaktId?DB.contacts.find(x=>x.id===t.kontaktId):null;
           const overdue=t.datum&&t.datum<today()&&t.col!=='done';
           const zugewiesen=botLabel(splitBot(t.notiz).bot);
-          return `<div class="kb-card" style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:4px;padding:10px 12px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
-            <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:4px">${esc(t.text)}</div>
-            ${zugewiesen?`<div style="font-size:10px;color:var(--blue);margin-bottom:3px">Zugewiesen an ${esc(zugewiesen)}</div>`:''}
-            ${c?`<div style="font-size:10px;color:var(--muted)">👤 ${esc(c.firma)}</div>`:''}
-            ${t.datum?`<div style="font-size:10px;color:${overdue?'var(--red)':'var(--muted)'};margin-top:3px">${overdue?'⚠ ':' '}${fmtDate(t.datum)}</div>`:''}
-            <div style="display:flex;gap:5px;margin-top:7px">
-              ${col.id!=='todo'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','todo')" style="font-size:9px;padding:2px 6px">◀ Offen</button>`:''}
-              ${col.id==='todo'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','doing')" style="font-size:9px;padding:2px 6px">▶ In Arbeit</button>`:''}
-              ${col.id!=='done'?`<button class="btn-ghost btn-sm" onclick="event.stopPropagation();moveKanbanTask('${t.id}','done')" style="font-size:9px;padding:2px 6px;color:var(--green)">✓ Erledigt</button>`:''}
-              <button class="btn-danger" onclick="event.stopPropagation();deleteKanbanTask('${t.id}')" style="margin-left:auto;padding:2px 6px;font-size:9px">✕</button>
+          const prioBadge = t.prio==='hoch'?'badge-ueberfaellig':(t.prio==='niedrig'?'badge-termin':'badge-offen');
+          const prioText = t.prio==='hoch'?'Hoch':(t.prio==='niedrig'?'Niedrig':'Normal');
+          return `<div class="kb-card" style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:12px;padding:16px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
+            <div class="kb-top">
+              <div class="kb-title">${esc(t.text)}</div>
+              ${overdue?'<span class="badge badge-ueberfaellig">Überfällig</span>':`<span class="badge ${prioBadge}">${prioText}</span>`}
+            </div>
+            <div class="kb-meta">
+              ${c?`<span>${esc(c.firma)}</span>`:''}
+              ${t.datum?`<span style="color:${overdue?'var(--red)':'inherit'}">${fmtDate(t.datum)}</span>`:''}
+              ${zugewiesen?`<span>${esc(zugewiesen)}</span>`:''}
+            </div>
+            <div class="kb-actions">
+              ${col.id!=='todo'?`<button class="btn-ghost btn-sm" title="Offen" aria-label="Offen" onclick="event.stopPropagation();moveKanbanTask('${t.id}','todo')">${voSvg('back',16)}<span class="vo-act-label">Offen</span></button>`:''}
+              ${col.id==='todo'?`<button class="btn-ghost btn-sm" title="In Arbeit" aria-label="In Arbeit" onclick="event.stopPropagation();moveKanbanTask('${t.id}','doing')">${voSvg('play',16)}<span class="vo-act-label">In Arbeit</span></button>`:''}
+              ${col.id!=='done'?`<button class="btn-ghost btn-sm" title="Erledigt" aria-label="Erledigt" onclick="event.stopPropagation();moveKanbanTask('${t.id}','done')" style="color:var(--green)">${voSvg('check',16)}<span class="vo-act-label">Erledigt</span></button>`:''}
+              <button class="btn-danger" onclick="event.stopPropagation();deleteKanbanTask('${t.id}')">✕</button>
             </div>
           </div>`;
         }).join(''):`<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">Keine Aufgaben</div>`}
@@ -7701,6 +7784,7 @@ function openDocModal(cid) {
   currentDocContactId = cid;
   document.getElementById('doc-name').value = '';
   document.getElementById('doc-file').value = '';
+  if(typeof voSyncFile==='function') voSyncFile(document.getElementById('doc-file'));
   document.getElementById('doc-preview-wrap').style.display = 'none';
   document.getElementById('doc-file').onchange = function(e) {
     const file = e.target.files[0]; if(!file) return;
