@@ -571,6 +571,71 @@ tbody tr:hover{background:var(--hover)}
   *,*::before,*::after{animation:none!important;transition:none!important}
   .haptik-in,.pl-card.dragging{transform:none!important}
 }
+:root{--font-sans:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+body,button,input,select,textarea{font-family:var(--font-sans)!important;font-variant-numeric:tabular-nums}
+#page-title,.sec-title,.modal-header h2,#sidebar-logo-name,.kpi-val,.login-btn{font-family:var(--font-sans)!important;letter-spacing:-.02em}
+#page-title{font-size:16px;font-weight:600}
+.sec-title,.sec-count,#angebote-summary,#rechnungen-summary{display:none}
+th{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);padding:12px 16px}
+td{padding:14px 16px;font-size:13px}
+td.mono,.kpi-val,.pl-col-sum,.pipe-count{font-family:var(--font-sans)!important;font-variant-numeric:tabular-nums}
+.kpi::before{display:none}
+.kpi{border-top:1px solid var(--border)!important}
+.kpi{border-radius:12px;box-shadow:0 1px 2px rgba(15,15,15,.04),0 8px 24px rgba(15,15,15,.04);padding:16px 18px}
+.kpi-label{font-size:12px;letter-spacing:.02em;font-weight:500;text-transform:none;margin-bottom:10px}
+.kpi-val{font-size:28px;font-weight:600;line-height:1.1}
+.kpi-sub{font-size:12px}
+.kpi-icon{display:none}
+#sidebar{background:#0c0c0c}
+.nav-section{font-size:11px;font-weight:500;letter-spacing:.08em;color:rgba(255,255,255,.38);padding:18px 16px 6px}
+.nav-item{padding:8px 12px;margin:1px 8px;border-radius:8px;border-left:none;font-size:13px;font-weight:500}
+.nav-item.active{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active::before{left:0;width:2px;height:14px;border-radius:2px}
+#sidebar-logo{padding:18px 16px 14px}
+#sidebar-logo-sub{display:none}
+.nav-item-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center}
+.vo-ico{display:block;flex-shrink:0}
+.badge{background:var(--bg);color:var(--ink2);border:none;font-size:12px;font-weight:500;letter-spacing:0;padding:3px 8px 3px 7px;gap:6px}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.badge-kunde,.badge-akzeptiert,.badge-bezahlt{color:#1f7a45;background:#eef8f2}
+.badge-termin,.badge-gesendet{color:#1d4f91;background:#eef3fa}
+.badge-angebot,.badge-offen-rg,.badge-kontakt{color:#8a5a00;background:#fbf6ea}
+.badge-absage,.badge-abgelehnt,.badge-ueberfaellig{color:#a32828;background:#fbeeee}
+.badge-entwurf,.badge-offen{color:#5c5c5c;background:#f3f2ef}
+td.actions{opacity:0;gap:2px}
+tr:hover td.actions,tr:focus-within td.actions{opacity:1}
+td.actions .btn-ghost,td.actions .icon-btn{border:none;background:transparent;color:var(--muted);padding:6px;border-radius:8px}
+td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);color:var(--ink)}
+.vo-more{position:relative}
+.vo-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--paper);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);padding:4px;z-index:30;min-width:148px}
+.vo-more.open .vo-menu{display:flex;flex-direction:column}
+.vo-menu .btn-danger{display:flex;align-items:center;gap:8px;width:100%;background:transparent;border:none;color:var(--red);border-radius:8px;padding:8px 10px;font-size:13px;font-weight:500}
+.vo-menu .btn-danger:hover{background:var(--red-bg)}
+.vo-avatar{width:28px;height:28px;border-radius:50%;background:#eceae4;color:#3a3a3a;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:0;flex-shrink:0}
+.btn-primary,.btn-yellow{background:#111;color:#fff;border:none;border-radius:8px;font-weight:600;padding:8px 14px}
+.btn-primary:hover,.btn-yellow:hover{background:#2a2a2a}
+.btn-ghost,.header-btn,.filter-chip{border-radius:8px;border-color:var(--border);font-weight:500}
+.filter-chip{display:inline-flex;align-items:center;gap:6px}
+.filter-chip.active{background:#111;color:#fff;border-color:#111}
+.field label{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink2)}
+.field input,.field select,.field textarea{border-radius:8px;padding:9px 11px;font-size:14px;background:var(--paper);border-color:var(--border)}
+.field input:focus,.field select:focus,.field textarea:focus,.search-box input:focus{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28);background:var(--paper)}
+.search-box::before{content:none}
+#fab{display:none}
+@media(max-width:768px){#fab{display:block}td.actions{opacity:1}}
+body.dark-mode{--bg:#0e0e0e;--paper:#161616;--ink:#f4f1ea;--ink2:#c8c4bc;--muted:#8d887f;--hover:#222;--border:#2a2a2a}
+body.dark-mode .kpi{box-shadow:none}
+body.dark-mode .badge-kunde,body.dark-mode .badge-akzeptiert,body.dark-mode .badge-bezahlt{color:#8fd7ad;background:#163024}
+body.dark-mode .badge-termin,body.dark-mode .badge-gesendet{color:#9ebcf0;background:#17233a}
+body.dark-mode .badge-angebot,body.dark-mode .badge-offen-rg,body.dark-mode .badge-kontakt{color:#e4c56a;background:#2a230f}
+body.dark-mode .badge-absage,body.dark-mode .badge-abgelehnt,body.dark-mode .badge-ueberfaellig{color:#f0a0a0;background:#3a1717}
+body.dark-mode .badge-entwurf,body.dark-mode .badge-offen{color:#c8c4bc;background:#242424}
+body.dark-mode .vo-avatar{background:#2a2a2a;color:#f4f1ea}
+body.dark-mode .btn-primary,body.dark-mode .btn-yellow{background:#f4f1ea;color:#111}
+body.dark-mode .btn-primary:hover,body.dark-mode .btn-yellow:hover{background:#fff}
+body.dark-mode .filter-chip.active{background:#f4f1ea;color:#111;border-color:#f4f1ea}
+body.dark-mode tbody tr:hover{background:#1c1c1c}
+body.dark-mode #sidebar{background:#0a0a0a}
 </style>
 </head>
 <body>
@@ -794,7 +859,7 @@ window._loginFallback = function() {
       <div class="kpi-sub" id="kpi-pipeline-sub">0 Angebote offen</div>
       <div class="kpi-icon">💰</div>
     </div>
-    <div class="kpi" style="border-top:3px solid var(--red)">
+    <div class="kpi">
       <div class="kpi-label">Offen / Überfällig</div>
       <div class="kpi-val" id="kpi-offen">0 €</div>
       <div class="kpi-sub" id="kpi-offen-sub">0 Rechnungen ausstehend</div>
@@ -3176,8 +3241,165 @@ function haptikEnter(pageId) {
 
 function haptikAfterPage(id) {
   haptikKpis(id);
-  requestAnimationFrame(() => haptikEnter(id));
+  requestAnimationFrame(() => { haptikEnter(id); voRefresh(document.getElementById('page-'+id)); });
 }
+
+const VO_PATH = {
+  layout:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  kanban:'<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M8 10h8M8 14h8"/>',
+  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  down:'<path d="M3 7l6 6 4-4 8 8"/><path d="M14 17h7v-7"/>',
+  cart:'<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2l2.4 12.4a2 2 0 0 0 2 1.6h9.2a2 2 0 0 0 2-1.6L21 7H6"/>',
+  euro:'<path d="M18 6a7 7 0 1 0 0 12"/><path d="M4 10h12M4 14h10"/>',
+  phone:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 7L2 7"/>',
+  zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  power:'<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
+  moon:'<path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+  pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  upload:'<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>',
+  chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  call:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6A2 2 0 0 1 22 16.9z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  refresh:'<path d="M21 12a9 9 0 1 1-2.6-6.3L21 8"/><path d="M21 3v5h-5"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  back:'<path d="M19 12H5M11 18l-6-6 6-6"/>',
+  cloud:'<path d="M17 18H7a5 5 0 0 1 0-10 6 6 0 0 1 11.5 2A4 4 0 0 1 17 18z"/>',
+  key:'<circle cx="8" cy="15" r="4"/><path d="M11.5 15H22M18 15v3M21 15v2"/>',
+  plug:'<path d="M9 7v6M15 7v6M6 13h12v2a6 6 0 0 1-12 0zM12 19v3"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>',
+  box:'<path d="M21 8 12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V15"/>',
+  pin:'<path d="M12 21s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  print:'<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/>',
+  eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  star:'<path d="m12 3 2.7 5.5L21 9.2l-4.5 4.4L17.5 20 12 17.3 6.5 20l1-6.4L3 9.2l6.3-.7z"/>',
+  home:'<path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/>',
+  building:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 21v-4h6v4M9 7h.01M15 7h.01M9 11h.01M15 11h.01"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  pause:'<path d="M8 5h3v14H8zM13 5h3v14h-3z"/>',
+  play:'<path d="M8 5v14l11-7z"/>',
+  circle:'<circle cx="12" cy="12" r="4"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  camera:'<path d="M14 4h-4L8 7H4v13h16V7h-4z"/><circle cx="12" cy="13" r="3"/>',
+  car:'<path d="M3 13h18l-2-5H5z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+  shield:'<path d="M12 3 5 6v6c0 5 3.5 7.5 7 9 3.5-1.5 7-4 7-9V6z"/>',
+  brain:'<path d="M9 6a3 3 0 0 1 5-1 3 3 0 0 1 4 3 3 3 0 0 1 1 5 3 3 0 0 1-3 4H9a3 3 0 0 1-1-6 3 3 0 0 1 1-5z"/>',
+  puzzle:'<path d="M8 4h4v3a2 2 0 1 0 0 4v3H8v-3a2 2 0 1 1 0-4zM4 10h4v4H4zM14 10h6v4h-6z"/>',
+  magnet:'<path d="M6 3v8a6 6 0 0 0 12 0V3M6 7h4M14 7h4"/>',
+  scale:'<path d="M12 3v18M8 21h8M12 7l6 8H6zM12 7 6 15h12"/>',
+  tag:'<path d="M20 13 11 22 2 13V3h9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  megaphone:'<path d="M3 11v2a2 2 0 0 0 2 2h1l4 4V5L6 9H5a2 2 0 0 0-2 2zM15 9a4 4 0 0 1 0 6"/>',
+  paperclip:'<path d="M21 11.5 12 20a5 5 0 0 1-7-7l9-9a3 3 0 0 1 4 4l-9 9a1 1 0 0 1-1.5-1.5l8-8"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  light:'<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c.6.6 1 1.4 1 2h6c0-.6.4-1.4 1-2a7 7 0 0 0-4-12z"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.6 5.6L3 18l3 3 6.1-6.1a4 4 0 0 0 5.6-5.6l-3 3-2-2z"/>',
+  monitor:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  rocket:'<path d="M5 15c-1 3 1 5 1 5s2-2 5-1c0 0 7-4 9-11-7 2-11 9-15 7z"/><path d="M15 9l-6 6"/>',
+  party:'<path d="M4 20 10 4l10 10z"/><path d="M8 8l2 2M14 4l1 2M18 8l2 1"/>',
+  crown:'<path d="M3 18h18l-2-9-5 4-2-6-2 6-5-4z"/>',
+  hand:'<path d="M8 11V5a2 2 0 1 1 4 0v6M12 11V4a2 2 0 1 1 4 0v7M16 11V6a2 2 0 1 1 4 0v8a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-3a2 2 0 1 1 4 0"/>',
+  calc:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  pause2:'<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+  dot:'<circle cx="12" cy="12" r="3"/>'
+};
+const VO_EMOJI = {
+  '📊':'layout','📅':'calendar','👥':'users','👤':'user','🧲':'magnet','📋':'file','🧾':'receipt','🗂':'kanban','🎯':'target','📈':'trend','📉':'down','📑':'file','🛒':'cart','💶':'euro','💰':'euro','💸':'euro','📱':'phone','📲':'phone','✉':'mail','⚡':'zap','🔍':'search','⚙':'settings','⏻':'power','🌙':'moon','☀':'sun','🔔':'bell','✏':'pencil','📦':'archive','✕':'x','✗':'x','✓':'check','✅':'check','❌':'x','☰':'menu','⬇':'download','📤':'upload','📥':'download','💬':'chat','📞':'call','⏰':'clock','⏳':'clock','🕐':'clock','⚠':'alert','🔄':'refresh','💾':'save','→':'arrow','←':'back','☁':'cloud','🔑':'key','🔐':'lock','🔌':'plug','🌐':'globe','🏁':'flag','📍':'pin','🗑':'trash','🖨':'print','👁':'eye','⭐':'star','🏠':'home','🏢':'building','🏥':'building','➕':'plus','⏸':'pause','▶':'play','◀':'back','▼':'down','▲':'trend','◌':'dot','●':'dot','🔴':'dot','🔵':'dot','🟣':'dot','🔍':'search','💡':'light','🔧':'wrench','🖥':'monitor','🚀':'rocket','🎉':'party','👑':'crown','💪':'hand','🧩':'puzzle','🧮':'calc','📎':'paperclip','📚':'book','📝':'pencil','📄':'file','📌':'pin','📨':'mail','📡':'megaphone','📢':'megaphone','📸':'camera','🖼':'image','🚗':'car','🛡':'shield','🧠':'brain','🏷':'tag','🍽':'circle','👋':'hand','🙏':'hand','💻':'monitor','↺':'refresh','↻':'refresh','⚖':'scale','✦':'star','❑':'box','❐':'box','▣':'box','◔':'clock','⚠':'alert'
+};
+function voSvg(name, size) {
+  const d = VO_PATH[name] || VO_PATH.circle;
+  return `<svg class="vo-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+let voLock = false;
+function voIconify(root) {
+  if(!root) return;
+  const keys = Object.keys(VO_EMOJI).sort((a,b)=>b.length-a.length);
+  const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n; while((n = walker.nextNode())) nodes.push(n);
+  nodes.forEach(node => {
+    const raw = node.nodeValue;
+    if(!raw || !raw.trim()) return;
+    if(node.parentElement && node.parentElement.closest('svg,.vo-ico')) return;
+    let changed = false; let html = '';
+    for(let i=0;i<raw.length;) {
+      let hit = '';
+      for(const k of keys) { if(raw.startsWith(k, i)) { hit = k; break; } }
+      if(hit) { html += voSvg(VO_EMOJI[hit], node.parentElement && node.parentElement.classList.contains('nav-item-icon') ? 18 : 16); i += hit.length; changed = true; }
+      else { html += raw[i].replace(/&/g,'&amp;').replace(/</g,'&lt;'); i++; }
+    }
+    if(!changed) return;
+    const span = document.createElement('span');
+    span.innerHTML = html;
+    node.parentNode.replaceChild(span, node);
+  });
+}
+function voRows(root) {
+  if(!root) return;
+  root.querySelectorAll('td.actions').forEach(td => {
+    if(td.dataset.voMenu) return;
+    const danger = td.querySelector('.btn-danger');
+    if(!danger) { td.dataset.voMenu = '1'; return; }
+    td.dataset.voMenu = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'vo-more';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn';
+    btn.setAttribute('aria-label','Weitere Aktionen');
+    btn.innerHTML = voSvg('more', 16);
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.vo-more.open').forEach(el => { if(el!==wrap) el.classList.remove('open'); });
+      wrap.classList.toggle('open');
+    };
+    danger.classList.add('vo-menu-item');
+    if(!danger.querySelector('.vo-ico')) danger.innerHTML = voSvg('trash', 16) + '<span>Löschen</span>';
+    const menu = document.createElement('div');
+    menu.className = 'vo-menu';
+    menu.appendChild(danger);
+    wrap.append(btn, menu);
+    td.appendChild(wrap);
+  });
+}
+function voRefresh(root) {
+  if(voLock || !root) return;
+  voLock = true;
+  try { voIconify(root); voRows(root); }
+  finally { voLock = false; }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  ['sidebar','top-header','bottom-nav','main-content','fab'].forEach(id => voRefresh(document.getElementById(id)));
+  const main = document.getElementById('main-content');
+  if(!main) return;
+  let t;
+  new MutationObserver(() => {
+    if(voLock) return;
+    clearTimeout(t);
+    t = setTimeout(() => voRefresh(main), 40);
+  }).observe(main, {childList:true, subtree:true});
+});
+document.addEventListener('click', () => document.querySelectorAll('.vo-more.open').forEach(el => el.classList.remove('open')));
 
 // ==================================================
 // UTILS
@@ -3201,13 +3423,13 @@ function initials(s) { if(!s) return '?'; const w=s.trim().split(' '); return w.
 
 function getBadge(status) {
   const map = {
-    lead:'badge-offen ◌ Lead', erstgespraech:'badge-termin 💬 Erstgespräch', gewonnen:'badge-kunde ✅ Gewonnen', verloren:'badge-absage ✗ Verloren',
-    offen:'badge-offen ◌ Offen', kontakt:'badge-kontakt 📞 Kontaktiert', termin:'badge-termin 📅 Termin',
-    angebot:'badge-angebot 📋 Angebot', kunde:'badge-kunde ✅ Kunde', absage:'badge-absage ✗ Absage',
-    entwurf:'badge-entwurf ✏ Entwurf', gesendet:'badge-gesendet 📤 Gesendet',
-    akzeptiert:'badge-akzeptiert ✅ Akzeptiert', abgelehnt:'badge-abgelehnt ✗ Abgelehnt',
-    'offen-rg':'badge-offen-rg ⏳ Offen', bezahlt:'badge-bezahlt ✅ Bezahlt',
-    ueberfaellig:'badge-ueberfaellig 🔴 Überfällig'
+    lead:'badge-offen Lead', erstgespraech:'badge-termin Erstgespräch', gewonnen:'badge-kunde Gewonnen', verloren:'badge-absage Verloren',
+    offen:'badge-offen Offen', kontakt:'badge-kontakt Kontaktiert', termin:'badge-termin Termin',
+    angebot:'badge-angebot Angebot', kunde:'badge-kunde Kunde', absage:'badge-absage Absage',
+    entwurf:'badge-entwurf Entwurf', gesendet:'badge-gesendet Gesendet',
+    akzeptiert:'badge-akzeptiert Akzeptiert', abgelehnt:'badge-abgelehnt Abgelehnt',
+    'offen-rg':'badge-offen-rg Offen', bezahlt:'badge-bezahlt Bezahlt',
+    ueberfaellig:'badge-ueberfaellig Überfällig'
   };
   const v = map[status]||('badge-offen '+status);
   const [cls,...rest] = v.split(' ');
@@ -3567,7 +3789,7 @@ function renderContacts() {
       <td data-label="Firma" class="bold"><div style="display:flex;align-items:center;gap:10px">
         ${c.photo
           ? `<img src="${esc(c.photo)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
-          : `<div style="width:30px;height:30px;border-radius:4px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--yellow);flex-shrink:0">${esc(initials(c.firma))}</div>`
+          : `<div class="vo-avatar">${esc(initials(c.firma))}</div>`
         }
         <div><div>${esc(c.firma)}${['website','ki-check'].includes(c.quelle)?` <span title="Anfrage über viraloutlaws.de" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle">🌐 WEBSITE</span>`:''}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${esc(c.person)}</div>`:''}</div>
       </div></td>
