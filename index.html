@@ -640,7 +640,9 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
 .field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]){min-height:40px;height:40px;box-sizing:border-box}
 .field select,select:not([multiple]){-webkit-appearance:none!important;appearance:none!important;background-color:var(--paper)!important;background-image:var(--vo-chevron)!important;background-repeat:no-repeat!important;background-position:right 12px center!important;background-size:16px!important;padding:9px 36px 9px 11px!important;border:1px solid var(--border);border-radius:8px;color:var(--ink);font-size:14px;line-height:1.2;min-height:40px;height:40px;box-sizing:border-box}
 .field select:focus,select:not([multiple]):focus{border-color:rgba(245,196,0,.9);box-shadow:0 0 0 3px rgba(245,196,0,.28);outline:none}
-.vo-file{position:relative;display:flex;align-items:center;gap:10px;width:100%;max-width:100%;min-height:40px;cursor:pointer}
+.vo-file{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;max-width:100%;min-height:40px;cursor:pointer}
+.vo-file-line{display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;min-width:0}
+.vo-file-line .vo-file{flex:1;width:auto;min-width:0}
 .vo-file-input{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
 .vo-file-btn{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:600;line-height:1}
 .vo-file-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--muted)}
@@ -698,7 +700,7 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
   #page-contacts .table-wrap,#page-angebote .table-wrap,#page-rechnungen .table-wrap{overflow:hidden}
   #page-contacts table,#page-angebote table,#page-rechnungen table,
   #contacts-tbody,#angebote-tbody,#rechnungen-tbody{display:block;width:100%}
-  #contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr{display:grid;width:100%;box-sizing:border-box;align-items:center;justify-items:start;text-align:left;gap:4px 10px;padding:16px;margin:0 0 10px;background:var(--paper);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+  #contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr{display:grid;width:100%;box-sizing:border-box;align-items:center;justify-items:start;text-align:left;gap:4px 10px;padding:16px 16px 12px;margin:0 0 10px;background:var(--paper);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   #contacts-tbody tr:has(td[colspan]),#angebote-tbody tr:has(td[colspan]),#rechnungen-tbody tr:has(td[colspan]){display:block;padding:0;border:none;box-shadow:none;background:transparent}
   #contacts-tbody td,#angebote-tbody td,#rechnungen-tbody td{display:block;width:auto;min-width:0;max-width:100%;padding:0;border:none;text-align:left;font-size:13px}
   #contacts-tbody td:before,#angebote-tbody td:before,#rechnungen-tbody td:before{content:none;display:none}
@@ -733,7 +735,7 @@ td.actions .btn-ghost:hover,td.actions .icon-btn:hover{background:var(--hover);c
   #contacts-tbody .vo-act-label,#angebote-tbody .vo-act-label,#rechnungen-tbody .vo-act-label,.kb-actions .vo-act-label{display:none}
   #page-kanban #kanban-board > div{overflow:visible!important}
   #contacts-tbody .badge,#angebote-tbody .badge,#rechnungen-tbody .badge,.kb-card .badge{font-size:12px!important;padding:3px 8px!important;white-space:nowrap}
-  .kb-card{padding:16px!important;border-radius:12px!important;text-align:left}
+  .kb-card{padding:16px 16px 12px!important;border-radius:12px!important;text-align:left}
   .kb-top{align-items:center}
   .kb-title{font-size:14px;margin:0}
   .kb-meta{margin-top:6px;font-size:13px;color:var(--ink2)}
@@ -1171,13 +1173,13 @@ window._loginFallback = function() {
         <div class="field"><label>Firmenname</label><input id="s-name" placeholder="Viral Outlaws"></div>
         <div class="field"><label>Inhaber</label><input id="s-inhaber" placeholder="Kim Mustermann"></div>
         <!-- Logo upload -->
-        <div class="field form-full" style="display:flex;align-items:center;gap:14px">
-          <img id="s-logo-preview" src="" style="height:44px;object-fit:contain;display:none;border:1px solid var(--border);border-radius:4px;padding:4px;background:#fff">
-          <div style="flex:1">
-            <label style="display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)">Agentur-Logo (erscheint auf Rechnungen & Angeboten)</label>
-            <input type="file" id="s-logo-input" accept="image/*" style="font-size:11px;color:var(--muted);width:100%">
-            <div style="font-size:10px;color:var(--muted);margin-top:3px">Empfohlen: PNG mit Transparenz, max. 300 KB</div>
+        <div class="field form-full">
+          <label for="s-logo-input">Agentur-Logo</label>
+          <div class="vo-file-line">
+            <img id="s-logo-preview" alt="" style="width:44px;height:44px;object-fit:contain;display:none;border:1px solid var(--border);border-radius:8px;padding:4px;background:#fff;flex-shrink:0">
+            <input type="file" id="s-logo-input" accept="image/*">
           </div>
+          <div style="font-size:12px;color:var(--muted)">Erscheint auf Rechnungen und Angeboten. PNG mit Transparenz, max. 300 KB.</div>
         </div>
         <div class="field"><label>Straße & Nr.</label><input id="s-str" placeholder="Musterstraße 1"></div>
         <div class="field"><label>PLZ & Ort</label><input id="s-plz" placeholder="87780 Woringen"></div>
@@ -2180,11 +2182,11 @@ window._loginFallback = function() {
       <div class="form-grid">
         <div class="field form-full"><label>Firmenname *</label><input id="c-firma" placeholder="Muster GmbH"></div>
         <!-- Photo upload -->
-        <div class="field form-full" style="display:flex;align-items:center;gap:14px">
-          <img id="c-photo-preview" src="" style="width:52px;height:52px;border-radius:6px;object-fit:cover;display:none;border:2px solid var(--border)">
-          <div>
-            <label style="display:block;margin-bottom:4px">Logo / Foto</label>
-            <input type="file" id="c-photo-input" accept="image/*" style="font-size:11px;color:var(--muted)">
+        <div class="field form-full">
+          <label for="c-photo-input">Logo / Foto</label>
+          <div class="vo-file-line">
+            <img id="c-photo-preview" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;display:none;border:1px solid var(--border);flex-shrink:0">
+            <input type="file" id="c-photo-input" accept="image/*">
             <input type="hidden" id="c-photo-data">
           </div>
         </div>
@@ -6553,7 +6555,7 @@ function renderKanban() {
           const zugewiesen=botLabel(splitBot(t.notiz).bot);
           const prioBadge = t.prio==='hoch'?'badge-ueberfaellig':(t.prio==='niedrig'?'badge-termin':'badge-offen');
           const prioText = t.prio==='hoch'?'Hoch':(t.prio==='niedrig'?'Niedrig':'Normal');
-          return `<div class="kb-card" style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:12px;padding:16px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
+          return `<div class="kb-card" style="background:var(--bg);border:1.5px solid ${overdue?'var(--red)':prioColors[t.prio]||'var(--border)'};border-radius:12px;padding:16px 16px 12px;cursor:pointer" onclick="openKanbanTaskModal('${t.id}')">
             <div class="kb-top">
               <div class="kb-title">${esc(t.text)}</div>
               ${overdue?'<span class="badge badge-ueberfaellig">Überfällig</span>':`<span class="badge ${prioBadge}">${prioText}</span>`}
