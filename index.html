@@ -11113,30 +11113,43 @@ applyExtraModules();
 </script>
 
 <style>
-/* Glas: ruhiger Verlauf, damit die Flächen sichtbar bleiben. Kein fixed-Attachment (Handy-Scroll). */
-body{
+/* Farbflächen liegen fest hinter dem Inhalt. Der Blur sitzt auf drei Flächen, nicht auf jeder Zeile. */
+body{isolation:isolate;background:#f4f2ee}
+body.dark-mode{background:#070707}
+body::before{
+  content:"";
+  position:fixed;
+  left:-18vw;top:-18vh;width:136vw;height:136vh;
+  z-index:-1;pointer-events:none;
   background:
-    radial-gradient(920px 520px at 0% -10%, rgba(245,196,0,.09), transparent 58%),
-    radial-gradient(780px 460px at 100% 0%, rgba(150,146,138,.18), transparent 54%),
-    linear-gradient(165deg, #f8f5ef 0%, #f3efe8 46%, #ebe6de 100%);
+    radial-gradient(circle at 16% 12%, #e2a428 0 170px, transparent 172px),
+    radial-gradient(circle at 86% 18%, #c5d4e2 0 200px, transparent 202px),
+    radial-gradient(circle at 42% 86%, #f4e3bc 0 180px, transparent 182px);
+  filter:blur(120px);
+  -webkit-filter:blur(120px);
 }
-body.dark-mode{
-  --glass-bg:rgba(20,20,20,.5);
-  --glass-bd:rgba(255,255,255,.18);
-  --glass-hi:inset 0 1px 0 rgba(255,255,255,.14);
-  --glass-sh:0 12px 32px rgba(0,0,0,.38);
+body.dark-mode::before{
   background:
-    radial-gradient(720px 460px at 92% -12%, rgba(245,196,0,.14), transparent 58%),
-    radial-gradient(520px 340px at 0% 0%, rgba(245,196,0,.05), transparent 54%),
-    linear-gradient(180deg, #090909 0%, #0d0d0d 100%);
+    radial-gradient(circle at 84% 6%, #b08a2e 0 170px, transparent 172px),
+    radial-gradient(circle at 8% 28%, #3a4048 0 210px, transparent 212px),
+    radial-gradient(circle at 58% 92%, #6d5824 0 160px, transparent 162px);
+  opacity:.9;
 }
 #main-content,.page{background:transparent}
+#main-content{position:relative;z-index:1;min-width:0}
+.page{min-width:0;max-width:100%}
 :root{
-  --glass-bg:rgba(255,255,255,.62);
-  --glass-bd:rgba(255,255,255,.6);
-  --glass-hi:inset 0 1px 0 rgba(255,255,255,.78);
-  --glass-sh:0 10px 28px rgba(48,40,24,.07);
-  --glass-blur:blur(20px) saturate(160%);
+  --glass-bg:rgba(255,255,255,.46);
+  --glass-bd:rgba(255,255,255,.7);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.8);
+  --glass-sh:0 18px 50px rgba(28,24,16,.1);
+  --glass-blur:blur(22px) saturate(160%);
+}
+body.dark-mode{
+  --glass-bg:rgba(255,255,255,.06);
+  --glass-bd:rgba(255,255,255,.1);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.45);
+  --glass-sh:0 22px 50px rgba(0,0,0,.45);
 }
 .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item{
   background:var(--glass-bg);
@@ -11145,28 +11158,53 @@ body.dark-mode{
   border:1px solid var(--glass-bd);
   box-shadow:var(--glass-sh), var(--glass-hi);
 }
-.kpi{border:1px solid var(--glass-bd)!important;overflow:hidden}
-#top-header,#bottom-nav{background:rgba(255,255,255,.7);border-left:none;border-right:none}
+.kpi{border:1px solid var(--glass-bd)!important}
+#top-header,#bottom-nav{background:rgba(255,255,255,.5);border-left:none;border-right:none}
 #top-header{border-top:none}
 #bottom-nav{border-bottom:none}
-body.dark-mode #top-header,body.dark-mode #bottom-nav{background:rgba(20,20,20,.66)}
+body.dark-mode #top-header,body.dark-mode #bottom-nav{background:rgba(255,255,255,.07)}
 #sidebar{
-  background:rgba(8,8,8,.88);
-  -webkit-backdrop-filter:blur(22px) saturate(140%);
-  backdrop-filter:blur(22px) saturate(140%);
-  border-right:1px solid rgba(255,255,255,.08);
+  background:rgba(10,10,10,.62);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  backdrop-filter:blur(24px) saturate(160%);
+  border-right:1px solid rgba(255,255,255,.14);
 }
-body.dark-mode #sidebar{background:rgba(8,8,8,.8)}
+body.dark-mode #sidebar{background:rgba(8,8,8,.55);border-right-color:rgba(255,255,255,.1)}
+#sidebar .nav-item{color:rgba(255,255,255,.86)}
+#sidebar .nav-item.active{color:#fff}
+#sidebar .nav-section{color:rgba(255,255,255,.66)}
 .modal{-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}
 .modal-footer{background:transparent}
 .vo-menu,.haptik-toast,.fab-item{-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%)}
-.pl-col{background:rgba(255,255,255,.42);border:1px solid rgba(255,255,255,.6);box-shadow:var(--glass-hi)}
-.pl-card{background:rgba(255,255,255,.78);-webkit-backdrop-filter:none;backdrop-filter:none}
-body.dark-mode .pl-col{background:rgba(20,20,20,.45);border-color:rgba(255,255,255,.14)}
-body.dark-mode .pl-card{background:rgba(22,22,22,.86)}
+.pl-col{background:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.7);box-shadow:var(--glass-hi)}
+.pl-card{background:rgba(255,255,255,.55);-webkit-backdrop-filter:none;backdrop-filter:none}
+body.dark-mode .pl-col{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+body.dark-mode .pl-card{background:rgba(255,255,255,.06)}
 tbody tr{background:transparent}
 body.dark-mode tbody tr:hover{background:rgba(255,255,255,.04)}
 body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
+@media(min-width:769px){
+  #page-contacts table{width:100%;table-layout:auto}
+  #page-contacts td[data-label="Telefon"],
+  #page-contacts td[data-label="PLZ / Ort"],
+  #page-contacts td[data-label="Umsatz"],
+  #page-contacts td[data-label="Telefon"] a{
+    white-space:nowrap;width:1%;
+  }
+  #page-contacts td[data-label="Firma"] > div{min-width:0}
+  #page-contacts td[data-label="Firma"] > div > div{min-width:0}
+  #page-contacts td[data-label="Firma"] > div > div > div:first-child{white-space:nowrap}
+}
+@media(min-width:769px) and (max-width:1280px){
+  #page-contacts.page{padding-left:16px;padding-right:16px}
+  #page-contacts .table-wrap{max-width:100%;overflow-x:auto}
+  #page-contacts th,#page-contacts td{padding:8px 4px;font-size:12px}
+  #page-contacts .vo-act-label{display:none}
+  #page-contacts th:nth-child(7),#page-contacts td[data-label="Zuletzt"]{display:none}
+  #page-contacts .badge{white-space:nowrap}
+  #page-contacts td.actions{white-space:nowrap;gap:0}
+  #page-contacts td.actions .btn-ghost,#page-contacts td.actions .icon-btn{padding:0;width:24px;height:24px}
+}
 @media(max-width:768px){
   :root{--glass-blur:blur(18px) saturate(160%)}
   .table-wrap{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border-color:transparent;box-shadow:none}
@@ -11185,6 +11223,7 @@ body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   :root{--glass-bg:rgba(255,255,255,.94)}
   body.dark-mode{--glass-bg:rgba(16,16,16,.94)}
+  body::before{display:none}
   #sidebar{background:#0c0c0c;-webkit-backdrop-filter:none;backdrop-filter:none}
   .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item,#contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card{
     -webkit-backdrop-filter:none;backdrop-filter:none;
@@ -11193,6 +11232,7 @@ body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
 @media(prefers-reduced-transparency:reduce){
   :root{--glass-bg:rgba(255,255,255,.94)}
   body.dark-mode{--glass-bg:rgba(16,16,16,.94)}
+  body::before{display:none}
   #sidebar{background:#0c0c0c;-webkit-backdrop-filter:none;backdrop-filter:none}
   .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item,#contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card,.pl-col{
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
