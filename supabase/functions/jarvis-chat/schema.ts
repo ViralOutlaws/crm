@@ -13,6 +13,7 @@ const BLOCKED = new Set([
   "profiles", "profile", "workspaces", "workspace", "nutzer", "users",
   "social_posts", "jarvis_actions",
   "bot_tokens", "bot_token", "bot_runs", "bot_run",
+  "doc_counters",
 ]);
 
 const ALIAS: Record<string, string> = {
@@ -111,7 +112,11 @@ const TABLES: Record<string, TableSpec> = {
     status: { kind: "enum", values: ["entwurf", "offen-rg", "bezahlt", "ueberfaellig"], aliases: { draft: "entwurf", offen: "offen-rg", gesendet: "offen-rg", versendet: "offen-rg", sent: "offen-rg", paid: "bezahlt", überfällig: "ueberfaellig", ueberfaellig: "ueberfaellig", overdue: "ueberfaellig" } },
     positions: { kind: "positions" },
     notes: { kind: "text", max: 5000 },
-    r_typ: { kind: "enum", values: ["normal", "anzahlung", "schluss"] },
+    r_typ: { kind: "enum", values: ["normal", "anzahlung", "schluss", "gutschrift"] },
+    leistung_von: { kind: "date" },
+    leistung_bis: { kind: "date" },
+    bezug_nr: { kind: "text", max: 40 },
+    bezug_label: { kind: "text", max: 40 },
     anzahl: { kind: "num", min: 0, max: 10_000_000 },
     anztext: { kind: "text", max: 300 },
     archiviert: { kind: "bool" },
@@ -540,6 +545,12 @@ function normalize(table: string, row: Record<string, unknown>, mode: "insert" |
     if (key === "__proto__" || key === "constructor" || key === "prototype") throw new Error("Feld nicht erlaubt.");
     if (["workspace_id", "user_id", "id", "created_at", "updated_at"].includes(key)) {
       throw new Error(`${prefix}${key} setzt der Server, nicht das Werkzeug.`);
+    }
+    if ((table === "angebote" || table === "rechnungen") && key === "nr") {
+      throw new Error(`${prefix}Die Belegnummer setzt der Server. Sie ist danach fest.`);
+    }
+    if (table === "contacts" && key === "kundennummer") {
+      throw new Error(`${prefix}Die Kundennummer setzt der Server.`);
     }
     if (spec.restore[key]) throw new Error(`${prefix}Dateien und Assets ändert Jarvis nicht.`);
     if (spec.virtual.includes(key)) {

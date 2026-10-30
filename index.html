@@ -1212,6 +1212,15 @@ window._loginFallback = function() {
     <div class="dash-card" style="grid-column:1/-1">
       <h3 style="margin-bottom:16px">Standard-Fußnote auf Dokumenten</h3>
       <div class="field"><textarea id="s-footer" rows="3" placeholder="Vielen Dank für Ihr Vertrauen. Bei Fragen stehen wir Ihnen jederzeit zur Verfügung."></textarea></div>
+    </div>
+    <div class="dash-card" id="settings-nummern" style="grid-column:1/-1">
+      <h3 style="margin-bottom:8px">Nummernkreise</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Neue Belege starten bei 1001 im laufenden Jahr. Schon ausgestellte Nummern wie R007 oder R0001 bleiben. Ein höherer Startwert ist möglich, ein niedrigerer nicht.</p>
+      <div class="nummern-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <div class="field"><label>Nächste Rechnungsnummer</label><input id="s-next-rechnung" type="number" min="1001" step="1" oninput="previewDocSeq('rechnung')"><div id="s-preview-rechnung" style="font-size:12px;color:var(--muted);margin-top:6px;font-family:'DM Mono',monospace"></div></div>
+        <div class="field"><label>Nächste Angebotsnummer</label><input id="s-next-angebot" type="number" min="1001" step="1" oninput="previewDocSeq('angebot')"><div id="s-preview-angebot" style="font-size:12px;color:var(--muted);margin-top:6px;font-family:'DM Mono',monospace"></div></div>
+        <div class="field"><label>Nächste Gutschriftnummer</label><input id="s-next-gutschrift" type="number" min="1001" step="1" oninput="previewDocSeq('gutschrift')"><div id="s-preview-gutschrift" style="font-size:12px;color:var(--muted);margin-top:6px;font-family:'DM Mono',monospace"></div></div>
+      </div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn-yellow" onclick="saveSettings()">Einstellungen speichern</button>
         <button class="btn-ghost" onclick="exportData()">📤 Daten exportieren</button>
@@ -2181,6 +2190,7 @@ window._loginFallback = function() {
     <div class="modal-body">
       <div class="form-grid">
         <div class="field form-full"><label>Firmenname *</label><input id="c-firma" placeholder="Muster GmbH"></div>
+        <div class="field" id="c-kd-wrap" style="display:none"><label>Kundennummer</label><input id="c-kundennummer" readonly tabindex="-1" style="color:var(--muted)"></div>
         <!-- Photo upload -->
         <div class="field form-full">
           <label for="c-photo-input">Logo / Foto</label>
@@ -2317,7 +2327,9 @@ window._loginFallback = function() {
           </div>
         </div>
         <div class="field form-full"><label>Anmerkungen</label><textarea id="r-notes" placeholder="Zahlungshinweise, Projektdetails…"></textarea></div>
-        <div class="field"><label>Fälligkeitsdatum</label><input id="r-faellig" type="date"></div>
+        <div class="field"><label>Zahlbar bis</label><input id="r-faellig" type="date"></div>
+        <div class="field"><label>Leistungsdatum</label><input id="r-leistung-von" type="date"></div>
+        <div class="field"><label>Leistungszeitraum bis</label><input id="r-leistung-bis" type="date"></div>
         <div class="field"><label>Abrechnungsart</label>
           <select id="r-abrechnungsart" style="font-family:'Sora',sans-serif;font-size:13px;border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--paper);color:var(--ink);outline:none;width:100%">
             <option value="einmalig">Einmalig</option>
@@ -2342,6 +2354,7 @@ window._loginFallback = function() {
             <option value="normal">Standard-Rechnung</option>
             <option value="anzahlung">Anzahlungsrechnung</option>
             <option value="schluss">Schlussrechnung</option>
+            <option value="gutschrift">Gutschrift / Storno</option>
           </select>
         </div>
         <div id="r-anzahlung-wrap" style="display:none" class="field form-full">
@@ -2363,6 +2376,7 @@ window._loginFallback = function() {
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn-ghost" id="r-gutschrift-btn" style="display:none" onclick="createGutschriftFrom(editId)">Gutschrift</button>
       <button class="btn-ghost" onclick="closeModal('rechnung-modal')">Abbrechen</button>
       <button class="btn-yellow" onclick="saveRechnung()">Speichern & Vorschau</button>
     </div>
@@ -3650,6 +3664,79 @@ document.addEventListener('click', () => document.querySelectorAll('.vo-more.ope
 function fmtEur(n) { return Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
 function fmtDate(d) { if(!d) return '–'; try { return new Date(d).toLocaleDateString('de-DE'); } catch(e) { return d; } }
 function today() { return new Date().toISOString().split('T')[0]; }
+
+function crmYear() {
+  try { return new Intl.DateTimeFormat('en', { timeZone: 'Europe/Berlin', year: 'numeric' }).format(new Date()); }
+  catch(e) { return today().slice(0, 4); }
+}
+function rechnungLaufendesJahr(r) {
+  return String(r && r.datum || '').slice(0, 4) === crmYear();
+}
+function formatDocNr(kind, datum, seq) {
+  const year = Number(String(datum || today()).slice(0, 4)) || Number(crmYear());
+  const prefix = kind === 'angebot' ? 'AN' : (kind === 'gutschrift' ? 'GS' : 'RE');
+  return prefix + '-' + year + '-' + String(seq).padStart(4, '0');
+}
+function allocDocNrLocal(kind, datum) {
+  const year = Number(String(datum || today()).slice(0, 4)) || Number(crmYear());
+  if (!DB.settings.docSeq || typeof DB.settings.docSeq !== 'object') DB.settings.docSeq = {};
+  const key = kind + ':' + year;
+  let n = Number(DB.settings.docSeq[key]);
+  if (!Number.isInteger(n) || n < 1001) n = 1001;
+  DB.settings.docSeq[key] = n + 1;
+  return formatDocNr(kind, String(year), n);
+}
+function peekLocalDoc(kind, year) {
+  year = year || Number(crmYear());
+  const n = Number(DB.settings?.docSeq?.[kind + ':' + year]);
+  return Number.isInteger(n) && n >= 1001 ? n : 1001;
+}
+function allocKundennummerLocal() {
+  let max = 10000;
+  (DB.contacts || []).forEach(c => {
+    const m = /^KD-(\d{5})$/.exec(String(c.kundennummer || ''));
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return 'KD-' + String(max + 1).padStart(5, '0');
+}
+function docKindLabel(doc, isAngebot) {
+  if (isAngebot) return 'Angebot';
+  if (doc && doc.rTyp === 'gutschrift') return 'Gutschrift';
+  if (doc && doc.rTyp === 'anzahlung') return 'Anzahlungsrechnung';
+  if (doc && doc.rTyp === 'schluss') return 'Schlussrechnung';
+  return 'Rechnung';
+}
+function docFileKind(doc, isAngebot) {
+  if (isAngebot) return 'Angebot';
+  if (doc && doc.rTyp === 'gutschrift') return 'Gutschrift';
+  return 'Rechnung';
+}
+function docProjectName(doc) {
+  const b = String(doc && doc.betreff || '').trim();
+  if (b) return b;
+  const p = (doc && doc.positions || []).find(x => x && String(x.desc || '').trim());
+  return p ? String(p.desc).trim() : '';
+}
+function docHeading(doc, isAngebot) {
+  return (docKindLabel(doc, isAngebot) + ' ' + (doc && doc.nr || '')).trim();
+}
+function docSubjectLine(doc, isAngebot) {
+  const head = docHeading(doc, isAngebot);
+  const project = docProjectName(doc);
+  return project ? head + ' – ' + project : head;
+}
+function sanitizeFirmaFile(s) {
+  const t = String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+  return t || 'Kunde';
+}
+function docFileStem(doc, isAngebot, firma) {
+  const nr = String(doc && doc.nr || 'ohne').replace(/[^A-Za-z0-9-]+/g, '') || 'ohne';
+  return docFileKind(doc, isAngebot) + '_' + nr + '_' + sanitizeFirmaFile(firma);
+}
+function docKindForSave(doc, isAngebot) {
+  if (isAngebot) return 'angebot';
+  return doc && doc.rTyp === 'gutschrift' ? 'gutschrift' : 'rechnung';
+}
 function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().split('T')[0]; }
 function uid() {
   // Generate proper UUID v4 for Supabase compatibility
@@ -3901,6 +3988,12 @@ function openContactModal(id) {
   editId = id || null;
   const c = id ? DB.contacts.find(x=>x.id===id) : null;
   document.getElementById('contact-modal-title').textContent = id ? 'Kontakt bearbeiten' : 'Neuer Kontakt';
+  const kdWrap = document.getElementById('c-kd-wrap');
+  const kdInput = document.getElementById('c-kundennummer');
+  if (kdWrap && kdInput) {
+    kdInput.value = c?.kundennummer || '';
+    kdWrap.style.display = c?.kundennummer ? '' : 'none';
+  }
   document.getElementById('c-firma').value = c?.firma||'';
   document.getElementById('c-person').value = c?.person||'';
   setSelectValue('c-branche', c?.branche, 'handwerk');
@@ -3961,7 +4054,8 @@ function saveContact() {
     notizen: existingContact?.notizen||[],
     dokumente: existingContact?.dokumente||[],
     checks: existingContact?.checks||[],
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    kundennummer: existingContact?.kundennummer || (_currentUser ? '' : allocKundennummerLocal())
   };
   if(editId) { const i = DB.contacts.findIndex(x=>x.id===editId); if(i>-1) DB.contacts[i]=obj; }
   else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue', {type:'kontakt', id:obj.id}); }
@@ -4016,7 +4110,7 @@ function renderContacts() {
   const q = (document.getElementById('contact-search')?.value||'').toLowerCase();
   let list = DB.contacts.filter(c => {
     const matchF = contactFilter==='archiv' ? c.archiviert===true : (contactFilter==='alle' ? !c.archiviert : (contactFilter==='faellig' ? (!c.archiviert && isDealOpen(c) && c.naechsterSchritt && c.naechsterSchritt<=today()) : (c.status===contactFilter && !c.archiviert)));
-    const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q);
+    const matchQ = !q||c.firma.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||(c.person||'').toLowerCase().includes(q)||String(c.kundennummer||'').toLowerCase().includes(q);
     return matchF && matchQ;
   });
   list.sort(compareContacts);
@@ -4034,7 +4128,7 @@ function renderContacts() {
           ? `<img src="${esc(c.photo)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0">`
           : `<div class="vo-avatar">${esc(initials(c.firma))}</div>`
         }
-        <div><div>${esc(c.firma)}${['website','ki-check'].includes(c.quelle)?` <span title="Anfrage über viraloutlaws.de" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle">🌐 WEBSITE</span>`:''}</div>${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${esc(c.person)}</div>`:''}</div>
+        <div><div>${esc(c.firma)}${['website','ki-check'].includes(c.quelle)?` <span title="Anfrage über viraloutlaws.de" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--yellow);color:var(--ink);font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle">🌐 WEBSITE</span>`:''}</div>${c.kundennummer?`<div style="font-size:10px;color:var(--muted);font-weight:400;font-family:'DM Mono',monospace">${esc(c.kundennummer)}</div>`:''}${c.person?`<div style="font-size:10px;color:var(--muted);font-weight:400">${esc(c.person)}</div>`:''}</div>
       </div></td>
       <td data-label="Branche"><span class="badge ${esc(brancheClass(c.branche))}" style="font-size:9px;padding:2px 7px">${esc(brancheLabel(c.branche))}</span></td>
       <td data-label="PLZ / Ort">${esc([c.plz, c.ort].filter(Boolean).join(' '))||'–'}</td>
@@ -4095,24 +4189,31 @@ function openAngebotForContact(cid) {
   }, 100);
 }
 
-function saveAngebot(forceStatus) {
+async function saveAngebot(forceStatus) {
   const kundeId = document.getElementById('a-kunde').value;
   const betreff = document.getElementById('a-betreff').value.trim();
   if(!kundeId||!betreff) { alert('Bitte Kunde und Betreff ausfüllen.'); return; }
   const positions = getPositions('a');
   const status = forceStatus||document.getElementById('a-status').value;
+  const existing = editId ? DB.angebote.find(x=>x.id===editId) : null;
+  const datum = document.getElementById('a-datum').value;
+  let nr = existing?.nr || null;
+  if(!nr && !_currentUser) nr = allocDocNrLocal('angebot', datum);
   const obj = {
     id: editId||uid(),
-    nr: editId ? DB.angebote.find(x=>x.id===editId)?.nr : 'A'+String(DB.nextAngebotNr).padStart(4,'0'),
+    nr,
     kundeId, betreff, status, positions,
-    datum: document.getElementById('a-datum').value,
+    datum,
     validBis: document.getElementById('a-valid').value,
     notes: document.getElementById('a-notes').value,
-    createdAt: editId ? DB.angebote.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    nrLocked: !!(existing && existing.nr)
   };
   if(editId) { const i=DB.angebote.findIndex(x=>x.id===editId); if(i>-1) DB.angebote[i]=obj; }
-  else { DB.angebote.unshift(obj); DB.nextAngebotNr++; const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr} für "${c?.firma||'?'}" erstellt`,'orange', {type:'angebot', id:obj.id}); }
-  sbSaveAngebot(obj);
+  else { DB.angebote.unshift(obj); const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr||''} für "${c?.firma||'?'}" erstellt`,'orange', {type:'angebot', id:obj.id}); }
+  const assigned = await sbSaveAngebot(obj);
+  if(assigned) { obj.nr = assigned; obj.nrLocked = true; }
+  if(!obj.nr){ alert('Die Angebotsnummer konnte nicht vergeben werden.'); if(!editId) DB.angebote = DB.angebote.filter(x=>x.id!==obj.id); return; }
   save(); closeModal('angebot-modal'); renderAngebote(); renderDashboard();
   if(!forceStatus) printDoc('angebot', obj.id);
 }
@@ -4172,6 +4273,15 @@ function renderAngebote() {
   }).join('');
 }
 
+function createGutschriftFrom(id) {
+  const r = DB.rechnungen.find(x=>x.id===id);
+  if(!r || r.rTyp==='gutschrift') return;
+  if(!confirm('Gutschrift zu '+r.nr+' anlegen? Die Rechnung behält ihre Nummer.')) return;
+  const preset = { kundeId:r.kundeId, betreff:r.betreff, positions:r.positions, notes:'', rTyp:'gutschrift', bezug:{nr:r.nr, label:'Rechnung'} };
+  closeModal('rechnung-modal');
+  setTimeout(()=>openRechnungModal(null, preset), 30);
+}
+
 function angebotToRechnung(aid) {
   const a=DB.angebote.find(x=>x.id===aid);
   if(!a){return;}
@@ -4183,14 +4293,15 @@ function angebotToRechnung(aid) {
     document.getElementById('r-datum').value=today();
     document.getElementById('r-faellig').value=addDays(today(),getZahlung());
     fillPositions('r',a.positions);
-    document.getElementById('r-notes').value=`Basierend auf Angebot ${a.nr}`;
+    document.getElementById('r-notes').value='';
+    window._pendingBezug = { nr: a.nr, label: 'Angebot' };
   },150);
 }
 
 // ==================================================
 // RECHNUNGEN
 // ==================================================
-function openRechnungModal(id) {
+function openRechnungModal(id, preset) {
   editId=id||null;
   populateKundenSelect('r-kunde');
   const r=id?DB.rechnungen.find(x=>x.id===id):null;
@@ -4198,6 +4309,11 @@ function openRechnungModal(id) {
   document.getElementById('r-kunde').value=r?.kundeId||'';
   document.getElementById('r-datum').value=r?.datum||today();
   document.getElementById('r-faellig').value=r?.faellig||addDays(today(),getZahlung());
+  const lv=document.getElementById('r-leistung-von'); if(lv) lv.value=r?.leistungVon||'';
+  const lb=document.getElementById('r-leistung-bis'); if(lb) lb.value=r?.leistungBis||'';
+  const gsBtn=document.getElementById('r-gutschrift-btn');
+  if(gsBtn) gsBtn.style.display = (r && r.rTyp!=='gutschrift' && r.nr) ? '' : 'none';
+  if(!r) window._pendingBezug = preset?.bezug || null;
   document.getElementById('r-betreff').value=r?.betreff||'';
   setSelectValue('r-status', r?.status, 'offen-rg');
   setSelectValue('r-abrechnungsart', r?.abrechnungsart, 'einmalig');
@@ -4206,12 +4322,19 @@ function openRechnungModal(id) {
   document.getElementById('r-anzahl').value=r?.anzahl||'';
   document.getElementById('r-anztext').value=r?.anztext||'';
   toggleAnzahlungFields();
-  fillPositions('r',r?.positions||[]);
-  if(!r) addPosition('r-positions','r');
+  fillPositions('r', (preset && preset.positions) || r?.positions || []);
+  if(preset){
+    if(preset.kundeId) document.getElementById('r-kunde').value = preset.kundeId;
+    if(preset.betreff) document.getElementById('r-betreff').value = preset.betreff;
+    document.getElementById('r-typ').value = preset.rTyp || 'gutschrift';
+    document.getElementById('r-notes').value = preset.notes || '';
+    window._pendingBezug = preset.bezug || window._pendingBezug;
+    toggleAnzahlungFields();
+  } else if(!r) addPosition('r-positions','r');
   document.getElementById('rechnung-modal').classList.add('open');
 }
 
-function saveRechnung() {
+async function saveRechnung() {
   const kundeId=document.getElementById('r-kunde').value;
   const betreff=document.getElementById('r-betreff').value.trim();
   if(!kundeId||!betreff){alert('Bitte Kunde und Betreff ausfüllen.');return;}
@@ -4219,23 +4342,37 @@ function saveRechnung() {
   const rTyp = document.getElementById('r-typ').value;
   const anzahl = parseFloat(document.getElementById('r-anzahl').value)||0;
   const anztext = document.getElementById('r-anztext').value.trim();
+  const existing = editId ? DB.rechnungen.find(x=>x.id===editId) : null;
+  const datum = document.getElementById('r-datum').value;
+  const kind = rTyp==='gutschrift' ? 'gutschrift' : 'rechnung';
+  let nr = existing?.nr || null;
+  if(!nr && !_currentUser) nr = allocDocNrLocal(kind, datum);
+  const bezug = !editId ? (window._pendingBezug || null) : null;
   const obj={
     id:editId||uid(),
-    nr:editId?DB.rechnungen.find(x=>x.id===editId)?.nr:'R'+String(DB.nextRechnungNr).padStart(4,'0'),
+    nr,
     kundeId,betreff,positions,
-    datum:document.getElementById('r-datum').value,
+    datum,
     faellig:document.getElementById('r-faellig').value,
+    leistungVon: document.getElementById('r-leistung-von')?.value || null,
+    leistungBis: document.getElementById('r-leistung-bis')?.value || null,
+    bezugNr: existing?.bezugNr || bezug?.nr || null,
+    bezugLabel: existing?.bezugLabel || bezug?.label || null,
     status:document.getElementById('r-status').value,
     abrechnungsart:document.getElementById('r-abrechnungsart').value,
     notes:document.getElementById('r-notes').value,
     rTyp: rTyp,
     anzahl: anzahl,
     anztext: anztext,
-    createdAt:editId?DB.rechnungen.find(x=>x.id===editId)?.createdAt:new Date().toISOString()
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    nrLocked: !!(existing && existing.nr)
   };
   if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
-  else{DB.rechnungen.unshift(obj);DB.nextRechnungNr++;const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`Rechnung ${obj.nr} für "${c?.firma||'?'}" erstellt`,'green', {type:'rechnung', id:obj.id});}
-  sbSaveRechnung(obj);
+  else{DB.rechnungen.unshift(obj);const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`${docKindLabel(obj,false)} ${obj.nr||''} für "${c?.firma||'?'}" erstellt`,'green', {type:'rechnung', id:obj.id});}
+  const assigned = await sbSaveRechnung(obj);
+  if(assigned) { obj.nr = assigned; obj.nrLocked = true; }
+  window._pendingBezug = null;
+  if(!obj.nr){ alert('Die Belegnummer konnte nicht vergeben werden.'); if(!editId) DB.rechnungen = DB.rechnungen.filter(x=>x.id!==obj.id); return; }
   save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
   haptikToast('Rechnung gespeichert');
   printDoc('rechnung',obj.id);
@@ -4534,6 +4671,10 @@ body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:18mm 20mm;
 async function toggleArchivRechnung(id) {
   const r = DB.rechnungen.find(x=>x.id===id);
   if(!r) return;
+  if(!r.archiviert && rechnungLaufendesJahr(r)) {
+    haptikToast('Rechnungen des laufenden Jahres bleiben sichtbar');
+    return;
+  }
   r.archiviert = !r.archiviert;
   try {
     const sb = await getSupabase();
@@ -4597,7 +4738,9 @@ function renderRechnungen(){
         ${isOpenRechnung(r)?`<button class="btn-ghost btn-sm" title="Mahnung" aria-label="Mahnung" onclick="event.stopPropagation();openMahnung('${r.id}')" style="color:var(--red)">${voSvg('alert',16)}<span class="vo-act-label">Mahnung</span></button>`:''}
         <button class="btn-ghost btn-sm" title="PDF" aria-label="PDF" onclick="event.stopPropagation();printDoc('rechnung','${r.id}')">${voSvg('print',16)}<span class="vo-act-label">PDF</span></button>
         <button class="btn-ghost btn-sm" title="Bearbeiten" aria-label="Bearbeiten" onclick="event.stopPropagation();openRechnungModal('${r.id}')">${voSvg('pencil',16)}<span class="vo-act-label">Bearbeiten</span></button>
-        <button class="btn-ghost btn-sm" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" aria-label="${r.archiviert?'Aus Archiv holen':'Archivieren'}" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')">${voSvg(r.archiviert?'upload':'archive',16)}<span class="vo-act-label">Archiv</span></button>
+        ${(rechnungLaufendesJahr(r) && !r.archiviert)
+          ? `<button class="btn-ghost btn-sm" type="button" disabled title="Rechnungen des laufenden Jahres bleiben sichtbar" aria-label="Rechnungen des laufenden Jahres bleiben sichtbar" style="opacity:.4;cursor:not-allowed">${voSvg('archive',16)}<span class="vo-act-label">Archiv</span></button>`
+          : `<button class="btn-ghost btn-sm" title="${r.archiviert?'Aus Archiv holen':'Archivieren'}" aria-label="${r.archiviert?'Aus Archiv holen':'Archivieren'}" onclick="event.stopPropagation();toggleArchivRechnung('${r.id}')">${voSvg(r.archiviert?'upload':'archive',16)}<span class="vo-act-label">Archiv</span></button>`}
         <button class="btn-danger" onclick="event.stopPropagation();deleteRechnung('${r.id}')">✕</button>
       </td>
     </tr>`;
@@ -4622,7 +4765,7 @@ function printDoc(type, id) {
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>${isAngebot?'Angebot':'Rechnung'} ${esc(doc.nr||'')} – ${esc(c.firma||'')}</title>
+<title>${esc(docFileStem(doc, isAngebot, c.firma||''))}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Sora',sans-serif;color:#111;background:#fff;padding:16mm 18mm;font-size:12px;line-height:1.5}
@@ -4664,7 +4807,7 @@ function printDoc(type, id) {
 <body>
   <div class="header">
     <div>${logoHtml}<div class="logo-txt">VIRAL <span>OUTLAWS</span></div><div style="font-size:11px;color:#666;margin-top:2px">${esc(s.name||'Viral Outlaws')}${s.inhaber?' · '+esc(s.inhaber):''}</div></div>
-    <div><div class="doc-type">${isAngebot?'ANGEBOT':doc.rTyp==='anzahlung'?'ANZAHLUNGSRECHNUNG':doc.rTyp==='schluss'?'SCHLUSSRECHNUNG':'RECHNUNG'}</div><div class="doc-num">${esc(doc.nr||'')}</div></div>
+    <div><div class="doc-type" style="font-size:22px">${esc(docHeading(doc, isAngebot))}</div></div>
   </div>
 
   <div class="addresses">
@@ -4687,14 +4830,17 @@ function printDoc(type, id) {
   </div>
 
   <div class="meta-row">
-    <div class="meta-item"><b>${isAngebot?'Angebots-Nr.':'Rechnungs-Nr.'}</b>${esc(doc.nr||'–')}</div>
+    <div class="meta-item"><b>${isAngebot?'Angebots-Nr.':(doc.rTyp==='gutschrift'?'Gutschrift-Nr.':'Rechnungs-Nr.')}</b>${esc(doc.nr||'–')}</div>
+    <div class="meta-item"><b>Kundennummer</b>${esc(c.kundennummer||'–')}</div>
     <div class="meta-item"><b>Datum</b>${fmtDate(doc.datum)}</div>
-    ${isAngebot?`<div class="meta-item"><b>Gültig bis</b>${fmtDate(doc.validBis)}</div>`:`<div class="meta-item"><b>Fällig am</b>${fmtDate(doc.faellig)}</div>`}
+    ${isAngebot?`<div class="meta-item"><b>Gültig bis</b>${fmtDate(doc.validBis)}</div>`:`<div class="meta-item"><b>Zahlbar bis</b>${fmtDate(doc.faellig)}</div>`}
+    ${!isAngebot?`<div class="meta-item"><b>${doc.leistungVon&&doc.leistungBis?'Leistungszeitraum':'Leistungsdatum'}</b>${doc.leistungVon&&doc.leistungBis?fmtDate(doc.leistungVon)+' – '+fmtDate(doc.leistungBis):fmtDate(doc.leistungVon||doc.datum)}</div>`:''}
+    ${doc.bezugNr?`<div class="meta-item"><b>zu ${esc(doc.bezugLabel||'Beleg')}</b>${esc(doc.bezugNr)}</div>`:''}
     ${s.steuer?`<div class="meta-item"><b>Steuernummer</b>${esc(s.steuer)}</div>`:''}
     ${s.ust?`<div class="meta-item"><b>USt-IdNr.</b>${esc(s.ust)}</div>`:''}
   </div>
 
-  <div class="betreff">${esc(doc.betreff)}</div>
+  <div class="betreff">${esc(docSubjectLine(doc, isAngebot))}</div>
   ${doc.notes?`<div class="note-box"><b>Hinweis</b>${esc(doc.notes)}</div>`:''}
 
   <table>
@@ -4754,6 +4900,7 @@ function printDoc(type, id) {
 </body>
 </html>`;
 
+  if (window._docCapture) return html;
   // Open in new tab for reliable PDF generation
   const blob = new Blob([html], {type:'text/html;charset=utf-8'});
   const url = URL.createObjectURL(blob);
@@ -4863,6 +5010,7 @@ function loadSettings() {
     });
   }
   renderEmailTemplatesEditor();
+  fillNumberInputs();
   // Drive sync status
   driveUpdateUI();
   if(s.lastSync) {
@@ -4871,7 +5019,55 @@ function loadSettings() {
   }
 }
 
-function saveSettings() {
+function previewDocSeq(kind) {
+  const year = (window._docPeek && window._docPeek.year) || Number(crmYear());
+  const el = document.getElementById('s-next-' + kind);
+  const out = document.getElementById('s-preview-' + kind);
+  if (!el || !out) return;
+  const n = Number(el.value);
+  out.textContent = Number.isInteger(n) && n >= 1001 ? formatDocNr(kind, String(year), n) : '';
+}
+async function fillNumberInputs() {
+  const year = Number(crmYear());
+  let next = { year, rechnung: peekLocalDoc('rechnung', year), angebot: peekLocalDoc('angebot', year), gutschrift: peekLocalDoc('gutschrift', year) };
+  if (_currentUser) {
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.rpc('peek_doc_numbers');
+      if (!error && data) next = data;
+    } catch (e) {}
+  }
+  window._docPeek = next;
+  ['rechnung', 'angebot', 'gutschrift'].forEach(kind => {
+    const el = document.getElementById('s-next-' + kind);
+    if (el) el.value = next[kind] || 1001;
+    previewDocSeq(kind);
+  });
+}
+async function persistDocFloors() {
+  const year = Number((window._docPeek && window._docPeek.year) || crmYear());
+  for (const kind of ['rechnung', 'angebot', 'gutschrift']) {
+    const el = document.getElementById('s-next-' + kind);
+    if (!el) continue;
+    const want = Number(el.value);
+    const cur = Number((window._docPeek && window._docPeek[kind]) || peekLocalDoc(kind, year));
+    const label = kind === 'rechnung' ? 'Rechnungsnummer' : (kind === 'angebot' ? 'Angebotsnummer' : 'Gutschriftnummer');
+    if (!Number.isInteger(want) || want < 1001) { alert('Die nächste ' + label + ' muss mindestens 1001 sein.'); return false; }
+    if (want < cur) { alert('Die nächste ' + label + ' muss mindestens ' + cur + ' sein. Niedriger als die letzte vergebene Nummer geht nicht.'); return false; }
+    if (!_currentUser) {
+      if (!DB.settings.docSeq || typeof DB.settings.docSeq !== 'object') DB.settings.docSeq = {};
+      DB.settings.docSeq[kind + ':' + year] = want;
+    } else if (want > cur) {
+      const sb = await getSupabase();
+      const { error } = await sb.rpc('set_next_doc_number', { p_kind: kind, p_next: want, p_year: year });
+      if (error) { alert(error.message || 'Nummernkreis konnte nicht gesetzt werden.'); return false; }
+    }
+  }
+  return true;
+}
+async function saveSettings() {
+  const floorsOk = await persistDocFloors();
+  if (!floorsOk) return;
   ['name','inhaber','str','plz','tel','email','web','steuer','ust','iban','bic','bank','mwst','zahlung','footer'].forEach(k=>{
     const el=document.getElementById('s-'+k); if(el) DB.settings[k]=el.value;
   });
@@ -5260,7 +5456,12 @@ async function sbSaveContact(contact) {
       updated_at: new Date().toISOString()
     };
     console.log('Saving contact:', row.firma, 'ws:', wsId);
-    const { data, error } = await sb.from('contacts').upsert(row).select();
+    const { data, error } = await sb.from('contacts').upsert(row).select('id, kundennummer');
+    if(!error && data?.[0]?.kundennummer){
+      contact.kundennummer = data[0].kundennummer;
+      const local = DB.contacts.find(c => c.id === contact.id);
+      if(local) local.kundennummer = data[0].kundennummer;
+    }
     if(error) console.error('sbSaveContact error:', error.message, error.code);
     else console.log('✅ Contact saved:', data?.[0]?.firma);
   } catch(e) { console.error('sbSaveContact exception:', e.message); }
@@ -5291,6 +5492,7 @@ async function sbLoadContacts() {
       notes: r.notes||'', ana: r.ana||'', photo: r.photo||'',
       notizen: r.notizen||[], dokumente: r.dokumente||[], checks: r.checks||[],
       archiviert: r.archiviert||false, quelle: r.quelle||'',
+      kundennummer: r.kundennummer||'',
       updatedAt: r.updated_at, createdAt: r.created_at
     }));
   } catch(e) { console.warn('sbLoadContacts:', e.message); return null; }
@@ -5298,19 +5500,25 @@ async function sbLoadContacts() {
 
 // ── ANGEBOTE ──
 async function sbSaveAngebot(a) {
-  if(!_useSupabase) return;
+  if(!_useSupabase) return a?.nr || null;
   try {
     const sb = await getSupabase();
-    await sb.from('angebote').upsert({
+    const row = {
       id: a.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
-      kunde_id: a.kundeId||null, nr: a.nr||null,
+      kunde_id: a.kundeId||null,
       betreff: a.betreff||null, datum: a.datum||null,
       valid_bis: a.validBis||null, status: a.status||'entwurf',
       positions: a.positions||[], notes: a.notes||null,
       archiviert: a.archiviert||false,
       updated_at: new Date().toISOString()
-    });
-  } catch(e) { console.warn('sbSaveAngebot:', e.message); }
+    };
+    // Neue Belege: nr weglassen, der Trigger vergibt AN-Jahr-1001.
+    // Bestehende: die gespeicherte Nummer mitschicken, der Trigger lässt sie stehen.
+    if(a.nrLocked && a.nr) row.nr = a.nr;
+    const { data, error } = await sb.from('angebote').upsert(row).select('nr').maybeSingle();
+    if(error) console.warn('sbSaveAngebot:', error.message);
+    return data?.nr || a.nr || null;
+  } catch(e) { console.warn('sbSaveAngebot:', e.message); return a.nr || null; }
 }
 
 async function sbDeleteAngebot(id) {
@@ -5330,27 +5538,36 @@ async function sbLoadAngebote() {
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
       datum: r.datum, validBis: r.valid_bis, status: r.status,
       positions: r.positions||[], notes: r.notes,
-      archiviert: r.archiviert||false, createdAt: r.created_at
+      archiviert: r.archiviert||false, createdAt: r.created_at,
+      nrLocked: !!r.nr
     }));
   } catch(e) { console.warn(e); return null; }
 }
 
 // ── RECHNUNGEN ──
 async function sbSaveRechnung(r) {
-  if(!_useSupabase) return;
+  if(!_useSupabase) return r?.nr || null;
   try {
     const sb = await getSupabase();
-    await sb.from('rechnungen').upsert({
+    const row = {
       id: r.id, workspace_id: _currentWorkspace?.id || _FALLBACK_WORKSPACE_ID,
-      kunde_id: r.kundeId||null, nr: r.nr||null,
+      kunde_id: r.kundeId||null,
       betreff: r.betreff||null, datum: r.datum||null,
       faellig: r.faellig||null, status: r.status||'offen-rg',
+      leistung_von: r.leistungVon||null, leistung_bis: r.leistungBis||null,
+      bezug_nr: r.bezugNr||null, bezug_label: r.bezugLabel||null,
       positions: r.positions||[], notes: r.notes||null,
       r_typ: r.rTyp||'normal', anzahl: r.anzahl||0, anztext: r.anztext||null,
       archiviert: r.archiviert||false,
       updated_at: new Date().toISOString()
-    });
-  } catch(e) { console.warn('sbSaveRechnung:', e.message); }
+    };
+    // Neue Belege: nr weglassen, der Trigger vergibt RE- oder GS-Jahr-1001.
+    // Bestehende, auch R0001: Nummer mitschicken, der Trigger ändert sie nicht.
+    if(r.nrLocked && r.nr) row.nr = r.nr;
+    const { data, error } = await sb.from('rechnungen').upsert(row).select('nr').maybeSingle();
+    if(error) console.warn('sbSaveRechnung:', error.message);
+    return data?.nr || r.nr || null;
+  } catch(e) { console.warn('sbSaveRechnung:', e.message); return r.nr || null; }
 }
 
 async function sbDeleteRechnung(id) {
@@ -5371,7 +5588,10 @@ async function sbLoadRechnungen() {
       datum: r.datum, faellig: r.faellig, status: r.status,
       positions: r.positions||[], notes: r.notes,
       rTyp: r.r_typ||'normal', anzahl: r.anzahl||0, anztext: r.anztext||'',
-      archiviert: r.archiviert||false, createdAt: r.created_at
+      leistungVon: r.leistung_von||null, leistungBis: r.leistung_bis||null,
+      bezugNr: r.bezug_nr||null, bezugLabel: r.bezug_label||null,
+      archiviert: r.archiviert||false, createdAt: r.created_at,
+      nrLocked: !!r.nr
     }));
   } catch(e) { console.warn(e); return null; }
 }
@@ -5657,21 +5877,18 @@ async function loadAllFromSupabase() {
     // Save to localStorage as cache
     try { localStorage.setItem('vo_crm', JSON.stringify(DB)); } catch(e){}
 
-    // Sync counters from Supabase data so they never reset
-    if(DB.rechnungen && DB.rechnungen.length > 0) {
-      const maxRg = Math.max(...DB.rechnungen.map(r => {
-        const n = parseInt((r.nr||'').replace(/[^0-9]/g,''));
-        return isNaN(n) ? 0 : n;
-      }));
-      if(maxRg >= DB.nextRechnungNr) DB.nextRechnungNr = maxRg + 1;
+    // Altnummern wie R0001 bleiben. Neue Nummern vergibt die Datenbank.
+    // Den lokalen Zähler nur anheben, wenn schon eine Nummer im neuen Schema existiert.
+    function raiseLocalSeq(kind, nr) {
+      const m = /^(RE|AN|GS)-(\d{4})-(\d+)$/.exec(String(nr||''));
+      if(!m) return;
+      const key = kind+':'+m[2];
+      if(!DB.settings.docSeq || typeof DB.settings.docSeq!=='object') DB.settings.docSeq = {};
+      const seq = Number(m[3]) + 1;
+      if(!DB.settings.docSeq[key] || DB.settings.docSeq[key] < seq) DB.settings.docSeq[key] = seq;
     }
-    if(DB.angebote && DB.angebote.length > 0) {
-      const maxAg = Math.max(...DB.angebote.map(a => {
-        const n = parseInt((a.nr||'').replace(/[^0-9]/g,''));
-        return isNaN(n) ? 0 : n;
-      }));
-      if(maxAg >= DB.nextAngebotNr) DB.nextAngebotNr = maxAg + 1;
-    }
+    (DB.rechnungen||[]).forEach(r => raiseLocalSeq(r.rTyp==='gutschrift'?'gutschrift':'rechnung', r.nr));
+    (DB.angebote||[]).forEach(a => raiseLocalSeq('angebot', a.nr));
 
     renderDashboard(); renderMiniCal(); renderDashCalEvents();
     // Auto-refresh settings fields with loaded data
@@ -5943,7 +6160,10 @@ ${s.tel||''}
 ${s.web||'viraloutlaws.de'}`
   },
   rechnung: {
-    subject: (c,s) => `Rechnung von Viral Outlaws – ${c?.firma||''}`,
+    subject: (c,s) => {
+      const list = (DB.rechnungen||[]).filter(r => r.kundeId===c?.id && !r.archiviert);
+      return list[0] ? docSubjectLine(list[0], false) : `Rechnung von Viral Outlaws – ${c?.firma||''}`;
+    },
     body: (c,s) => `Guten Tag${c?.person?' '+c.person:''},
 
 im Anhang finden Sie unsere aktuelle Rechnung für die erbrachten Leistungen.
@@ -6740,7 +6960,7 @@ function closeGlobalSearch(){
 function runGlobalSearch(q){
   q=q.toLowerCase().trim(); _gsResults=[]; _gsSelectedIdx=-1;
   const el=document.getElementById('global-search-results');
-  const contacts=DB.contacts.filter(c=>c.firma?.toLowerCase().includes(q)||c.person?.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||c.tel?.includes(q)).slice(0,5);
+  const contacts=DB.contacts.filter(c=>c.firma?.toLowerCase().includes(q)||c.person?.toLowerCase().includes(q)||c.plz?.toLowerCase().includes(q)||c.tel?.includes(q)||String(c.kundennummer||'').toLowerCase().includes(q)).slice(0,5);
   const angebote=DB.angebote.filter(a=>{const c=DB.contacts.find(x=>x.id===a.kundeId);return a.nr?.toLowerCase().includes(q)||a.betreff?.toLowerCase().includes(q)||c?.firma?.toLowerCase().includes(q);}).slice(0,4);
   const rechnungen=DB.rechnungen.filter(r=>{const c=DB.contacts.find(x=>x.id===r.kundeId);return r.nr?.toLowerCase().includes(q)||r.betreff?.toLowerCase().includes(q)||c?.firma?.toLowerCase().includes(q);}).slice(0,4);
   let html='';
@@ -6750,7 +6970,7 @@ function runGlobalSearch(q){
       _gsResults.push({type:'contact',id:c.id});
       html+=`<div class="gs-result" onclick="gsGoto('contact','${c.id}')">
         ${c.photo?`<img src="${esc(c.photo)}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;flex-shrink:0">`:`<div class="gs-result-icon">👤</div>`}
-        <div class="gs-result-main"><div class="gs-result-title">${esc(c.firma)}</div><div class="gs-result-sub">${esc(c.plz||'')}${c.person?' · '+esc(c.person):''}</div></div>
+        <div class="gs-result-main"><div class="gs-result-title">${esc(c.firma)}</div><div class="gs-result-sub">${c.kundennummer?esc(c.kundennummer)+' · ':''}${esc(c.plz||'')}${c.person?' · '+esc(c.person):''}</div></div>
         ${getBadge(c.status)}</div>`;
     });
   }
@@ -7489,7 +7709,7 @@ function konfCalc() {
   window._konfLastData = { selected, einmalig, monatlich, jaehrlich, einmaligR, monatlichR, jaehrlichR, gesamt, rabatt, laufzeit };
 }
 
-function konfInsAngebot() {
+async function konfInsAngebot() {
   if(!window._konfLastData?.selected?.length) { alert('Bitte mindestens eine Leistung auswaehlen.'); return; }
   const data = window._konfLastData;
   const kundeId = document.getElementById('konf-kunde').value||null;
@@ -7497,10 +7717,12 @@ function konfInsAngebot() {
   const gueltig = document.getElementById('konf-gueltig').value||addDays(today(),30);
   const notiz = document.getElementById('konf-notiz')?.value||'';
   const positions = data.selected.map(i => ({ id:uid(), desc:i.label, detail:i.desc+' ('+i.typ+')', qty:1, price:i.preis*(1-data.rabatt), total:i.preis*(1-data.rabatt) }));
-  const angebot = { id:uid(), nr:'A-'+new Date().getFullYear()+'-'+String(DB.angebote.length+1).padStart(3,'0'),
+  const angebot = { id:uid(), nr: _currentUser ? null : allocDocNrLocal('angebot', today()), nrLocked: false,
     kundeId, betreff:'Angebot '+firma+' - Performance Marketing & Webdesign',
     datum:today(), validBis:gueltig, status:'entwurf', positions, notes:notiz, createdAt:new Date().toISOString() };
   DB.angebote.unshift(angebot);
+  const assignedAg = await sbSaveAngebot(angebot);
+  if(assignedAg) { angebot.nr = assignedAg; angebot.nrLocked = true; }
   save();
   addActivity('Angebot aus Konfigurator erstellt fuer "'+firma+'"','yellow');
   if(confirm('Angebot erstellt!\nJetzt zum Angebot wechseln?')) showPage('angebote');
@@ -7689,6 +7911,7 @@ function renderContactDetail(cid) {
         }
         <div style="flex:1">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">${esc(c.firma)}</div>
+          ${c.kundennummer?`<div style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px">${esc(c.kundennummer)}</div>`:''}
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--muted)">
             ${c.person ? `<span>👤 ${esc(c.person)}</span>` : ''}
             ${c.tel ? `<span>📞 <a href="tel:${esc(c.tel)}" style="color:var(--blue)">${esc(c.tel)}</a></span>` : ''}
@@ -8498,12 +8721,12 @@ function generateRetainerRechnungen() {
   document.body.appendChild(modal);
 }
 
-function doGenerateRetainerRechnungen(btn) {
+async function doGenerateRetainerRechnungen(btn) {
   const aktive = (DB.retainer||[]).filter(r=>r.status==='aktiv');
   let count = 0;
-  aktive.forEach(r => {
+  for (const r of aktive) {
     const cb = document.getElementById('ret-rg-'+r.id);
-    if(!cb || !cb.checked || cb.disabled) return;
+    if(!cb || !cb.checked || cb.disabled) continue;
     const c = DB.contacts.find(x=>x.id===r.kundeId);
     const now = new Date();
     const tag = r.abrechnungstag==='letzter' ? new Date(now.getFullYear(),now.getMonth()+1,0).getDate() : (r.abrechnungstag||1);
@@ -8511,7 +8734,8 @@ function doGenerateRetainerRechnungen(btn) {
     const faellig = addDays(datum, parseInt(DB.settings.zahlung||14));
     const rg = {
       id: uid(),
-      nr: 'R-'+now.getFullYear()+'-'+String(DB.rechnungen.length+1+count).padStart(3,'0'),
+      nr: _currentUser ? null : allocDocNrLocal('rechnung', datum),
+      nrLocked: false,
       kundeId: r.kundeId,
       betreff: `Retainer ${MONAT_LABELS[now.getMonth()]} ${now.getFullYear()} – ${r.paket||'Marketing Management'}`,
       datum, faellig, status: 'offen-rg',
@@ -8519,11 +8743,13 @@ function doGenerateRetainerRechnungen(btn) {
       createdAt: new Date().toISOString()
     };
     DB.rechnungen.unshift(rg);
+    const assignedRg = await sbSaveRechnung(rg);
+    if(assignedRg) { rg.nr = assignedRg; rg.nrLocked = true; }
     // Update next billing date
     const nextMonth = new Date(now.getFullYear(), now.getMonth()+1, tag);
     r.next = nextMonth.toISOString().split('T')[0];
     count++;
-  });
+  }
   if(count>0) {
     save();
     addActivity(`${count} Retainer-Rechnung(en) erstellt`, 'green');
@@ -11312,6 +11538,9 @@ body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
   #page-contacts td[data-label="Firma"] > div{min-width:0}
   #page-contacts td[data-label="Firma"] > div > div{min-width:0}
   #page-contacts td[data-label="Firma"] > div > div > div:first-child{white-space:nowrap}
+}
+@media(max-width:768px){
+  #settings-nummern .nummern-grid{grid-template-columns:1fr !important}
 }
 @media(min-width:769px) and (max-width:1280px){
   #page-contacts.page{padding-left:16px;padding-right:16px}

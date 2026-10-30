@@ -1,5 +1,6 @@
 // Lesen für Holo-Panels. Immer mit dem Nutzer-JWT, damit RLS gilt.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { canonicalKunde } from "../_shared/doc_numbers.ts";
 import { botFromText, briefingSpoken, deDate, eur, speakDate, sumNetto, weekRange, type Ctx } from "./logic.ts";
 
 type Row = Record<string, unknown>;
@@ -90,7 +91,7 @@ export async function customerFile(sb: SupabaseClient, input: Record<string, unk
     }
     id = found.id;
   }
-  const contact = await sb.from("contacts").select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, notes, ana, notizen, archiviert").eq("id", id).maybeSingle();
+  const contact = await sb.from("contacts").select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, notes, ana, notizen, kundennummer, archiviert").eq("id", id).maybeSingle();
   if (contact.error) throw new Error(dbErr(contact.error.message));
   if (!contact.data || contact.data.archiviert) return { ui: null, forModel: { hinweis: "Kontakt nicht gefunden oder kein Zugriff." } };
   const c = contact.data;
@@ -117,6 +118,7 @@ export async function customerFile(sb: SupabaseClient, input: Record<string, unk
     customer: {
       id: c.id,
       firma: c.firma,
+      kundennummer: c.kundennummer || null,
       person: c.person,
       email: c.email,
       tel: c.tel,
@@ -142,9 +144,18 @@ export async function customerFile(sb: SupabaseClient, input: Record<string, unk
 export async function fuzzyFind(sb: SupabaseClient, query: string): Promise<
   { kind: "none" } | { kind: "one"; id: string; firma: string } | { kind: "many"; rows: Array<{ id: string; firma: string | null; person: string | null }> }
 > {
+  const kd = canonicalKunde(query);
+  if (kd) {
+    const exact = await sb.from("contacts").select("id, firma, person, kundennummer, archiviert").eq("kundennummer", kd).limit(5);
+    if (exact.error) throw new Error(dbErr(exact.error.message));
+    const rows = (exact.data ?? []).filter((c) => !c.archiviert);
+    if (!rows.length) return { kind: "none" };
+    if (rows.length > 1) return { kind: "many", rows: rows.map((r) => ({ id: r.id, firma: r.firma, person: r.person })) };
+    return { kind: "one", id: rows[0].id, firma: rows[0].firma || rows[0].person || "Kontakt" };
+  }
   const q = norm(query);
   if (!q) return { kind: "none" };
-  const { data, error } = await sb.from("contacts").select("id, firma, person, archiviert").limit(400);
+  const { data, error } = await sb.from("contacts").select("id, firma, person, kundennummer, archiviert").limit(400);
   if (error) throw new Error(dbErr(error.message));
   const ranked = (data ?? []).filter((c) => !c.archiviert).map((c) => ({ ...c, score: scoreName(q, c.firma, c.person) })).filter((c) => c.score >= 40).sort((a, b) => b.score - a.score);
   if (!ranked.length) return { kind: "none" };
@@ -197,7 +208,7 @@ async function postView(sb: SupabaseClient): Promise<View> {
 }
 
 async function contactsView(sb: SupabaseClient, filter: Filter, ctx: Ctx): Promise<View> {
-  let q = sb.from("contacts").select("id, firma, person, ort, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert").limit(200);
+  let q = sb.from("contacts").select("id, firma, person, ort, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, kundennummer, archiviert").limit(200);
   if (filter.status) q = q.eq("status", filter.status);
   if (filter.quelle) q = q.eq("quelle", filter.quelle);
   const { data, error } = await q;
@@ -207,9 +218,10 @@ async function contactsView(sb: SupabaseClient, filter: Filter, ctx: Ctx): Promi
     open: "customer",
     overdue: !!(c.naechster_schritt && c.naechster_schritt < ctx.today),
     flags: { status: c.status, quelle: c.quelle },
-    search: `${c.firma} ${c.person} ${c.ort}`.toLowerCase(),
+    search: `${c.firma} ${c.person} ${c.ort} ${c.kundennummer || ""}`.toLowerCase(),
     cells: {
       firma: c.firma || "",
+      kundennummer: c.kundennummer || "",
       person: c.person || "",
       ort: c.ort || "",
       phase: labelPhase(c.status),
@@ -220,7 +232,7 @@ async function contactsView(sb: SupabaseClient, filter: Filter, ctx: Ctx): Promi
     badge: { text: labelPhase(c.status), tone: c.status === "gewonnen" ? "f" : c.status === "verloren" ? "o" : "w" },
   }));
   return base("Kontakte", "contacts", rows, [
-    { key: "firma", label: "Firma" }, { key: "person", label: "Person" }, { key: "ort", label: "Ort" },
+    { key: "kundennummer", label: "Kundennr." }, { key: "firma", label: "Firma" }, { key: "person", label: "Person" }, { key: "ort", label: "Ort" },
     { key: "phase", label: "Phase" }, { key: "quelle", label: "Quelle" }, { key: "deal", label: "Deal netto", align: "r" },
     { key: "naechster", label: "Nächster Schritt" },
   ], [

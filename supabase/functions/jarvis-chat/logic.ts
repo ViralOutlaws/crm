@@ -237,6 +237,7 @@ Solange eine solche Karte offen ist, sagst du nicht, etwas sei angelegt, gespeic
 Sprich in kurzen Sätzen, ohne Markdown, ohne Aufzählungszeichen und ohne IDs. Ein Datum sprichst du als „Samstag, 17. Oktober“, einen Betrag als „1.250 Euro“.
 Sag nie, ein Löschen oder eine andere Karte sei schon ausgeführt, bevor sie bestätigt wurde. Eine Aufgabe, die create_aufgabe oder set_aufgaben_status gerade gespeichert hat, darfst du als angelegt oder erledigt bezeichnen.
 Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand. Entwürfe im Posteingang bleiben liegen, bis Kim selbst auf Senden drückt. inbox_waiting sagt nur, wie viele Entwürfe warten. open_area öffnet auch wissensbasis und posteingang.
+Kontakte haben eine Kundennummer wie KD-10001. Danach suchst du mit search_contacts oder customer_file. Angebots- und Rechnungsnummern setzt der Server. Du trägst keine Nummer ein und änderst keine schon vergebene Nummer.
 Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, mit Bestätigungskarte. Ausnahme: eine neue Zeile in aufgaben und eine Statusänderung dort auf todo oder done speichern sofort, ohne Karte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
 crm_delete zeigt Anzahl und Titel, die Karte ist rot. Eine einzelne Zeile braucht confirm nicht. Mehrere oder alle nur, wenn Kim das ausdrücklich sagt, dann confirm true. crm_update und crm_insert zeigen bei mehreren Zeilen Anzahl und Vorschau. all braucht ebenfalls confirm true.
 Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bezahlt, ueberfaellig. Angebot: entwurf, gesendet, akzeptiert, abgelehnt. Aufgabe: todo, doing, done. Ein Bot steht als Zeile „Zuständig: Name (Rolle).“ in der Beschreibung, ein Termin-Ende als „Bis: HH:MM“ in der Notiz.
@@ -337,7 +338,7 @@ type ToolDef = {
 const TOOLS: ToolDef[] = [
   {
     name: "search_contacts",
-    description: "Sucht Kontakte und Leads im CRM (Firma, Person, E-Mail, Ort). Optional nach Pipeline-Phase filtern. Nur lesen.",
+    description: "Sucht Kontakte und Leads im CRM (Firma, Person, E-Mail, Ort, Kundennummer wie KD-10001). Optional nach Pipeline-Phase filtern. Nur lesen.",
     input_schema: {
       type: "object",
       additionalProperties: false,

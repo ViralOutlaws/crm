@@ -5,6 +5,7 @@
 // Einstellungen und Geheimnisse bleiben tabu. Mails und Datei-Uploads gibt es nicht.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { leitstandPayload } from "../_shared/bot_leitstand.ts";
+import { canonicalKunde } from "../_shared/doc_numbers.ts";
 import { customerFile, fuzzyFind, morningBriefing, openArea } from "./areas.ts";
 import {
   anthropicTools,
@@ -580,12 +581,10 @@ async function writePlan(sb: SupabaseClient, ws: string, plan: Plan, ctx: Ctx): 
     await assertContact(sb, d.kunde_id as string | null);
     const id = crypto.randomUUID();
     const table = plan.kind === "angebot" ? "angebote" : "rechnungen";
-    const nr = await nextNr(sb, table, plan.kind === "angebot" ? "A" : "R");
     const row: Record<string, unknown> = {
       id,
       workspace_id: ws,
       kunde_id: d.kunde_id ?? null,
-      nr,
       betreff: d.betreff,
       datum: d.datum,
       status: "entwurf",
@@ -1189,9 +1188,7 @@ async function executeCrm(
       const id = crypto.randomUUID();
       next = { ...next, id, workspace_id: ws };
       if (stampsUpdatedAt(table)) next.updated_at = new Date().toISOString();
-      if ((table === "angebote" || table === "rechnungen") && !next.nr) {
-        next.nr = await nextNr(sb, table as "angebote" | "rechnungen", table === "angebote" ? "A" : "R");
-      }
+      if (table === "angebote" || table === "rechnungen") delete next.nr;
       if (table === "social_media_posts" && !next.external_id) next.external_id = `jarvis-${ctx.today}-${id.slice(0, 8)}`;
       await assertContact(sb, (next.kontakt_id ?? next.kunde_id ?? null) as string | null);
       const ins = await sb.from(table).insert(next).select("*").single();
@@ -1562,11 +1559,13 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
   const limit = Math.min(25, Math.max(1, Number(o.limit) || 12));
   const newest = o.newest === true || String(o.newest).toLowerCase() === "true";
   let q = sb.from("contacts")
-    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, archiviert, created_at")
+    .select("id, firma, person, email, tel, ort, branche, status, quelle, deal_wert, naechster_schritt, naechster_schritt_text, kundennummer, archiviert, created_at")
     .limit(limit);
   if (newest) q = q.order("created_at", { ascending: false });
+  const kd = canonicalKunde(String(o.query ?? ""));
   const query = likeSafe(o.query);
-  if (query) q = q.or(`firma.ilike.%${query}%,person.ilike.%${query}%,email.ilike.%${query}%,ort.ilike.%${query}%`);
+  if (kd) q = q.eq("kundennummer", kd);
+  else if (query) q = q.or(`firma.ilike.%${query}%,person.ilike.%${query}%,email.ilike.%${query}%,ort.ilike.%${query}%,kundennummer.ilike.%${query}%`);
   const st = typeof o.status === "string" ? o.status.toLowerCase() : "";
   if (["lead", "erstgespraech", "angebot", "gewonnen", "verloren"].includes(st)) q = q.eq("status", st);
   const { data, error } = await q;
@@ -1597,6 +1596,7 @@ async function searchContacts(sb: SupabaseClient, o: Record<string, unknown>) {
         id: c.id,
         firma: c.firma,
         person: c.person,
+        kundennummer: c.kundennummer || null,
         ort: c.ort,
         status: c.status,
         quelle: c.quelle,
@@ -1750,8 +1750,9 @@ function emptyLanes(): Record<string, Array<Record<string, unknown>>> {
   return { lead: [], erstgespraech: [], angebot: [], gewonnen: [], verloren: [] };
 }
 
-function card(c: { firma?: string | null; person?: string | null; ort?: string | null; quelle?: string | null; deal_wert?: number | null; naechster_schritt?: string | null }) {
+function card(c: { firma?: string | null; person?: string | null; ort?: string | null; quelle?: string | null; deal_wert?: number | null; naechster_schritt?: string | null; kundennummer?: string | null }) {
   return {
+    kundennummer: c.kundennummer || null,
     firma: c.firma || c.person || "Ohne Namen",
     person: c.person || "",
     ort: c.ort || "",
@@ -1837,16 +1838,6 @@ async function assertContact(sb: SupabaseClient, id: string | null) {
   if (!data) throw new Error("Kontakt nicht gefunden oder kein Zugriff.");
 }
 
-async function nextNr(sb: SupabaseClient, table: "angebote" | "rechnungen", prefix: "A" | "R") {
-  const { data, error } = await sb.from(table).select("nr").limit(2000);
-  if (error) throw new Error("Nummernkreis nicht lesbar.");
-  let max = 0;
-  for (const r of data ?? []) {
-    const n = parseInt(String(r.nr ?? "").replace(/\D/g, ""), 10);
-    if (Number.isFinite(n) && n > max) max = n;
-  }
-  return prefix + String(max + 1).padStart(4, "0");
-}
 
 function note(text: string, today: string) {
   return { id: crypto.randomUUID(), typ: "notiz", text, datum: today, createdAt: new Date().toISOString() };
