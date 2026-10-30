@@ -245,8 +245,8 @@ export async function imapFetchNew(folder: string, lastUid: number): Promise<Fet
     if (!(login[login.length - 1] || "").includes(" OK")) throw new Error("IMAP Login fehlgeschlagen");
     const sel = await run(`SELECT ${quote(folder)}`);
     if (!(sel[sel.length - 1] || "").includes(" OK")) throw new Error("Ordner nicht lesbar");
-    const range = lastUid > 0 ? `${lastUid + 1}:*` : "1:*";
-    const found = await run(`UID SEARCH UID ${range}`);
+    const query = lastUid > 0 ? `UID SEARCH UID ${lastUid + 1}:*` : `UID SEARCH SINCE ${imapSince(90)}`;
+    const found = await run(query);
     const uids = (found.find((l) => l.startsWith("* SEARCH")) || "")
       .replace("* SEARCH", "").trim().split(/\s+/).filter(Boolean).map(Number)
       .filter((u) => u > lastUid).slice(0, 80);

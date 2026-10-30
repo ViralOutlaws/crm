@@ -9,19 +9,24 @@
     { k: 'verloren', l: 'Verloren' },
   ];
   const SECTIONS = [
-    { k: 'ton', l: 'So klingst du' },
-    { k: 'begruessung', l: 'Begrüßung' },
-    { k: 'niemals', l: 'Niemals' },
-    { k: 'preise', l: 'Preise & Pakete' },
+    { k: 'ton', l: 'So klingst du', icon: 'chat', help: 'Stimme für jeden Entwurf.' },
+    { k: 'begruessung', l: 'Begrüßung und Abschluss', icon: 'mail', help: 'Anfang und Schluss jeder Mail.' },
+    { k: 'niemals', l: 'Niemals', icon: 'shield', help: 'Diese Regeln bricht die KI nicht.' },
+    { k: 'faq', l: 'Häufige Fragen', icon: 'light', help: 'Kurze Antworten, die so übernommen werden dürfen.' },
+    { k: 'preise', l: 'Preise & Pakete', icon: 'euro', help: 'Nur diese Pakete. Steht ein Preis nicht hier, wird keiner erfunden.' },
   ];
   const DEFAULTS = {
-    ton: 'Klar, freundlich, auf Deutsch. Wir sind eine Webdesign- und KI-Agentur. Kurze Absätze.',
-    begruessung: 'Guten Tag, oder den Vornamen. Abschluss: Viele Grüße, Kim, Viral Outlaws.',
-    niemals: 'Erfinde nie Preise, Termine oder Referenzen. Schicke nie Zahlungslinks. Warte, bis Kim auf Senden drückt. Lösche nie etwas von allein.',
-    preise: 'Preise nur aus den Paketen. Steht dort nichts, sag das.',
+    ton: 'Klar, freundlich und auf Deutsch. Kurze Absätze, keine Floskeln. Wir sind eine Webdesign- und KI-Agentur und sprechen als wir. Kein Druck und kein erfundener Smalltalk.',
+    begruessung: 'Guten Tag, wenn der Name fehlt. Sonst den Vornamen.\n\nAbschluss:\nViele Grüße\nKim\nViral Outlaws',
+    niemals: '- Erfinde nie Preise, Rabatte oder Pakete, die nicht in der Tabelle stehen.\n- Erfinde nie Termine, Referenzen oder Kunden.\n- Schicke nie Zahlungslinks und keine Kontodaten, die nicht in den Einstellungen stehen.\n- Versprich nie Liefertermine oder Rankings.\n- Antworte nie auf Newsletter, Spam oder Werbung.\n- Warte, bis Kim auf Senden drückt. Lösche nie etwas von allein.',
+    faq: 'Ablauf\nErst das Gespräch, dann ein Angebot, danach der Entwurf. Nichts startet ohne Freigabe.\n\nDauer\nEine kleine Website liegt meist bei vier bis sechs Wochen, nachdem Texte und Bilder da sind.\n\nZahlungsweise\nDie Hälfte bei Auftrag, der Rest bei Abnahme. Details stehen auf der Rechnung.',
+    preise: '',
   };
 
   const ico = (name, size) => (typeof voSvg === 'function' ? voSvg(name, size || 16) : '');
+  function spark() {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21M5.8 5.8l2.5 2.5M15.7 15.7l2.5 2.5M18.2 5.8l-2.5 2.5M8.3 15.7l-2.5 2.5"/></svg>';
+  }
   const css = document.createElement('style');
   css.textContent = `
   .reel-live{display:inline-flex;align-items:center;gap:8px;background:#1f9e5a;color:#fff;font-size:11px;font-weight:700;letter-spacing:.4px;border-radius:99px;padding:4px 8px}
@@ -43,10 +48,12 @@
   .reel-wait b{font-size:32px;line-height:1}
   .reel-feed{display:flex;flex-direction:column;gap:8px}
   .reel-feed-row{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;font-size:12px}
-  .pl-card.reel-card{padding:16px;display:flex;flex-direction:column;gap:8px}
+  .pl-card.reel-card{padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow:hidden}
   .reel-card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
-  .reel-name{font-weight:700;font-size:13px}
-  .reel-val{font-weight:700;white-space:nowrap;text-align:right}
+  .reel-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .reel-val-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+  .reel-val-row .chip{max-width:100%}
+  .reel-val{font-weight:700;white-space:nowrap}
   .reel-req{font-size:12px;color:var(--ink2,var(--muted));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
   .reel-foot{font-size:11px;color:var(--muted);margin-top:auto}
   .reel-foot.late{color:#d97706}
@@ -63,11 +70,33 @@
   .folder-pop button{display:block;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:8px;border-radius:6px;cursor:pointer}
   .folder-tree button.fld{display:flex;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:6px 8px;border-radius:8px;cursor:pointer}
   .folder-tree button.fld.on,.folder-tree button.fld:hover{background:rgba(245,196,0,.16)}
-  .mail-row{display:grid;grid-template-columns:16px 1fr;gap:8px;padding:10px 8px;border-radius:8px;cursor:pointer;position:relative}
+  .mail-row{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;padding:10px 8px;border-radius:8px;cursor:pointer;position:relative}
+  .mail-row > div{min-width:0}
   .mail-row:hover,.mail-row.on{background:rgba(245,196,0,.12)}
   .mail-row input{opacity:0}
   .mail-row:hover input,.mail-row.on input,.inbox.selecting .mail-row input{opacity:1}
-  .mail-top{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+  .mail-top{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;align-items:center;font-size:12px}
+  .mail-who,.mail-sub,.mail-snip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mail-time{text-align:right;white-space:nowrap;color:var(--muted);font-size:11px}
+  .dash-card.reel-ki{display:flex;align-items:center;gap:12px;margin-top:8px;padding:12px 16px;min-height:0}
+  .reel-spark,.wissen-ico{width:36px;height:36px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:rgba(245,196,0,.2);color:#8a6a00;flex:0 0 36px}
+  body.dark-mode .reel-spark,body.dark-mode .wissen-ico{color:#f5c400}
+  .wissen-card{margin-bottom:8px}
+  .wissen-head{display:flex;gap:12px;align-items:flex-start}
+  .wissen-title{font-size:14px;font-weight:700}
+  .wissen-help{font-size:12px;color:var(--muted);margin-top:2px}
+  .wissen-view{font-size:13px;line-height:1.55;margin-top:12px;cursor:pointer;border-radius:8px}
+  .wissen-view:hover{background:rgba(245,196,0,.06)}
+  .wissen-list{margin:0;padding-left:18px}
+  .wissen-list li{margin:4px 0}
+  .wissen-edit{width:100%;min-height:140px;margin-top:12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;padding:12px;font:inherit;line-height:1.5;resize:vertical}
+  .wissen-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;min-height:28px}
+  .wissen-status{font-size:11px;color:#1f9e5a}
+  .wissen-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+  .wissen-table th{font-size:11px;font-weight:650;color:var(--muted);text-align:left;padding:0 8px 6px 0}
+  .wissen-table td{padding:8px 8px 8px 0;border-bottom:1px solid var(--border);vertical-align:top}
+  .wissen-table td:first-child{font-weight:650}
+  .wissen-table td:last-child,.wissen-table th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .mail-sub{font-weight:650;font-size:13px;margin:2px 0}
   .mail-snip{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dot{width:8px;height:8px;border-radius:99px;display:inline-block;flex:0 0 8px}
@@ -161,11 +190,15 @@
     const open = (DB.contacts || []).filter((c) => !c.archiviert && ['lead', 'erstgespraech', 'angebot'].includes(c.status));
     const sum = open.reduce((s, c) => s + cardValue(c).n, 0);
     const won = (DB.contacts || []).filter((c) => !c.archiviert && c.status === 'gewonnen');
-    const avg = won.length ? Math.round(won.reduce((s, c) => {
-      const start = new Date(c.createdAt || 0).getTime();
-      const end = new Date(c.statusSeit || c.status_seit || c.updatedAt || Date.now()).getTime();
-      return s + (start ? Math.max(0, Math.round((end - start) / 86400000)) : 0);
-    }, 0) / won.length) : 0;
+    const spans = won.map((c) => {
+      const hist = c.phasen || c.statusVerlauf;
+      if (!Array.isArray(hist) || hist.length < 2) return null;
+      const start = new Date(hist[0].at || hist[0]).getTime();
+      const end = new Date(hist[hist.length - 1].at || hist[hist.length - 1]).getTime();
+      if (!start || !end) return null;
+      return Math.max(0, Math.round((end - start) / 86400000));
+    }).filter((n) => n != null);
+    const avg = spans.length ? Math.round(spans.reduce((s, n) => s + n, 0) / spans.length) : null;
     return { sum, count: open.length, avg };
   }
 
@@ -176,7 +209,7 @@
     if (strip) strip.remove();
     const pipe = openPipeline();
     const tot = document.getElementById('pl-total');
-    if (tot) tot.textContent = 'Offene Pipeline ' + eur(pipe.sum) + ' · ' + pipe.count + ' Deals · Ø ' + pipe.avg + ' Tage bis Abschluss';
+    if (tot) tot.textContent = 'Offene Pipeline ' + eur(pipe.sum) + ' · ' + pipe.count + ' Deals · Ø Tage bis Abschluss ' + (pipe.avg == null ? '–' : pipe.avg);
     const list = (DB.contacts || []).filter((c) => !c.archiviert);
     board.innerHTML = STAGES.map((st) => {
       const cs = list.filter((c) => (window.normStatus ? normStatus(c.status) : c.status) === st.k);
@@ -188,7 +221,8 @@
           const days = daysCount(c);
           const req = c.ana || c.notes || '';
           return `<div class="pl-card reel-card" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${esc(c.id)}')">
-            <div class="reel-card-top"><div class="reel-name" onclick="openContactDetail('${esc(c.id)}')">${esc(c.firma)}</div><div class="reel-val">${v.n ? eur(v.n) : '–'}${v.ki ? ` <span class="chip" title="${esc(c.kiGrund || 'KI-Schätzung')}">KI-Schätzung</span>` : ''}</div></div>
+            <div class="reel-name" onclick="openContactDetail('${esc(c.id)}')">${esc(c.firma)}</div>
+            <div class="reel-val-row"><span class="reel-val">${v.n ? eur(v.n) : '–'}</span>${v.ki ? `<span class="chip" title="${esc(c.kiGrund || 'KI-Schätzung')}">KI-Schätzung</span>` : ''}</div>
             <div class="reel-req">${esc(req)}</div>
             <div class="reel-foot ${days >= 14 ? 'late' : ''}">seit ${days} ${days === 1 ? 'Tag' : 'Tagen'}</div>
           </div>`;
@@ -275,10 +309,7 @@
         <div class="dash-card"><h3>Umsatz pro Monat <span class="reel-seg"><button type="button" class="${span === 6 ? 'on' : ''}" onclick="reelSpan(6)">6</button><button type="button" class="${span === 12 ? 'on' : ''}" onclick="reelSpan(12)">12</button></span></h3><div class="reel-chart">${months.map((m) => `<div class="reel-bar-col"><div class="reel-bar ${m.now ? 'on' : ''}" style="height:${Math.max(m.h, 8)}%" title="${esc(m.label)} ${eur(m.sum)}"></div><div class="reel-bar-label">${esc(m.label)}</div></div>`).join('')}</div></div>
         <div class="dash-card dash-hit" onclick="dashGo('contacts')"><h3>Woher kommen Leads</h3>${sourceBars(contacts)}</div>
       </div>
-      <div class="reel-panels" style="margin-top:8px">
-        <div class="dash-card"><div class="reel-wait"><span>${ico('star', 22)}</span><div><b>${waiting}</b><div>Entwürfe warten auf Senden</div></div><button class="btn-yellow" onclick="event.stopPropagation();reelDrafts()">Prüfen</button></div></div>
-        <div class="dash-card"><h3>Aktivität</h3><div class="reel-feed">${feedItems()}</div></div>
-      </div>`;
+      <div class="dash-card reel-ki"><span class="reel-spark">${spark()}</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">KI wartet auf dich</div><div><b style="font-size:28px;line-height:1.1">${waiting}</b> <span style="color:var(--muted)">Entwürfe warten auf Senden</span></div></div><button type="button" class="btn-yellow" onclick="reelDrafts()">Prüfen</button></div>`;
   }
   window.reelSpan = function (n) { const host = document.getElementById('reel-dash'); if (host) host.dataset.span = String(n); renderDashExtra(); };
   window.reelDrafts = function () { inboxFilter = 'entwurf'; showPage('posteingang'); };
@@ -325,30 +356,91 @@
   window.renderDashExtra = renderDashExtra;
 
   function wissenList() {
-    DB.wissensbasis = DB.wissensbasis || SECTIONS.map((s) => ({ section: s.k, content: DEFAULTS[s.k] }));
+    if (!Array.isArray(DB.wissensbasis)) DB.wissensbasis = [];
+    SECTIONS.forEach((s) => {
+      if (!DB.wissensbasis.some((r) => r.section === s.k)) DB.wissensbasis.push({ section: s.k, content: DEFAULTS[s.k] || '' });
+    });
     return DB.wissensbasis;
+  }
+  function wissenHtml(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return '<span style="color:var(--muted)">Noch leer. Tippen zum Schreiben.</span>';
+    const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.every((l) => l.startsWith('- ') || l.startsWith('• '))) {
+      return '<ul class="wissen-list">' + lines.map((l) => `<li>${esc(l.replace(/^[-•]\s*/, ''))}</li>`).join('') + '</ul>';
+    }
+    return esc(raw).replace(/\n/g, '<br>');
+  }
+  function paketRows() {
+    const raw = DB.pakete;
+    if (Array.isArray(raw) && raw.length) {
+      return raw.map((p) => ({
+        name: p.name || p.label || '',
+        leistung: p.leistung || p.beschreibung || p.desc || '',
+        preis: p.preis,
+        typ: p.typ || '',
+      })).filter((p) => p.name);
+    }
+    const src = typeof KONF_LEISTUNGEN === 'object' ? KONF_LEISTUNGEN : null;
+    const web = src && Array.isArray(src.web) ? src.web : [];
+    return web.slice(0, 6).map((p) => ({ name: p.label || '', leistung: p.desc || '', preis: p.preis, typ: p.typ || '' }));
+  }
+  function abPreis(p) {
+    const n = Math.round(Number(p.preis) || 0).toLocaleString('de-DE');
+    return 'ab ' + n + ' €' + (p.typ === 'monatlich' ? ' / Monat' : '');
+  }
+  function preiseTable() {
+    const rows = paketRows();
+    if (!rows.length) return '<div class="wissen-view">Noch keine Pakete.</div>';
+    return `<table class="wissen-table"><thead><tr><th>Name</th><th>Leistung</th><th>ab-Preis</th></tr></thead><tbody>${rows.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(p.leistung)}</td><td>${esc(abPreis(p))}</td></tr>`).join('')}</tbody></table>`;
   }
   function renderWissen() {
     const host = document.getElementById('wissen-body');
     if (!host) return;
     const rows = wissenList();
     host.innerHTML = SECTIONS.map((s) => {
-      const row = rows.find((r) => r.section === s.k) || { content: DEFAULTS[s.k] };
-      return `<div class="dash-card" style="margin-bottom:12px"><h3>${s.l}</h3><textarea id="wissen-${s.k}" rows="4" style="width:100%">${esc(row.content || '')}</textarea>${s.k === 'preise' ? '<div style="font-size:12px;margin-top:6px"><a href="#" onclick="event.preventDefault();showPage(\'konfigurator\')">Pakete im Konfigurator</a></div>' : ''}<button class="btn-yellow" style="margin-top:8px" onclick="reelSaveWissen('${s.k}')">Speichern</button></div>`;
+      const row = rows.find((r) => r.section === s.k) || { content: DEFAULTS[s.k] || '' };
+      const body = s.k === 'preise'
+        ? preiseTable()
+        : `<div class="wissen-view" onclick="reelEditWissen('${s.k}')">${wissenHtml(row.content)}</div>`;
+      const actions = s.k === 'preise'
+        ? '<span></span><button type="button" class="btn-ghost btn-sm" onclick="showPage(\'konfigurator\')">Pakete bearbeiten</button>'
+        : `<span class="wissen-status" id="wissen-status-${s.k}"></span><button type="button" class="btn-ghost btn-sm" onclick="reelEditWissen('${s.k}')">Bearbeiten</button>`;
+      return `<div class="dash-card wissen-card" id="wissen-card-${s.k}"><div class="wissen-head"><span class="wissen-ico">${ico(s.icon, 18)}</span><div><div class="wissen-title">${esc(s.l)}</div><div class="wissen-help">${esc(s.help)}</div></div></div><div class="wissen-body">${body}</div><div class="wissen-actions">${actions}</div></div>`;
     }).join('');
   }
+  window.reelEditWissen = function (section) {
+    if (section === 'preise') return;
+    const card = document.getElementById('wissen-card-' + section);
+    if (!card || card.dataset.mode === 'edit') return;
+    card.dataset.mode = 'edit';
+    const row = wissenList().find((r) => r.section === section) || { content: '' };
+    const body = card.querySelector('.wissen-body');
+    if (!body) return;
+    body.innerHTML = `<textarea class="wissen-edit" id="wissen-${section}">${esc(row.content || '')}</textarea>`;
+    const ta = body.querySelector('textarea');
+    if (!ta) return;
+    ta.focus();
+    ta.addEventListener('blur', () => reelSaveWissen(section));
+  };
   window.reelSaveWissen = async function (section) {
-    const content = document.getElementById('wissen-' + section).value;
+    const el = document.getElementById('wissen-' + section);
+    if (!el) return;
+    const content = el.value;
     const rows = wissenList();
     const row = rows.find((r) => r.section === section);
     if (row) row.content = content; else rows.push({ section, content });
     if (window._currentUser && typeof getSupabase === 'function') {
-      const sb = await getSupabase();
-      const ws = _currentWorkspace?.id || window._FALLBACK_WORKSPACE_ID;
-      await sb.from('wissensbasis').upsert({ workspace_id: ws, section, content, updated_at: new Date().toISOString() }, { onConflict: 'workspace_id,section' });
+      try {
+        const sb = await getSupabase();
+        const ws = _currentWorkspace?.id || window._FALLBACK_WORKSPACE_ID;
+        await sb.from('wissensbasis').upsert({ workspace_id: ws, section, content, updated_at: new Date().toISOString() }, { onConflict: 'workspace_id,section' });
+      } catch (e) { /* lokal bleibt gespeichert */ }
     }
     if (typeof save === 'function') save();
-    if (typeof haptikToast === 'function') haptikToast('Wissensbasis gespeichert');
+    renderWissen();
+    const mark = document.getElementById('wissen-status-' + section);
+    if (mark) mark.textContent = 'Gespeichert';
   };
 
   function mails() { DB.conversations = DB.conversations || []; DB.messages = DB.messages || []; DB.mailFolders = DB.mailFolders || []; DB.mailRules = DB.mailRules || []; return DB.conversations; }
@@ -416,7 +508,7 @@
     const when = msg && msg.created_at ? relTime(msg.created_at) : '';
     return `<div class="mail-row ${c.id === inboxId ? 'on' : ''}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${esc(c.id)}')" onclick="reelOpen('${esc(c.id)}')">
       <input type="checkbox" ${selected.has(c.id) ? 'checked' : ''} onclick="event.stopPropagation();reelToggleSelect('${esc(c.id)}',this.checked)">
-      <div><div class="mail-top"><span><span class="dot ${esc(c.status || 'neu')}"></span> ${esc(who.replace(/<[^>]+>/g, '').trim())}</span><span style="color:var(--muted)">${esc(when)}</span></div>
+      <div><div class="mail-top"><span class="mail-who"><span class="dot ${esc(c.status || 'neu')}"></span> ${esc(who.replace(/<[^>]+>/g, '').trim())}</span><span class="mail-time">${esc(when)}</span></div>
       <div class="mail-sub">${esc(c.subject || '')}</div>
       <div class="mail-snip">${esc((msg && msg.body_text) || '')}</div>
       <div style="margin-top:4px"><span class="chip muted">${esc(labelOf(c.klassifikation))}</span>${chip(c)}</div></div></div>`;
