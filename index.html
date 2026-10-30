@@ -11112,5 +11112,92 @@ applyExtraModules();
 })();
 </script>
 
+<style>
+/* Glas: ruhiger Verlauf, damit die Flächen sichtbar bleiben. Kein fixed-Attachment (Handy-Scroll). */
+body{
+  background:
+    radial-gradient(920px 520px at 0% -10%, rgba(245,196,0,.09), transparent 58%),
+    radial-gradient(780px 460px at 100% 0%, rgba(150,146,138,.18), transparent 54%),
+    linear-gradient(165deg, #f8f5ef 0%, #f3efe8 46%, #ebe6de 100%);
+}
+body.dark-mode{
+  --glass-bg:rgba(20,20,20,.5);
+  --glass-bd:rgba(255,255,255,.18);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.14);
+  --glass-sh:0 12px 32px rgba(0,0,0,.38);
+  background:
+    radial-gradient(720px 460px at 92% -12%, rgba(245,196,0,.14), transparent 58%),
+    radial-gradient(520px 340px at 0% 0%, rgba(245,196,0,.05), transparent 54%),
+    linear-gradient(180deg, #090909 0%, #0d0d0d 100%);
+}
+#main-content,.page{background:transparent}
+:root{
+  --glass-bg:rgba(255,255,255,.62);
+  --glass-bd:rgba(255,255,255,.6);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.78);
+  --glass-sh:0 10px 28px rgba(48,40,24,.07);
+  --glass-blur:blur(20px) saturate(160%);
+}
+.kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item{
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  border:1px solid var(--glass-bd);
+  box-shadow:var(--glass-sh), var(--glass-hi);
+}
+.kpi{border:1px solid var(--glass-bd)!important;overflow:hidden}
+#top-header,#bottom-nav{background:rgba(255,255,255,.7);border-left:none;border-right:none}
+#top-header{border-top:none}
+#bottom-nav{border-bottom:none}
+body.dark-mode #top-header,body.dark-mode #bottom-nav{background:rgba(20,20,20,.66)}
+#sidebar{
+  background:rgba(8,8,8,.88);
+  -webkit-backdrop-filter:blur(22px) saturate(140%);
+  backdrop-filter:blur(22px) saturate(140%);
+  border-right:1px solid rgba(255,255,255,.08);
+}
+body.dark-mode #sidebar{background:rgba(8,8,8,.8)}
+.modal{-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}
+.modal-footer{background:transparent}
+.vo-menu,.haptik-toast,.fab-item{-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%)}
+.pl-col{background:rgba(255,255,255,.42);border:1px solid rgba(255,255,255,.6);box-shadow:var(--glass-hi)}
+.pl-card{background:rgba(255,255,255,.78);-webkit-backdrop-filter:none;backdrop-filter:none}
+body.dark-mode .pl-col{background:rgba(20,20,20,.45);border-color:rgba(255,255,255,.14)}
+body.dark-mode .pl-card{background:rgba(22,22,22,.86)}
+tbody tr{background:transparent}
+body.dark-mode tbody tr:hover{background:rgba(255,255,255,.04)}
+body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
+@media(max-width:768px){
+  :root{--glass-blur:blur(18px) saturate(160%)}
+  .table-wrap{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border-color:transparent;box-shadow:none}
+  #contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card{
+    background:var(--glass-bg);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    backdrop-filter:blur(18px) saturate(160%);
+    border:1px solid var(--glass-bd);
+    box-shadow:var(--glass-sh), var(--glass-hi);
+  }
+  #contacts-tbody tr:has(td[colspan]),#angebote-tbody tr:has(td[colspan]),#rechnungen-tbody tr:has(td[colspan]){
+    background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border:none;box-shadow:none;
+  }
+  .modal-footer{background:transparent}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root{--glass-bg:rgba(255,255,255,.94)}
+  body.dark-mode{--glass-bg:rgba(16,16,16,.94)}
+  #sidebar{background:#0c0c0c;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item,#contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card{
+    -webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+}
+@media(prefers-reduced-transparency:reduce){
+  :root{--glass-bg:rgba(255,255,255,.94)}
+  body.dark-mode{--glass-bg:rgba(16,16,16,.94)}
+  #sidebar{background:#0c0c0c;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item,#contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card,.pl-col{
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  }
+}
+</style>
 </body>
 </html>
