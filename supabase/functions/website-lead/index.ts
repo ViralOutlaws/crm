@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", c.id);
       if (e2) return json({ error: "db error" }, 500);
+      await rememberLead(c.id, email, name, message, label);
       return json({ ok: true, merged: true, id: c.id });
     }
   }
@@ -131,5 +132,47 @@ Deno.serve(async (req) => {
     .select("id")
     .single();
   if (error) return json({ error: "db error" }, 500);
+  await rememberLead(data.id, email, name, message, label);
   return json({ ok: true, merged: false, id: data.id });
 });
+
+async function rememberLead(contactId: string, email: string | null, name: string | null, message: string | null, label: string) {
+  try {
+    const now = new Date().toISOString();
+    const { data: conv, error } = await sb.from("conversations").insert({
+      workspace_id: WORKSPACE_ID,
+      channel: "website",
+      subject: `${label}: ${name || email || "Anfrage"}`,
+      contact_id: contactId,
+      status: "neu",
+      klassifikation: "anfrage",
+      folder_role: "inbox",
+      unread: true,
+      first_inbound_at: now,
+    }).select("id").single();
+    if (error || !conv) return;
+    await sb.from("messages").insert({
+      workspace_id: WORKSPACE_ID,
+      conversation_id: conv.id,
+      direction: "in",
+      from_addr: email,
+      subject: label,
+      body_text: message || "",
+      created_at: now,
+    });
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    await fetch(`${url}/functions/v1/inbox-draft`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "x-internal-job": "inbox-draft",
+      },
+      body: JSON.stringify({ conversationId: conv.id, workspaceId: WORKSPACE_ID }),
+    });
+  } catch {
+    // Der Lead bleibt gespeichert, auch wenn der Entwurf scheitert.
+  }
+}

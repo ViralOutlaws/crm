@@ -9,6 +9,7 @@ type View = Record<string, unknown>;
 const AREAS = new Set([
   "contacts", "pipeline", "angebote", "rechnungen", "retainer", "pakete",
   "aufgaben", "wiedervorlagen", "kalender", "social", "ausgaben", "roi", "ziele",
+  "wissensbasis", "posteingang",
 ]);
 
 export async function openArea(sb: SupabaseClient, userId: string, input: Record<string, unknown>, ctx: Ctx) {
@@ -177,7 +178,33 @@ async function buildArea(sb: SupabaseClient, userId: string, area: string, filte
   if (area === "social") return socialView(sb, filter, ctx);
   if (area === "ausgaben") return filterRows(await ausgabenView(sb), filter);
   if (area === "roi") return filterRows(await roiView(sb), filter);
+  if (area === "wissensbasis") return wissenView(sb);
+  if (area === "posteingang") return postView(sb);
   return zieleView(sb);
+}
+
+async function wissenView(sb: SupabaseClient): Promise<View> {
+  const { data, error } = await sb.from("wissensbasis").select("section, content").order("section");
+  if (error) throw new Error(dbErr(error.message));
+  const rows = (data || []).map((r) => ({
+    id: r.section,
+    cells: { abschnitt: r.section, text: String(r.content || "").slice(0, 180) },
+  }));
+  return { title: "Wissensbasis", crm: "wissensbasis", spoken: "Die Wissensbasis ist offen. Entwürfe halten sich daran.", rows, columns: [{ key: "abschnitt", label: "Abschnitt" }, { key: "text", label: "Inhalt" }], kpis: [{ label: "LIVE", value: "an" }] };
+}
+
+async function postView(sb: SupabaseClient): Promise<View> {
+  const { data, error } = await sb.from("conversations").select("id, subject, status, klassifikation, draft_status").order("updated_at", { ascending: false }).limit(25);
+  if (error) throw new Error(dbErr(error.message));
+  const waiting = (data || []).filter((r) => r.draft_status === "pending").length;
+  return {
+    title: "Posteingang",
+    crm: "posteingang",
+    spoken: waiting ? `${waiting} Entwürfe warten auf dich.` : "Posteingang ist offen. Nichts geht ohne Senden raus.",
+    rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "", art: r.klassifikation || "" } })),
+    columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }, { key: "art", label: "Art" }],
+    kpis: [{ label: "Entwürfe", value: String(waiting) }],
+  };
 }
 
 async function contactsView(sb: SupabaseClient, filter: Filter, ctx: Ctx): Promise<View> {

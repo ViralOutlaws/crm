@@ -553,7 +553,7 @@ tbody tr:hover{background:var(--hover)}
 .kpi-tip{position:relative}
 .kpi-tip::after{content:attr(data-tip);position:absolute;left:12px;bottom:calc(100% + 6px);max-width:220px;background:var(--ink);color:#fff;font-size:11px;font-weight:500;letter-spacing:0;text-transform:none;line-height:1.35;padding:8px 10px;border-radius:var(--radius-sm);box-shadow:var(--shadow);opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity var(--dur-tip) var(--ease-out),transform var(--dur-tip) var(--ease-out);z-index:5;white-space:normal}
 .kpi-tip:hover::after{opacity:1;transform:translateY(0)}
-.haptik-in{animation:haptik-rise var(--dur-enter) var(--ease-spring) both}
+.haptik-in{animation:haptik-rise var(--dur-enter) var(--ease-out) backwards}
 @keyframes haptik-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 #haptik-toasts{position:fixed;right:16px;bottom:24px;z-index:8000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .haptik-toast{background:var(--paper);color:var(--ink);border:1px solid var(--border);border-left:3px solid var(--yellow);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:10px 14px;font-size:12px;font-weight:600;min-width:180px;animation:haptik-toast-in var(--dur-enter) var(--ease-out) both}
@@ -569,7 +569,7 @@ tbody tr:hover{background:var(--hover)}
 @media(max-width:768px){.area-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#haptik-toasts{left:12px;right:12px;bottom:72px}}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
-  .haptik-in,.pl-card.dragging{transform:none!important}
+  .haptik-in,.pl-card,.pl-card.dragging{transform:none!important;opacity:1!important}
 }
 :root{--font-sans:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 body,button,input,select,textarea{font-family:var(--font-sans)!important;font-variant-numeric:tabular-nums}
@@ -1003,14 +1003,10 @@ window._loginFallback = function() {
     </div>
   </div>
 
-  <div class="dash-row" style="grid-template-columns:2fr 1fr" id="dash-row-followup">
+  <div class="dash-row" style="grid-template-columns:1fr" id="dash-row-followup">
     <div class="dash-card">
       <h3>⏰ Heute fällig / überfällig</h3>
       <div id="dash-followups"></div>
-    </div>
-    <div class="dash-card">
-        <h3 class="dash-hit" role="button" tabindex="0" onclick="dashGo('contacts')" onkeydown="dashKey(event)" style="display:inline-flex;align-items:center;min-height:44px">📈 Lead-Quellen</h3>
-      <div id="dash-quellen"></div>
     </div>
   </div>
 
@@ -3391,11 +3387,17 @@ function haptikKpis(pageId) {
   });
 }
 
+function dealShown(c) {
+  if (!c) return 0;
+  if (c.dealWert != null && c.dealWert !== '' && !isNaN(Number(c.dealWert))) return Number(c.dealWert);
+  if (c.kiWert != null && c.kiWert !== '' && !isNaN(Number(c.kiWert))) return Number(c.kiWert);
+  return 0;
+}
 function haptikSpec(pageId) {
   const contacts = (DB.contacts || []).filter(c => !c.archiviert);
   const openStages = ['lead', 'erstgespraech', 'angebot'];
   const openDeals = contacts.filter(c => openStages.includes(c.status));
-  const pipeline = openDeals.reduce((s, c) => s + (Number(c.dealWert) || 0), 0);
+  const pipeline = openDeals.reduce((s, c) => s + dealShown(c), 0);
   if(pageId === 'contacts') {
     return [
       { label: 'Kontakte', n: contacts.length, kind: 'n', tone: 'yellow', sub: 'ohne Archiv', tip: 'Alle nicht archivierten Kontakte, alphabetisch nach Firma.' },
@@ -3404,14 +3406,7 @@ function haptikSpec(pageId) {
       { label: 'Pipeline', n: pipeline, kind: 'eur', tone: 'green', sub: 'Deal-Wert netto', tip: 'Summe der Deal-Werte in Lead, Erstgespräch und Angebot.' }
     ];
   }
-  if(pageId === 'pipeline') {
-    return [
-      { label: 'Lead', n: contacts.filter(c => c.status === 'lead').length, kind: 'n', tone: 'yellow', sub: 'Karten', tip: 'Anzahl der Karten in Lead.' },
-      { label: 'Erstgespräch', n: contacts.filter(c => c.status === 'erstgespraech').length, kind: 'n', tone: 'blue', sub: 'Karten', tip: 'Anzahl der Karten im Erstgespräch.' },
-      { label: 'Angebot', n: contacts.filter(c => c.status === 'angebot').length, kind: 'n', tone: 'orange', sub: 'Karten', tip: 'Anzahl der Karten in Angebot.' },
-      { label: 'Offen', n: pipeline, kind: 'eur', tone: 'green', sub: 'Deal-Wert', tip: 'Dieselbe offene Pipeline wie im Dashboard.' }
-    ];
-  }
+  if(pageId === 'pipeline') return null;
   if(pageId === 'angebote') {
     const list = DB.angebote || [];
     const sum = list.filter(a => a.status !== 'abgelehnt').reduce((s, a) => s + (sumPositions(a.positions).netto || 0), 0);
@@ -3461,13 +3456,23 @@ function haptikSpec(pageId) {
 function haptikEnter(pageId) {
   const page = document.getElementById('page-' + pageId);
   if(!page) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const nodes = page.querySelectorAll('#contacts-tbody tr, #angebote-tbody tr, #rechnungen-tbody tr, .pl-card, .kb-card, .kal-day');
   nodes.forEach((el, i) => {
-    if(i > 14) return;
-    el.style.animationDelay = Math.min(i * 24, 336) + 'ms';
     el.classList.remove('haptik-in');
+    el.style.animationDelay = '';
+    if(reduce || i > 14) return;
+    const delay = Math.min(i * 24, 336);
+    el.style.animationDelay = delay + 'ms';
     void el.offsetWidth;
     el.classList.add('haptik-in');
+    const done = (ev) => {
+      if(ev.target !== el) return;
+      el.removeEventListener('animationend', done);
+      el.classList.remove('haptik-in');
+      el.style.animationDelay = '';
+    };
+    el.addEventListener('animationend', done);
   });
 }
 
@@ -4943,14 +4948,15 @@ function renderDashboard() {
     return s + Math.max(0, brutto - abzug);
   },0);
 
-  document.getElementById('kpi-pipeline').textContent = fmtEur(pipelineWert);
-  document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote gesendet';
-  document.getElementById('kpi-umsatz').textContent = fmtEur(umsatz);
-  document.getElementById('kpi-umsatz-sub').textContent = bezahlteRg.length+' Rechnungen bezahlt';
-  document.getElementById('kpi-kunden').textContent = kunden;
-  document.getElementById('kpi-kunden-sub').textContent = 'von '+DB.contacts.length+' Kontakten';
-  document.getElementById('kpi-offen').textContent = fmtEur(offenWert);
-  document.getElementById('kpi-offen-sub').textContent = offeneRg.length+' Rechnungen ausstehend';
+  const kpiSet = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  kpiSet('kpi-pipeline', fmtEur(pipelineWert));
+  kpiSet('kpi-pipeline-sub', offeneAngebote.length+' Angebote gesendet');
+  kpiSet('kpi-umsatz', fmtEur(umsatz));
+  kpiSet('kpi-umsatz-sub', bezahlteRg.length+' Rechnungen bezahlt');
+  kpiSet('kpi-kunden', kunden);
+  kpiSet('kpi-kunden-sub', 'von '+DB.contacts.length+' Kontakten');
+  kpiSet('kpi-offen', fmtEur(offenWert));
+  kpiSet('kpi-offen-sub', offeneRg.length+' Rechnungen ausstehend');
 
   // Pipeline bars
   const statuses = ['lead','erstgespraech','angebot','gewonnen','verloren'];
@@ -11210,7 +11216,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 .pl-col-title{font-weight:700;font-size:13px}
 .pl-col-sum{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-align:right}
 .pl-cards{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1}
-.pl-card{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:grab;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform var(--dur-enter) var(--ease-spring),box-shadow var(--dur-hover) var(--ease-out),opacity var(--dur-hover) var(--ease-out)}
+.pl-card{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:grab;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform var(--dur-hover) var(--ease-out),box-shadow var(--dur-hover) var(--ease-out)}
 .pl-card.dragging{opacity:1;transform:rotate(1.5deg) scale(1.03);box-shadow:var(--shadow-lift);z-index:3}
 .pl-card-firma{font-weight:700;font-size:13px;cursor:pointer}
 .pl-card-meta{color:var(--muted);font-size:11px;margin-top:3px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
@@ -11594,5 +11600,6 @@ tr.dash-mark td{background:rgba(245,196,0,.16)}
   }
 }
 </style>
+<script src="/crm-reel.js"></script>
 </body>
 </html>

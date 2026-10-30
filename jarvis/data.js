@@ -18,6 +18,8 @@ export const AREAS = [
   { id: "ausgaben", label: "Ausgaben" },
   { id: "roi", label: "ROI" },
   { id: "ziele", label: "Ziele" },
+  { id: "wissensbasis", label: "Wissensbasis" },
+  { id: "posteingang", label: "Posteingang" },
 ];
 
 const CRM = {
@@ -34,6 +36,8 @@ const CRM = {
   ausgaben: "ausgaben",
   roi: "roi",
   ziele: "ziele",
+  wissensbasis: "wissensbasis",
+  posteingang: "posteingang",
   customer: "contacts",
   agenda: "kalender",
 };
@@ -285,7 +289,22 @@ export async function loadArea(sb, area, filter = {}, userId) {
   if (area === "social") return socialView(sb, filter, today);
   if (area === "ausgaben") return filterRows(await ausgabenView(sb), filter);
   if (area === "roi") return filterRows(await roiView(sb), filter);
+  if (area === "wissensbasis") return wissenLive(sb);
+  if (area === "posteingang") return postLive(sb);
   return zieleView(sb);
+}
+
+async function wissenLive(sb) {
+  const { data, error } = await sb.from("wissensbasis").select("section, content").order("section");
+  throwDb(error);
+  return { title: "Wissensbasis", crm: "wissensbasis", spoken: "Die Wissensbasis ist offen.", rows: (data || []).map((r) => ({ id: r.section, cells: { abschnitt: r.section, text: String(r.content || "").slice(0, 160) } })), columns: [{ key: "abschnitt", label: "Abschnitt" }, { key: "text", label: "Inhalt" }], kpis: [{ label: "LIVE", value: "an" }] };
+}
+
+async function postLive(sb) {
+  const { data, error } = await sb.from("conversations").select("id, subject, status, draft_status").order("updated_at", { ascending: false }).limit(25);
+  throwDb(error);
+  const waiting = (data || []).filter((r) => r.draft_status === "pending").length;
+  return { title: "Posteingang", crm: "posteingang", spoken: waiting ? `${waiting} Entwürfe warten.` : "Nichts wartet.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "" } })), columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: String(waiting) }] };
 }
 
 async function contactsView(sb, filter, today) {
@@ -914,6 +933,8 @@ function post(datum, uhrzeit, format, hook, caption, tags, status, gradient) {
 }
 
 const VIEWS = demoViews();
+VIEWS.wissensbasis = { title: "Wissensbasis", crm: "wissensbasis", spoken: "Die Wissensbasis ist offen.", rows: [{ id: "ton", cells: { abschnitt: "So klingst du", text: "Klar und auf Deutsch." } }], columns: [{ key: "abschnitt", label: "Abschnitt" }, { key: "text", label: "Inhalt" }], kpis: [{ label: "LIVE", value: "an" }] };
+VIEWS.posteingang = { title: "Posteingang", crm: "posteingang", spoken: "Ein Entwurf wartet. Nichts geht ohne Senden raus.", rows: [{ id: "m1", cells: { betreff: "Website-Relaunch", status: "neu" } }], columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: "1" }] };
 
 export function demoView(id, filter) {
   const view = VIEWS[id];

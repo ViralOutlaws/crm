@@ -163,7 +163,12 @@ async function runChat(
 ) {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
   const model = Deno.env.get("JARVIS_MODEL") || "claude-sonnet-5-5";
-  const system = systemBlocks(ctx.today, name);
+  const wissen = await sb.from("wissensbasis").select("section, content");
+  const wissenText = (wissen.data || []).map((w) => `${w.section}: ${w.content}`).join("\n");
+  const system = [
+    ...systemBlocks(ctx.today, name),
+    { type: "text" as const, text: wissenText ? `Wissensbasis, alle Entwürfe halten sich daran:\n${wissenText.slice(0, 6000)}` : "Wissensbasis noch leer." },
+  ];
   const tools = anthropicTools();
   const messages: ChatMsg[] = history.map((m) => ({ role: m.role, content: m.content }));
 
@@ -1476,9 +1481,20 @@ function runRead(
   if (name === "morning_briefing") return morningBriefing(sb, userId, ctx);
   if (name === "customer_file") return customerFile(sb, o, ctx);
   if (name === "list_tasks") return listTasks(sb, o, ctx);
+  if (name === "inbox_waiting") return inboxWaiting(sb);
   if (name === "list_bot_runs") return listBotRuns(sb, o);
   if (name === "get_bot_run") return getBotRun(sb, o);
   throw new Error("Unbekanntes Lesewerkzeug.");
+}
+
+async function inboxWaiting(sb: SupabaseClient) {
+  const { data, error } = await sb.from("conversations").select("id, subject").eq("draft_status", "pending").limit(50);
+  if (error) return { ui: { panel: "posteingang", data: { title: "Posteingang", crm: "posteingang", rows: [], kpis: [] } }, forModel: { hinweis: "Posteingang ist noch nicht migriert.", anzahl: 0 } };
+  const n = data?.length || 0;
+  return {
+    ui: { panel: "posteingang", data: { title: "Posteingang", crm: "posteingang", spoken: n ? `${n} Entwürfe warten auf dich.` : "Keine Entwürfe warten.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "" } })), columns: [{ key: "betreff", label: "Betreff" }], kpis: [{ label: "Wartet", value: String(n) }] } },
+    forModel: { anzahl: n, hinweis: n ? `${n} Entwürfe warten. Nichts wird von allein gesendet.` : "Keine Entwürfe warten." },
+  };
 }
 
 async function listBotRuns(sb: SupabaseClient, o: Record<string, unknown>) {
