@@ -4207,12 +4207,13 @@ async function saveAngebot(forceStatus) {
     datum,
     validBis: document.getElementById('a-valid').value,
     notes: document.getElementById('a-notes').value,
-    createdAt: existing?.createdAt || new Date().toISOString()
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    nrLocked: !!(existing && existing.nr)
   };
   if(editId) { const i=DB.angebote.findIndex(x=>x.id===editId); if(i>-1) DB.angebote[i]=obj; }
   else { DB.angebote.unshift(obj); const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr||''} für "${c?.firma||'?'}" erstellt`,'orange', {type:'angebot', id:obj.id}); }
   const assigned = await sbSaveAngebot(obj);
-  if(assigned) obj.nr = assigned;
+  if(assigned) { obj.nr = assigned; obj.nrLocked = true; }
   if(!obj.nr){ alert('Die Angebotsnummer konnte nicht vergeben werden.'); if(!editId) DB.angebote = DB.angebote.filter(x=>x.id!==obj.id); return; }
   save(); closeModal('angebot-modal'); renderAngebote(); renderDashboard();
   if(!forceStatus) printDoc('angebot', obj.id);
@@ -4364,12 +4365,13 @@ async function saveRechnung() {
     rTyp: rTyp,
     anzahl: anzahl,
     anztext: anztext,
-    createdAt: existing?.createdAt || new Date().toISOString()
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    nrLocked: !!(existing && existing.nr)
   };
   if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
   else{DB.rechnungen.unshift(obj);const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`${docKindLabel(obj,false)} ${obj.nr||''} für "${c?.firma||'?'}" erstellt`,'green', {type:'rechnung', id:obj.id});}
   const assigned = await sbSaveRechnung(obj);
-  if(assigned) obj.nr = assigned;
+  if(assigned) { obj.nr = assigned; obj.nrLocked = true; }
   window._pendingBezug = null;
   if(!obj.nr){ alert('Die Belegnummer konnte nicht vergeben werden.'); if(!editId) DB.rechnungen = DB.rechnungen.filter(x=>x.id!==obj.id); return; }
   save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
@@ -5510,7 +5512,9 @@ async function sbSaveAngebot(a) {
       archiviert: a.archiviert||false,
       updated_at: new Date().toISOString()
     };
-    if(a.nr) row.nr = a.nr;
+    // Neue Belege: nr weglassen, der Trigger vergibt AN-Jahr-1001.
+    // Bestehende: die gespeicherte Nummer mitschicken, der Trigger lässt sie stehen.
+    if(a.nrLocked && a.nr) row.nr = a.nr;
     const { data, error } = await sb.from('angebote').upsert(row).select('nr').maybeSingle();
     if(error) console.warn('sbSaveAngebot:', error.message);
     return data?.nr || a.nr || null;
@@ -5534,7 +5538,8 @@ async function sbLoadAngebote() {
       id: r.id, kundeId: r.kunde_id, nr: r.nr, betreff: r.betreff,
       datum: r.datum, validBis: r.valid_bis, status: r.status,
       positions: r.positions||[], notes: r.notes,
-      archiviert: r.archiviert||false, createdAt: r.created_at
+      archiviert: r.archiviert||false, createdAt: r.created_at,
+      nrLocked: !!r.nr
     }));
   } catch(e) { console.warn(e); return null; }
 }
@@ -5556,7 +5561,9 @@ async function sbSaveRechnung(r) {
       archiviert: r.archiviert||false,
       updated_at: new Date().toISOString()
     };
-    if(r.nr) row.nr = r.nr;
+    // Neue Belege: nr weglassen, der Trigger vergibt RE- oder GS-Jahr-1001.
+    // Bestehende, auch R0001: Nummer mitschicken, der Trigger ändert sie nicht.
+    if(r.nrLocked && r.nr) row.nr = r.nr;
     const { data, error } = await sb.from('rechnungen').upsert(row).select('nr').maybeSingle();
     if(error) console.warn('sbSaveRechnung:', error.message);
     return data?.nr || r.nr || null;
@@ -5583,7 +5590,8 @@ async function sbLoadRechnungen() {
       rTyp: r.r_typ||'normal', anzahl: r.anzahl||0, anztext: r.anztext||'',
       leistungVon: r.leistung_von||null, leistungBis: r.leistung_bis||null,
       bezugNr: r.bezug_nr||null, bezugLabel: r.bezug_label||null,
-      archiviert: r.archiviert||false, createdAt: r.created_at
+      archiviert: r.archiviert||false, createdAt: r.created_at,
+      nrLocked: !!r.nr
     }));
   } catch(e) { console.warn(e); return null; }
 }
@@ -7709,12 +7717,12 @@ async function konfInsAngebot() {
   const gueltig = document.getElementById('konf-gueltig').value||addDays(today(),30);
   const notiz = document.getElementById('konf-notiz')?.value||'';
   const positions = data.selected.map(i => ({ id:uid(), desc:i.label, detail:i.desc+' ('+i.typ+')', qty:1, price:i.preis*(1-data.rabatt), total:i.preis*(1-data.rabatt) }));
-  const angebot = { id:uid(), nr: _currentUser ? null : allocDocNrLocal('angebot', today()),
+  const angebot = { id:uid(), nr: _currentUser ? null : allocDocNrLocal('angebot', today()), nrLocked: false,
     kundeId, betreff:'Angebot '+firma+' - Performance Marketing & Webdesign',
     datum:today(), validBis:gueltig, status:'entwurf', positions, notes:notiz, createdAt:new Date().toISOString() };
   DB.angebote.unshift(angebot);
   const assignedAg = await sbSaveAngebot(angebot);
-  if(assignedAg) angebot.nr = assignedAg;
+  if(assignedAg) { angebot.nr = assignedAg; angebot.nrLocked = true; }
   save();
   addActivity('Angebot aus Konfigurator erstellt fuer "'+firma+'"','yellow');
   if(confirm('Angebot erstellt!\nJetzt zum Angebot wechseln?')) showPage('angebote');
@@ -8727,6 +8735,7 @@ async function doGenerateRetainerRechnungen(btn) {
     const rg = {
       id: uid(),
       nr: _currentUser ? null : allocDocNrLocal('rechnung', datum),
+      nrLocked: false,
       kundeId: r.kundeId,
       betreff: `Retainer ${MONAT_LABELS[now.getMonth()]} ${now.getFullYear()} – ${r.paket||'Marketing Management'}`,
       datum, faellig, status: 'offen-rg',
@@ -8735,7 +8744,7 @@ async function doGenerateRetainerRechnungen(btn) {
     };
     DB.rechnungen.unshift(rg);
     const assignedRg = await sbSaveRechnung(rg);
-    if(assignedRg) rg.nr = assignedRg;
+    if(assignedRg) { rg.nr = assignedRg; rg.nrLocked = true; }
     // Update next billing date
     const nextMonth = new Date(now.getFullYear(), now.getMonth()+1, tag);
     r.next = nextMonth.toISOString().split('T')[0];

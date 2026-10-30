@@ -156,23 +156,23 @@ security definer
 set search_path = public
 as $$
 declare
-  ws uuid := public.get_my_workspace_id();
-  y int := coalesce(p_year, extract(year from (now() at time zone 'Europe/Berlin'))::int);
-  rec int;
-  ang int;
-  gut int;
+  v_ws uuid := public.get_my_workspace_id();
+  v_year int := coalesce(p_year, extract(year from (now() at time zone 'Europe/Berlin'))::int);
+  v_rec int;
+  v_ang int;
+  v_gut int;
 begin
-  if ws is null then
+  if v_ws is null then
     raise exception 'Kein Workspace';
   end if;
-  select last_value + 1 into rec from public.doc_counters
-    where workspace_id = ws and kind = 'rechnung' and year = y;
-  select last_value + 1 into ang from public.doc_counters
-    where workspace_id = ws and kind = 'angebot' and year = y;
-  select last_value + 1 into gut from public.doc_counters
-    where workspace_id = ws and kind = 'gutschrift' and year = y;
+  select last_value + 1 into v_rec from public.doc_counters
+    where workspace_id = v_ws and kind = 'rechnung' and year = v_year;
+  select last_value + 1 into v_ang from public.doc_counters
+    where workspace_id = v_ws and kind = 'angebot' and year = v_year;
+  select last_value + 1 into v_gut from public.doc_counters
+    where workspace_id = v_ws and kind = 'gutschrift' and year = v_year;
   return jsonb_build_object(
-    'year', y,
+    'year', v_year,
     'rechnung', coalesce(rec, 1001),
     'angebot', coalesce(ang, 1001),
     'gutschrift', coalesce(gut, 1001)
@@ -187,11 +187,11 @@ security definer
 set search_path = public
 as $$
 declare
-  ws uuid := public.get_my_workspace_id();
-  y int := coalesce(p_year, extract(year from (now() at time zone 'Europe/Berlin'))::int);
+  v_ws uuid := public.get_my_workspace_id();
+  v_year int := coalesce(p_year, extract(year from (now() at time zone 'Europe/Berlin'))::int);
   v_last int;
 begin
-  if ws is null then
+  if v_ws is null then
     raise exception 'Kein Workspace';
   end if;
   if p_kind not in ('rechnung', 'angebot', 'gutschrift') then
@@ -202,12 +202,12 @@ begin
   end if;
 
   insert into public.doc_counters (workspace_id, kind, year, last_value)
-  values (ws, p_kind, y, 1000)
+  values (v_ws, p_kind, v_year, 1000)
   on conflict (workspace_id, kind, year) do nothing;
 
   select last_value into v_last
   from public.doc_counters
-  where workspace_id = ws and kind = p_kind and year = y
+  where workspace_id = v_ws and kind = p_kind and year = v_year
   for update;
 
   if p_next <= v_last then
@@ -216,7 +216,7 @@ begin
 
   update public.doc_counters
   set last_value = p_next - 1
-  where workspace_id = ws and kind = p_kind and year = y;
+  where workspace_id = v_ws and kind = p_kind and year = v_year;
 
   return p_next;
 end;
@@ -229,19 +229,19 @@ security definer
 set search_path = public
 as $$
 declare
-  seq int;
-  issued int;
+  v_seq int;
+  v_issued int;
 begin
   if tg_op = 'UPDATE' then
     new.kundennummer := old.kundennummer;
     return new;
   end if;
   if new.kundennummer ~ '^KD-[0-9]{5}$' then
-    seq := substring(new.kundennummer from 4)::int;
-    select last_value into issued
+    v_seq := substring(new.kundennummer from 4)::int;
+    select last_value into v_issued
     from public.doc_counters
     where workspace_id = new.workspace_id and kind = 'kunde' and year = 0;
-    if issued is not null and seq <= issued then
+    if v_issued is not null and v_seq <= v_issued then
       return new;
     end if;
   end if;
@@ -257,17 +257,17 @@ security definer
 set search_path = public
 as $$
 declare
-  kind text;
-  y int;
-  seq int;
-  issued int;
+  v_kind text;
+  v_year int;
+  v_seq int;
+  v_issued int;
 begin
   if tg_table_name = 'angebote' then
-    kind := 'angebot';
+    v_kind := 'angebot';
   elsif new.r_typ = 'gutschrift' then
-    kind := 'gutschrift';
+    v_kind := 'gutschrift';
   else
-    kind := 'rechnung';
+    v_kind := 'rechnung';
   end if;
 
   if tg_op = 'UPDATE' then
@@ -277,28 +277,29 @@ begin
     return new;
   end if;
 
-  y := extract(year from coalesce(new.datum, (now() at time zone 'Europe/Berlin')::date))::int;
+  v_year := extract(year from coalesce(new.datum, (now() at time zone 'Europe/Berlin')::date))::int;
 
   if new.nr is not null and btrim(new.nr) <> '' then
     -- Altnummern wie R0001 bleiben, auch wenn sie doppelt vorkommen.
+    -- Neue Belege lassen nr leer, damit hier nicht eine R0008 hängen bleibt.
     if new.nr ~ '^(RE|AN|GS)-[0-9]{4}-[0-9]+$' then
-      seq := substring(new.nr from '-([0-9]+)$')::int;
-      select last_value into issued
-      from public.doc_counters
-      where workspace_id = new.workspace_id and kind = kind and year = y;
-      if issued is null or seq > issued then
+      v_seq := substring(new.nr from '-([0-9]+)$')::int;
+      select c.last_value into v_issued
+      from public.doc_counters c
+      where c.workspace_id = new.workspace_id and c.kind = v_kind and c.year = v_year;
+      if v_issued is null or v_seq > v_issued then
         raise exception 'Die Belegnummer wird automatisch vergeben und ist danach fest.';
       end if;
       if tg_table_name = 'angebote' then
         if exists (
-          select 1 from public.angebote
-          where workspace_id = new.workspace_id and nr = new.nr and id is distinct from new.id
+          select 1 from public.angebote a
+          where a.workspace_id = new.workspace_id and a.nr = new.nr and a.id is distinct from new.id
         ) then
           raise exception 'Diese Belegnummer ist schon vergeben.';
         end if;
       elsif exists (
-        select 1 from public.rechnungen
-        where workspace_id = new.workspace_id and nr = new.nr and id is distinct from new.id
+        select 1 from public.rechnungen r
+        where r.workspace_id = new.workspace_id and r.nr = new.nr and r.id is distinct from new.id
       ) then
         raise exception 'Diese Belegnummer ist schon vergeben.';
       end if;
@@ -306,7 +307,7 @@ begin
     return new;
   end if;
 
-  new.nr := public.alloc_doc_nr(new.workspace_id, kind, y);
+  new.nr := public.alloc_doc_nr(new.workspace_id, v_kind, v_year);
   return new;
 end;
 $$;
