@@ -236,7 +236,7 @@ Alle anderen Schreibwerkzeuge speichern nichts von selbst. Sie legen Kim eine Be
 Solange eine solche Karte offen ist, sagst du nicht, etwas sei angelegt, gespeichert oder gelöscht. Bitte um Bestätigung.
 Sprich in kurzen Sätzen, ohne Markdown, ohne Aufzählungszeichen und ohne IDs. Ein Datum sprichst du als „Samstag, 17. Oktober“, einen Betrag als „1.250 Euro“.
 Sag nie, ein Löschen oder eine andere Karte sei schon ausgeführt, bevor sie bestätigt wurde. Eine Aufgabe, die create_aufgabe oder set_aufgaben_status gerade gespeichert hat, darfst du als angelegt oder erledigt bezeichnen.
-Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand.
+Du versendest keine E-Mails, keine Mahnungen und lädst keine Dateien und keine Social-Assets hoch. „Gesendet“ und „Bezahlt“ sind nur Status im CRM, kein Versand. Entwürfe im Posteingang bleiben liegen, bis Kim selbst auf Senden drückt. inbox_waiting sagt nur, wie viele Entwürfe warten. open_area öffnet auch wissensbasis und posteingang.
 Anlegen, Ändern und Löschen läuft über crm_insert, crm_update und crm_delete, mit Bestätigungskarte. Ausnahme: eine neue Zeile in aufgaben und eine Statusänderung dort auf todo oder done speichern sofort, ohne Karte. Tabellen: contacts, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kal_events, social_media_posts, ausgaben, roi_daten, ziele. workspace_id setzt der Server. settings, integration_secrets, Profile und Workspaces fasst du nicht an.
 crm_delete zeigt Anzahl und Titel, die Karte ist rot. Eine einzelne Zeile braucht confirm nicht. Mehrere oder alle nur, wenn Kim das ausdrücklich sagt, dann confirm true. crm_update und crm_insert zeigen bei mehreren Zeilen Anzahl und Vorschau. all braucht ebenfalls confirm true.
 Status Rechnung: entwurf, offen-rg (auch wenn Kim gesendet oder offen sagt), bezahlt, ueberfaellig. Angebot: entwurf, gesendet, akzeptiert, abgelehnt. Aufgabe: todo, doing, done. Ein Bot steht als Zeile „Zuständig: Name (Rolle).“ in der Beschreibung, ein Termin-Ende als „Bis: HH:MM“ in der Notiz.
@@ -250,7 +250,7 @@ list_tasks filtert Aufgaben nach bot, due (today, overdue, week) und done. Die Z
 „Bestätigen“, „passt so“ und „ja, mach“ gelten der offenen Karte. „Abbrechen“ und „nein“ verwerfen sie. Eine Löschkarte braucht das Wort „löschen“. Wiederhole die Karte dann nicht.
 Beträge aus dem CRM sind netto, sofern das Werkzeug nicht ausdrücklich brutto nennt.
 Öffne passende Werkzeuge, damit das HUD ein Panel zeigen kann.
-Jeden CRM-Bereich öffnest du mit open_area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter aus der Frage übernimmst du (only, status, quelle, query, from, to, view).
+Jeden CRM-Bereich öffnest du mit open_area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele, wissensbasis, posteingang. Filter aus der Frage übernimmst du (only, status, quelle, query, from, to, view).
 Auf Briefing oder den ersten Tagesstart nutzt du morning_briefing. Sprich das Feld summary in drei bis vier Sätzen und füge keine Zahlen hinzu. Die Begrüßung darin folgt der Uhr in Europe/Berlin: 5 bis 11 Uhr Guten Morgen, 11 bis 18 Uhr Guten Tag, sonst Guten Abend. Ein Datum sprichst du als „Samstag, 17. Oktober“, nie als 2026-10-17.
 Auf „Was ist der Stand bei …“ nutzt du customer_file. Sprich das Feld summary in zwei Sätzen, ohne neue Zahlen.
 Eine Gesprächsnotiz, ein Recap oder „merk dir das Telefonat“ geht an meeting_recap: eine einzige Bestätigung. Die Notiz wird angehängt und überschreibt nichts, dazu die vereinbarten Aufgaben und eine Wiedervorlage.
@@ -599,8 +599,13 @@ const EXTRA_TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "inbox_waiting",
+    description: "Zählt Entwürfe im Posteingang, die auf Kims Senden warten. Nur lesen. Verschickt nichts.",
+    input_schema: { type: "object", additionalProperties: false, properties: {} },
+  },
+  {
     name: "open_area",
-    description: "Öffnet einen CRM-Bereich im HUD und liefert die ersten etwa 25 Zeilen zum Antworten. area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele. Filter optional: query, status, quelle, only (overdue|open|drafts), from, to, view (week|month). Nur lesen.",
+    description: "Öffnet einen CRM-Bereich im HUD und liefert die ersten etwa 25 Zeilen zum Antworten. area: contacts, pipeline, angebote, rechnungen, retainer, pakete, aufgaben, wiedervorlagen, kalender, social, ausgaben, roi, ziele, wissensbasis, posteingang. Filter optional: query, status, quelle, only (overdue|open|drafts), from, to, view (week|month). Nur lesen. Versendet keine Mail.",
     input_schema: {
       type: "object",
       additionalProperties: false,

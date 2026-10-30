@@ -1,6 +1,6 @@
 // Viral Outlaws CRM – Service Worker
-const CACHE = 'vo-crm-v9';
-const ASSETS = ['/', '/index.html', '/manifest.json'];
+const CACHE = 'vo-crm-v11';
+const ASSETS = ['/', '/index.html', '/crm-reel.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
