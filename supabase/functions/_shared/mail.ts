@@ -223,6 +223,12 @@ async function readFetch(sock: Sock & { take: (n: number) => Promise<string> }, 
   }
 }
 
+function imapSince(days: number): string {
+  const d = new Date(Date.now() - days * 86400000);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${String(d.getUTCDate()).padStart(2, "0")}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+}
+
 export async function imapFetchNew(folder: string, lastUid: number): Promise<FetchedMail[]> {
   const cfg = mailConfig();
   if (!cfg) throw new Error("E-Mail noch nicht verbunden");
