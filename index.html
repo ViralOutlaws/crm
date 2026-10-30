@@ -3178,14 +3178,7 @@ function showPage(id) {
   const page = document.getElementById('page-'+id);
   if(page) page.classList.add('active');
 
-  // Update sidebar nav
-  document.querySelectorAll('.nav-item[data-page]').forEach(b => {
-    b.classList.toggle('active', b.dataset.page === id);
-  });
-  // Update bottom nav
-  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(b => {
-    b.classList.toggle('active', b.dataset.page === id);
-  });
+  setActiveNav(id);
   // Update page title
   const titleEl = document.getElementById('page-title');
   if(titleEl) titleEl.textContent = PAGE_TITLES[id] || id;
@@ -3213,6 +3206,11 @@ function showPage(id) {
   // contact-detail is handled by openContactDetail()
 }
 
+function setActiveNav(id) {
+  document.querySelectorAll('#sidebar .nav-item, #bottom-nav .bottom-nav-item').forEach(el => {
+    el.classList.toggle('active', !!id && el.dataset.page === id);
+  });
+}
 function dashScrollTop() {
   window.scrollTo(0, 0);
   document.documentElement.scrollTop = 0;
@@ -3235,7 +3233,7 @@ function dashGo(page, opts) {
   if(page === 'rechnungen') {
     rechnungFilter = opts.rechnungFilter || 'alle';
     document.querySelectorAll('[data-rf]').forEach(b => {
-      const on = rechnungFilter === 'offen-ueber' ? (b.dataset.rf === 'offen-rg' || b.dataset.rf === 'ueberfaellig') : b.dataset.rf === rechnungFilter;
+      const on = rechnungFilter === 'offen-ueber' ? b.dataset.rf === 'offen-rg' : b.dataset.rf === rechnungFilter;
       b.classList.toggle('active', on);
     });
   }
@@ -3278,8 +3276,7 @@ function dashRechnung(id) {
 }
 function dashKontakt(id) {
   openContactDetail(id);
-  document.querySelectorAll('.nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === 'contacts'));
-  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === 'contacts'));
+  setActiveNav('contacts');
   dashScrollTop();
 }
 function dashTermin(id, source) {
@@ -11284,7 +11281,9 @@ body.dark-mode #sidebar{
   border-right-color:rgba(255,255,255,.1);
 }
 #sidebar .nav-item{color:rgba(255,255,255,.86)}
+#sidebar .nav-item::before{height:0!important;width:2px;transition:none;background:var(--yellow)}
 #sidebar .nav-item.active{color:#fff}
+#sidebar .nav-item.active::before{height:14px!important;width:2px}
 #sidebar .nav-section{color:rgba(255,255,255,.66)}
 .modal{-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}
 .modal-footer{background:transparent}
@@ -11297,6 +11296,12 @@ tbody tr{background:transparent}
 body.dark-mode tbody tr:hover{background:rgba(255,255,255,.04)}
 body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
 @media(min-width:769px){
+  #page-contacts .table-wrap table,#page-angebote .table-wrap table,#page-rechnungen .table-wrap table{width:100%;table-layout:auto}
+  #page-contacts td.actions,#page-angebote td.actions,#page-rechnungen td.actions{display:table-cell;white-space:nowrap;width:1%;vertical-align:middle;text-align:right}
+  #page-rechnungen td[data-label="Nr."],#page-rechnungen td[data-label="Datum"],#page-rechnungen td[data-label="Fällig"],#page-rechnungen td[data-label="Betrag"],#page-rechnungen td[data-label="Status"],
+  #page-angebote td[data-label="Nr."],#page-angebote td[data-label="Datum"],#page-angebote td[data-label="Betrag"],#page-angebote td[data-label="Status"]{white-space:nowrap;width:1%}
+  #page-rechnungen td[data-label="Kunde"],#page-rechnungen td[data-label="Betreff"],
+  #page-angebote td[data-label="Kunde"],#page-angebote td[data-label="Betreff"]{white-space:nowrap}
   #page-contacts table{width:100%;table-layout:auto}
   #page-contacts td[data-label="Telefon"],
   #page-contacts td[data-label="PLZ / Ort"],
@@ -11312,7 +11317,7 @@ body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
   #page-contacts.page{padding-left:16px;padding-right:16px}
   #page-contacts .table-wrap{max-width:100%;overflow-x:auto}
   #page-contacts th,#page-contacts td{padding:8px 4px;font-size:12px}
-  #page-contacts .vo-act-label{display:none}
+  #page-contacts .vo-act-label,#page-angebote .vo-act-label,#page-rechnungen .vo-act-label{display:none}
   #page-contacts th:nth-child(7),#page-contacts td[data-label="Zuletzt"]{display:none}
   #page-contacts .badge{white-space:nowrap}
   #page-contacts td.actions{white-space:nowrap;gap:0}
