@@ -109,7 +109,11 @@
   .icon-actions button{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
   .draft-card{margin-top:16px;padding:16px;border-radius:12px;border:1px solid var(--border);border-left:3px solid #f5c400;background:rgba(245,196,0,.06)}
   .draft-box{width:100%;min-height:160px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;padding:12px;margin:8px 0}
-  .reel-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:8px;background:rgba(120,120,120,.08);font-size:12px;color:var(--muted);margin-bottom:8px}
+  .reel-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:8px;background:rgba(120,120,120,.08);font-size:12px;color:var(--muted);margin-bottom:8px;flex-wrap:nowrap}
+  .reel-banner > span{flex:1;min-width:0}
+  .reel-banner .btn-ghost{white-space:nowrap;flex:0 0 auto}
+  .inbox-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+  .inbox-actions .btn-ghost{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
   .seg{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px}
   .seg button{border:0;background:transparent;color:inherit;padding:8px 12px;font-size:12px;cursor:pointer}
   .seg button.on{background:#f5c400;color:#111}
@@ -127,6 +131,9 @@
     .inbox.detail .inbox-list,.inbox.detail .reel-folder-select{display:none}
     .inbox:not(.detail) .inbox-read{display:none}
     .reel-back{display:inline-flex}
+    #page-posteingang .sec-header{flex-wrap:nowrap;gap:8px;align-items:center}
+    #page-posteingang .inbox-actions{width:auto}
+    #page-posteingang .inbox-actions .btn-ghost{min-height:32px;height:32px;padding:0 10px;border-radius:99px;font-size:11px;font-weight:600}
   }`;
   document.head.appendChild(css);
 
@@ -149,7 +156,7 @@
       const hold = document.createElement('div');
       hold.innerHTML = `
         <div class="page" id="page-wissensbasis"><div class="sec-header"><div class="sec-title">Wissensbasis</div><span class="reel-live">LIVE</span></div><p style="font-size:12px;color:var(--muted);margin:0 0 12px">Alle KI-Entwürfe halten sich an diese Regeln. Nichts wird von allein gesendet.</p><div id="wissen-body"></div></div>
-        <div class="page" id="page-posteingang"><div class="sec-header"><div class="sec-title">Posteingang</div><div style="display:flex;gap:8px"><button class="btn-ghost btn-sm" onclick="reelSync()">Aktualisieren</button><button class="btn-ghost btn-sm" onclick="reelCompose()">Neue Mail</button><button class="btn-ghost btn-sm" onclick="reelRules()">Regeln</button></div></div><div id="inbox-note"></div><div id="inbox-filters"></div><div class="inbox" id="inbox-grid"></div></div>`;
+        <div class="page" id="page-posteingang"><div class="sec-header"><div class="sec-title">Posteingang</div><div class="inbox-actions"><button class="btn-ghost btn-sm" onclick="reelSync()">${ico('refresh', 14)} Aktualisieren</button><button class="btn-ghost btn-sm" onclick="reelCompose()">${ico('pencil', 14)} Neue Mail</button><button class="btn-ghost btn-sm" onclick="reelRules()">${ico('settings', 14)} Regeln</button></div></div><div id="inbox-note"></div><div id="inbox-filters"></div><div class="inbox" id="inbox-grid"></div></div>`;
       main.parentNode.insertBefore(hold, main);
       while (hold.firstChild) main.parentNode.insertBefore(hold.firstChild, main);
       hold.remove();
