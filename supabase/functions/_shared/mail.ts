@@ -229,9 +229,33 @@ function imapSince(days: number): string {
   return `${String(d.getUTCDate()).padStart(2, "0")}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
 }
 
-export async function imapFetchNew(folder: string, lastUid: number): Promise<FetchedMail[]> {
+export function pickRecentUids(uids: number[], limit: number, spec: { afterUid?: number; beforeUid?: number } = {}): number[] {
+  const cap = Math.max(0, Math.floor(limit));
+  const after = spec.afterUid || 0;
+  const before = spec.beforeUid || 0;
+  let pool = [...new Set(uids.filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b);
+  if (after > 0) pool = pool.filter((u) => u > after);
+  if (before > 0) pool = pool.filter((u) => u < before);
+  if (pool.length <= cap) return pool;
+  if (after > 0 && !before) return pool.slice(0, cap);
+  return pool.slice(-cap);
+}
+
+export function searchUids(lines: string[]): number[] {
+  return (lines.find((l) => l.startsWith("* SEARCH")) || "")
+    .replace("* SEARCH", "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
+}
+
+export async function imapFetchNew(folder: string, spec: number | { afterUid?: number; beforeUid?: number; limit?: number; deadline?: number } = {}): Promise<FetchedMail[]> {
   const cfg = mailConfig();
   if (!cfg) throw new Error("E-Mail noch nicht verbunden");
+  const opts = typeof spec === "number" ? { afterUid: spec, limit: spec > 0 ? 80 : 200 } : spec;
+  const limit = opts.limit ?? (opts.afterUid ? 80 : 200);
   const sock = await openTls(cfg.imapHost, cfg.imapPort);
   try {
     await sock.read();
@@ -245,19 +269,27 @@ export async function imapFetchNew(folder: string, lastUid: number): Promise<Fet
     if (!(login[login.length - 1] || "").includes(" OK")) throw new Error("IMAP Login fehlgeschlagen");
     const sel = await run(`SELECT ${quote(folder)}`);
     if (!(sel[sel.length - 1] || "").includes(" OK")) throw new Error("Ordner nicht lesbar");
-    const query = lastUid > 0 ? `UID SEARCH UID ${lastUid + 1}:*` : `UID SEARCH SINCE ${imapSince(90)}`;
-    const found = await run(query);
-    const uids = (found.find((l) => l.startsWith("* SEARCH")) || "")
-      .replace("* SEARCH", "").trim().split(/\s+/).filter(Boolean).map(Number)
-      .filter((u) => u > lastUid).slice(0, 80);
+    const afterUid = opts.afterUid || 0;
+    const beforeUid = opts.beforeUid || 0;
+    const query = afterUid > 0
+      ? `UID SEARCH UID ${afterUid + 1}:*`
+      : beforeUid > 0
+      ? `UID SEARCH UID 1:${beforeUid - 1}`
+      : "UID SEARCH ALL";
+    let found = await run(query);
+    if (afterUid === 0 && beforeUid === 0 && !(found[found.length - 1] || "").includes(" OK")) {
+      found = await run(`UID SEARCH SINCE ${imapSince(90)}`);
+    }
+    const uids = pickRecentUids(searchUids(found), limit, { afterUid, beforeUid });
     const out: FetchedMail[] = [];
     for (const uid of uids) {
-      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE)] BODY.PEEK[TEXT])`);
+      if (opts.deadline && Date.now() > opts.deadline) break;
+      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE)] BODY.PEEK[TEXT]<0.8000>)`);
       const blob = lines.join("\n");
       const header = /BODY\[HEADER[^\]]*\]\s*([\s\S]*?)(?=BODY\[TEXT\]|b\d+ OK|\* \d+ FETCH|$)/i.exec(blob)?.[1] || blob;
-      const text = /BODY\[TEXT\]\s*([\s\S]*?)(?=b\d+ OK|\)$)/i.exec(blob)?.[1] || "";
+      const text = /BODY\[TEXT\](?:<\d+>)?\s*([\s\S]*?)(?=b\d+ OK|\)$)/i.exec(blob)?.[1] || "";
       const flags = /FLAGS \(([^)]*)\)/.exec(blob)?.[1] || "";
-      out.push({ uid, flags, header: header.slice(0, 8000), text: text.slice(0, 20000) });
+      out.push({ uid, flags, header: header.slice(0, 8000), text: text.slice(0, 8000) });
     }
     try { await run("LOGOUT"); } catch { /* ignore */ }
     return out;

@@ -24,6 +24,12 @@
   };
 
   const ico = (name, size) => (typeof voSvg === 'function' ? voSvg(name, size || 16) : '');
+  function signedIn() { return typeof _currentUser !== 'undefined' && !!_currentUser; }
+  function workspaceId() {
+    if (typeof _currentWorkspace !== 'undefined' && _currentWorkspace && _currentWorkspace.id) return _currentWorkspace.id;
+    if (typeof _FALLBACK_WORKSPACE_ID !== 'undefined') return _FALLBACK_WORKSPACE_ID;
+    return '';
+  }
   function spark() {
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21M5.8 5.8l2.5 2.5M15.7 15.7l2.5 2.5M18.2 5.8l-2.5 2.5M8.3 15.7l-2.5 2.5"/></svg>';
   }
@@ -156,7 +162,7 @@
       const hold = document.createElement('div');
       hold.innerHTML = `
         <div class="page" id="page-wissensbasis"><div class="sec-header"><div class="sec-title">Wissensbasis</div><span class="reel-live">LIVE</span></div><p style="font-size:12px;color:var(--muted);margin:0 0 12px">Alle KI-Entwürfe halten sich an diese Regeln. Nichts wird von allein gesendet.</p><div id="wissen-body"></div></div>
-        <div class="page" id="page-posteingang"><div class="sec-header"><div class="sec-title">Posteingang</div><div class="inbox-actions"><button class="btn-ghost btn-sm" onclick="reelSync()">${ico('refresh', 14)} Aktualisieren</button><button class="btn-ghost btn-sm" onclick="reelCompose()">${ico('pencil', 14)} Neue Mail</button><button class="btn-ghost btn-sm" onclick="reelRules()">${ico('settings', 14)} Regeln</button></div></div><div id="inbox-note"></div><div id="inbox-filters"></div><div class="inbox" id="inbox-grid"></div></div>`;
+        <div class="page" id="page-posteingang"><div class="sec-header"><div class="sec-title">Posteingang</div><div class="inbox-actions"><button class="btn-ghost btn-sm" onclick="reelSync(true)">${ico('refresh', 14)} Aktualisieren</button><button class="btn-ghost btn-sm" onclick="reelCompose()">${ico('pencil', 14)} Neue Mail</button><button class="btn-ghost btn-sm" onclick="reelRules()">${ico('settings', 14)} Regeln</button></div></div><div id="inbox-note"></div><div id="inbox-filters"></div><div class="inbox" id="inbox-grid"></div></div>`;
       main.parentNode.insertBefore(hold, main);
       while (hold.firstChild) main.parentNode.insertBefore(hold.firstChild, main);
       hold.remove();
@@ -165,11 +171,18 @@
     window.showPage = function (id) {
       orig(id);
       if (id === 'wissensbasis') renderWissen();
-      if (id === 'posteingang') renderInbox();
+      if (id === 'posteingang') openInbox();
       if (id === 'dashboard') renderDashExtra();
       if (id === 'pipeline') renderBoard();
       paintBadge();
     };
+    const origLoad = window.loadAllFromSupabase;
+    if (typeof origLoad === 'function') {
+      window.loadAllFromSupabase = async function () {
+        await loadMailFromSupabase();
+        return origLoad.apply(this, arguments);
+      };
+    }
     const origPipe = window.renderPipeline;
     window.renderPipeline = function () { if (origPipe) origPipe(); renderBoard(); };
     const origDash = window.renderDashboard;
@@ -253,7 +266,7 @@
   window.reelEstimate = async function (id) {
     const c = (DB.contacts || []).find((x) => x.id === id);
     if (!c) return;
-    if (window._currentUser && typeof getSupabase === 'function') {
+    if (signedIn() && typeof getSupabase === 'function') {
       try {
         const sb = await getSupabase();
         const { data } = await sb.functions.invoke('deal-estimate', { body: { contactId: id } });
@@ -356,16 +369,22 @@
     const items = [];
     (DB.contacts || []).forEach((c) => { if (c.createdAt) items.push({ t: c.createdAt, icon: 'user', text: esc(c.firma) + ' angelegt' }); });
     (DB.rechnungen || []).filter((r) => r.status === 'bezahlt').forEach((r) => items.push({ t: r.datum, icon: 'check', text: 'Rechnung ' + esc(r.nr || '') + ' bezahlt' }));
-    (DB.messages || []).filter((m) => m.direction === 'out').forEach((m) => items.push({ t: m.created_at, icon: 'mail', text: 'Mail gesendet' }));
+    messages().filter((m) => m.direction === 'out').forEach((m) => items.push({ t: m.created_at, icon: 'mail', text: 'Mail gesendet' }));
     items.sort((a, b) => new Date(b.t) - new Date(a.t));
     return items.slice(0, 6).map((i) => `<div class="reel-feed-row"><span>${ico(i.icon, 16)}</span><span>${i.text}</span><span style="color:var(--muted)">${relTime(i.t)}</span></div>`).join('') || '<div style="color:var(--muted);font-size:12px">Noch keine Aktivität.</div>';
   }
   window.renderDashExtra = renderDashExtra;
 
+  function messages() {
+    DB.messages = DB.messages || [];
+    if (!signedIn()) return DB.messages;
+    return DB.messages.filter((m) => m && m.workspace_id);
+  }
   function wissenList() {
+    if (signedIn()) DB.wissensbasis = (DB.wissensbasis || []).filter((r) => r && r.workspace_id);
     if (!Array.isArray(DB.wissensbasis)) DB.wissensbasis = [];
     SECTIONS.forEach((s) => {
-      if (!DB.wissensbasis.some((r) => r.section === s.k)) DB.wissensbasis.push({ section: s.k, content: DEFAULTS[s.k] || '' });
+      if (!DB.wissensbasis.some((r) => r.section === s.k)) DB.wissensbasis.push({ section: s.k, content: DEFAULTS[s.k] || '', workspace_id: signedIn() ? workspaceId() : undefined });
     });
     return DB.wissensbasis;
   }
@@ -437,10 +456,10 @@
     const rows = wissenList();
     const row = rows.find((r) => r.section === section);
     if (row) row.content = content; else rows.push({ section, content });
-    if (window._currentUser && typeof getSupabase === 'function') {
+    if (signedIn() && typeof getSupabase === 'function') {
       try {
         const sb = await getSupabase();
-        const ws = _currentWorkspace?.id || window._FALLBACK_WORKSPACE_ID;
+        const ws = workspaceId();
         await sb.from('wissensbasis').upsert({ workspace_id: ws, section, content, updated_at: new Date().toISOString() }, { onConflict: 'workspace_id,section' });
       } catch (e) { /* lokal bleibt gespeichert */ }
     }
@@ -450,7 +469,64 @@
     if (mark) mark.textContent = 'Gespeichert';
   };
 
-  function mails() { DB.conversations = DB.conversations || []; DB.messages = DB.messages || []; DB.mailFolders = DB.mailFolders || []; DB.mailRules = DB.mailRules || []; return DB.conversations; }
+  function mails() {
+    DB.conversations = DB.conversations || [];
+    DB.messages = DB.messages || [];
+    DB.mailFolders = DB.mailFolders || [];
+    DB.mailRules = DB.mailRules || [];
+    if (!signedIn()) return DB.conversations;
+    return DB.conversations.filter((c) => c && c.workspace_id);
+  }
+  function serverList(rows) {
+    const list = rows || [];
+    if (!signedIn()) return list;
+    return list.filter((row) => row && row.workspace_id);
+  }
+  let mailNote = '';
+  let lastSyncAt = 0;
+  let olderBusy = false;
+  const olderDone = new Set();
+  const SYNC_GAP = 3 * 60 * 1000;
+  async function loadMailFromSupabase() {
+    if (!signedIn() || typeof getSupabase !== 'function') return;
+    const sb = await getSupabase();
+    const ws = workspaceId();
+    const scope = (q) => (ws ? q.eq('workspace_id', ws) : q);
+    const [folders, rules, conv, msgs, wissen] = await Promise.all([
+      scope(sb.from('mail_folders').select('*')).order('imap_path'),
+      scope(sb.from('mail_rules').select('*')),
+      scope(sb.from('conversations').select('*')).order('updated_at', { ascending: false }).limit(400),
+      scope(sb.from('messages').select('id,workspace_id,conversation_id,direction,from_addr,to_addrs,subject,body_text,imap_uid,imap_folder,created_at')).order('created_at', { ascending: false }).limit(800),
+      scope(sb.from('wissensbasis').select('id,workspace_id,section,content')),
+    ]);
+    if (!folders.error) DB.mailFolders = folders.data || [];
+    if (!rules.error) DB.mailRules = rules.data || [];
+    if (!conv.error) DB.conversations = conv.data || [];
+    if (!msgs.error) DB.messages = msgs.data || [];
+    if (!wissen.error && Array.isArray(wissen.data) && wissen.data.length) DB.wissensbasis = wissen.data;
+  }
+  async function readSyncMessage(data, error) {
+    if (data && (data.message || data.error)) return data.message || data.error;
+    if (error) {
+      try {
+        const ctx = error.context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json();
+          if (body && (body.message || body.error)) return body.message || body.error;
+        }
+      } catch (e) { /* die Funktionsmeldung bleibt leer */ }
+      return error.message || 'E-Mail noch nicht verbunden';
+    }
+    return '';
+  }
+  function openInbox() {
+    if (!signedIn()) { renderInbox(); return; }
+    loadMailFromSupabase().then(() => {
+      renderInbox();
+      paintBadge();
+      return reelSync();
+    }).catch(() => renderInbox());
+  }
   function paintBadge() {
     const n = mails().filter((c) => c.status === 'neu' || c.draft_status === 'pending').length;
     const b = document.getElementById('badge-inbox');
@@ -485,8 +561,9 @@
     if (!grid) return;
     const note = document.getElementById('inbox-note');
     if (note) {
-      note.className = window._currentUser ? '' : 'reel-banner';
-      note.innerHTML = window._currentUser ? '' : '<span>E-Mail noch nicht verbunden. Website-Anfragen bleiben nutzbar.</span><button class="btn-ghost btn-sm" onclick="this.previousElementSibling.textContent=\'Die Verbindung richtet Webby über die Mail-Secrets ein.\'">Verbinden</button>';
+      const text = signedIn() ? mailNote : 'Bitte im CRM anmelden';
+      note.className = text ? 'reel-banner' : '';
+      note.textContent = text;
     }
     const filters = document.getElementById('inbox-filters');
     const segs = [['alle', 'Alle'], ['email', 'E-Mail'], ['website', 'Website'], ['kunde', 'Nur Kundenmails'], ['ohne', 'Ohne Kunde'], ['entwurf', 'Entwürfe']];
@@ -503,14 +580,15 @@
     const open = mails().find((c) => c.id === inboxId) || null;
     grid.classList.toggle('detail', !!open && window.innerWidth < 900);
     grid.classList.toggle('selecting', inboxSelect || selected.size > 0);
-    const options = (DB.mailFolders || []).map((f) => `<option value="${esc(f.imap_path)}" ${f.imap_path === inboxFolder ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+    const folders = serverList(DB.mailFolders);
+    const options = folders.map((f) => `<option value="${esc(f.imap_path)}" ${f.imap_path === inboxFolder ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
     grid.innerHTML = `
-      <div class="inbox-col inbox-folders">${tree(DB.mailFolders || [])}</div>
-      <div class="inbox-col inbox-list"><select class="reel-folder-select" onchange="reelFolder(this.value)">${options}</select>${selected.size ? `<button class="btn-ghost btn-sm" onclick="reelMoveDialog()">Auswahl verschieben</button>` : ''}${list.map((c) => mailRow(c)).join('') || '<div style="color:var(--muted);padding:16px">Keine Mails.</div>'}</div>
+      <div class="inbox-col inbox-folders">${tree(folders)}</div>
+      <div class="inbox-col inbox-list" onscroll="reelListScroll(this)"><select class="reel-folder-select" onchange="reelFolder(this.value)">${options}</select>${selected.size ? `<button class="btn-ghost btn-sm" onclick="reelMoveDialog()">Auswahl verschieben</button>` : ''}${list.map((c) => mailRow(c)).join('') || '<div style="color:var(--muted);padding:16px">Keine Mails.</div>'}</div>
       <div class="inbox-col inbox-read">${open ? readPane(open) : '<div style="color:var(--muted);padding:24px">Wähle eine Nachricht.</div>'}</div>`;
   }
   function mailRow(c) {
-    const msg = (DB.messages || []).find((m) => m.conversation_id === c.id);
+    const msg = messages().find((m) => m.conversation_id === c.id);
     const who = (msg && msg.from_addr) || c.channel || '';
     const when = msg && msg.created_at ? relTime(msg.created_at) : '';
     return `<div class="mail-row ${c.id === inboxId ? 'on' : ''}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${esc(c.id)}')" onclick="reelOpen('${esc(c.id)}')">
@@ -531,7 +609,7 @@
     return '';
   }
   function readPane(c) {
-    const msgs = (DB.messages || []).filter((m) => m.conversation_id === c.id);
+    const msgs = messages().filter((m) => m.conversation_id === c.id);
     const contact = (DB.contacts || []).find((x) => x.id === c.contact_id);
     const sug = (DB.contacts || []).find((x) => x.id === c.suggested_contact_id);
     const from = (msgs[0] && msgs[0].from_addr) || '';
@@ -567,22 +645,58 @@
   window.reelOpen = function (id) { inboxId = id; const c = mails().find((x) => x.id === id); if (c) c.unread = false; renderInbox(); };
   window.reelBack = function () { inboxId = null; renderInbox(); };
   window.reelToggleSelect = function (id, on) { if (on) selected.add(id); else selected.delete(id); };
-  window.reelSync = async function () {
-    if (!(window._currentUser && typeof getSupabase === 'function')) {
-      const note = document.getElementById('inbox-note');
-      if (note) note.textContent = 'E-Mail noch nicht verbunden. Website-Anfragen bleiben nutzbar.';
-      return;
+  window.reelListScroll = function (el) {
+    if (!signedIn() || olderBusy || olderDone.has(inboxFolder)) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (el.scrollHeight > el.clientHeight + 8 && gap > 48) return;
+    olderBusy = true;
+    const top = el.scrollTop;
+    reelSync({ older: true, force: true }).finally(() => {
+      olderBusy = false;
+      const list = document.querySelector('.inbox-list');
+      if (list) list.scrollTop = top;
+    });
+  };
+  window.reelSync = async function (opts) {
+    const force = opts === true || !!(opts && opts.force);
+    const older = !!(opts && opts.older);
+    if (!(signedIn() && typeof getSupabase === 'function')) {
+      mailNote = 'Bitte im CRM anmelden';
+      renderInbox();
+      return { imported: 0 };
     }
-    const sb = await getSupabase();
-    const { data, error } = await sb.functions.invoke('mail-sync', { body: { op: 'sync' } });
-    const note = document.getElementById('inbox-note');
-    if (note) note.textContent = (data && data.message) || (error && error.message) || 'Aktualisiert.';
+    if (!force && !older && Date.now() - lastSyncAt < SYNC_GAP) {
+      await loadMailFromSupabase();
+      renderInbox();
+      return { imported: 0 };
+    }
+    mailNote = 'Posteingang wird geladen…';
     renderInbox();
+    let imported = 0;
+    try {
+      const sb = await getSupabase();
+      const body = older ? { op: 'sync', older: true, folder: inboxFolder } : { op: 'sync' };
+      const { data, error } = await sb.functions.invoke('mail-sync', { body });
+      const msg = await readSyncMessage(data, error);
+      imported = data && typeof data.imported === 'number' ? data.imported : 0;
+      if ((data && data.connected === false) || error || (data && data.error)) mailNote = msg || 'E-Mail noch nicht verbunden';
+      else {
+        mailNote = data && data.partial ? (msg || '') : '';
+        if (!older) lastSyncAt = Date.now();
+        if (older && imported === 0) olderDone.add(inboxFolder);
+      }
+    } catch (e) {
+      mailNote = (e && e.message) || 'E-Mail noch nicht verbunden';
+    }
+    await loadMailFromSupabase();
+    renderInbox();
+    paintBadge();
+    return { imported };
   };
   window.reelMoveDialog = function (id) {
     const ids = id ? [id] : [...selected];
     if (!ids.length) return;
-    const folders = DB.mailFolders || [];
+    const folders = serverList(DB.mailFolders);
     const box = document.createElement('div');
     box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
     window._reelMoveIds = ids;
@@ -595,8 +709,8 @@
     if (!c) return;
     const from = c.folder_path || 'INBOX';
     c.folder_path = path;
-    const msg = (DB.messages || []).find((m) => m.conversation_id === id && m.imap_uid);
-    if (window._currentUser && typeof getSupabase === 'function' && msg) {
+    const msg = messages().find((m) => m.conversation_id === id && m.imap_uid);
+    if (signedIn() && typeof getSupabase === 'function' && msg) {
       const sb = await getSupabase();
       await sb.functions.invoke('mail-sync', { body: { op: 'move', from, to: path, uid: msg.imap_uid, conversationId: id } });
     }
@@ -610,18 +724,18 @@
   };
   function offerRule(id, path) {
     const c = mails().find((x) => x.id === id);
-    const msg = (DB.messages || []).find((m) => m.conversation_id === id);
+    const msg = messages().find((m) => m.conversation_id === id);
     const from = (msg && msg.from_addr) || '';
     if (!c || c.contact_id) return;
     if (!confirm('Immer so sortieren?\nAbsender enthält ' + from + ' → ' + path)) return;
-    DB.mailRules.push({ id: 'rule-' + Date.now(), field: 'from', contains: from, target_path: path });
+    DB.mailRules.push({ id: 'rule-' + Date.now(), workspace_id: signedIn() ? workspaceId() : undefined, field: 'from', contains: from, target_path: path });
     if (typeof save === 'function') save();
   }
   window.reelMkdir = async function () {
     const path = prompt('Ordnername oder Pfad, zum Beispiel Kunden/Web');
     if (!path) return;
-    DB.mailFolders.push({ imap_path: path, name: path.split('/').pop(), parent_path: path.includes('/') ? path.split('/').slice(0, -1).join('/') : null, delimiter: '/' });
-    if (window._currentUser && typeof getSupabase === 'function') {
+    DB.mailFolders.push({ imap_path: path, workspace_id: signedIn() ? workspaceId() : undefined, name: path.split('/').pop(), parent_path: path.includes('/') ? path.split('/').slice(0, -1).join('/') : null, delimiter: '/' });
+    if (signedIn() && typeof getSupabase === 'function') {
       const sb = await getSupabase();
       await sb.functions.invoke('mail-sync', { body: { op: 'mkdir', path } });
     }
@@ -631,7 +745,7 @@
   window.reelRenameFolder = async function (path) {
     const to = prompt('Neuer Name', path);
     if (!to || to === path) return;
-    if (window._currentUser && typeof getSupabase === 'function') {
+    if (signedIn() && typeof getSupabase === 'function') {
       const sb = await getSupabase();
       await sb.functions.invoke('mail-sync', { body: { op: 'rename', from: path, to } });
     }
@@ -639,7 +753,7 @@
   window.reelDeleteFolder = async function (path) {
     if (!confirm('Ordner „' + path + '“ wirklich löschen?')) return;
     DB.mailFolders = DB.mailFolders.filter((f) => f.imap_path !== path);
-    if (window._currentUser && typeof getSupabase === 'function') {
+    if (signedIn() && typeof getSupabase === 'function') {
       const sb = await getSupabase();
       await sb.functions.invoke('mail-sync', { body: { op: 'deleteFolder', path, confirm: true } });
     }
@@ -647,7 +761,7 @@
     renderInbox();
   };
   window.reelRules = function () {
-    const rules = DB.mailRules || [];
+    const rules = serverList(DB.mailRules);
     alert('Regeln\n' + (rules.map((r) => r.field + ' enthält ' + r.contains + ' → ' + r.target_path).join('\n') || 'Noch keine.') + '\n\nNeue Regel nach dem Verschieben mit „Immer so sortieren?“.');
   };
   window.reelAssign = function (convId, contactId, remember) {
@@ -657,7 +771,7 @@
     c.contact_id = contactId;
     c.suggested_contact_id = null;
     if (remember) {
-      const msg = (DB.messages || []).find((m) => m.conversation_id === convId);
+      const msg = messages().find((m) => m.conversation_id === convId);
       const email = ((msg && msg.from_addr) || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
       if (email) {
         DB.contactEmails = DB.contactEmails || [];
@@ -686,9 +800,9 @@
     const c = mails().find((x) => x.id === id);
     if (!c) return;
     const text = (document.getElementById('draft-' + id) || {}).value || c.draft_body || '';
-    const msg = (DB.messages || []).find((m) => m.conversation_id === id);
+    const msg = messages().find((m) => m.conversation_id === id);
     const to = (msg && msg.from_addr) || '';
-    if (window._currentUser && typeof getSupabase === 'function') {
+    if (signedIn() && typeof getSupabase === 'function') {
       const sb = await getSupabase();
       const { data, error } = await sb.functions.invoke('mail-send', { body: { conversationId: id, to, subject: c.subject, text } });
       if (error || (data && data.error)) { alert((data && data.error) || error.message); return; }
@@ -697,7 +811,7 @@
     c.status = 'beantwortet';
     c.draft_status = 'sent';
     c.first_reply_at = c.first_reply_at || new Date().toISOString();
-    DB.messages.push({ id: 'local-' + Date.now(), conversation_id: id, direction: 'out', from_addr: 'ich', body_text: text, created_at: new Date().toISOString() });
+    DB.messages.push({ id: 'local-' + Date.now(), workspace_id: signedIn() ? workspaceId() : undefined, conversation_id: id, direction: 'out', from_addr: 'ich', body_text: text, created_at: new Date().toISOString() });
     const contact = (DB.contacts || []).find((x) => x.id === c.contact_id);
     if (contact && contact.status === 'lead') { contact.status = 'angebot'; contact.statusSeit = new Date().toISOString(); }
     if (typeof save === 'function') save();
@@ -708,8 +822,9 @@
     const c = id ? mails().find((x) => x.id === id) : null;
     const subject = c ? ((mode === 'fwd' ? 'Fwd: ' : 'Re: ') + (c.subject || '')) : prompt('Betreff') || '';
     if (!c && !subject) return;
-    const row = { id: 'new-' + Date.now(), channel: 'email', subject, status: 'beantwortet', folder_path: inboxFolder, draft_body: '', draft_status: 'pending' };
-    mails().unshift(row);
+    const row = { id: 'new-' + Date.now(), workspace_id: signedIn() ? workspaceId() : undefined, channel: 'email', subject, status: 'beantwortet', folder_path: inboxFolder, draft_body: '', draft_status: 'pending' };
+    DB.conversations = DB.conversations || [];
+    DB.conversations.unshift(row);
     inboxId = row.id;
     renderInbox();
   };

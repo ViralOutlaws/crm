@@ -4,6 +4,7 @@ import {
   folderRole,
   isFreemail,
   parseListLine,
+  pickRecentUids,
   pickSentFolder,
   sanitizeHtml,
   shouldDraft,
@@ -22,6 +23,23 @@ Deno.test("Ordnerrollen und Sent-Erkennung", () => {
   ].filter((x) => !!x);
   assertEquals(pickSentFolder(listed), "Gesendete Elemente");
   assertEquals(listed[2]?.role, "other");
+});
+
+Deno.test("Die neuesten UIDs, nicht die ältesten", () => {
+  const uids = Array.from({ length: 500 }, (_, i) => i + 1);
+  const newest = pickRecentUids(uids, 200);
+  assertEquals(newest[0], 301);
+  assertEquals(newest[newest.length - 1], 500);
+  assertEquals(newest.length, 200);
+  const older = pickRecentUids(uids, 50, { beforeUid: 301 });
+  assertEquals(older[0], 251);
+  assertEquals(older[older.length - 1], 300);
+  assertEquals(older.length, 50);
+  assertEquals(pickRecentUids(uids, 80, { afterUid: 500 }), []);
+  const gap = pickRecentUids(uids, 80, { afterUid: 490 });
+  assertEquals(gap[0], 491);
+  assertEquals(gap[gap.length - 1], 500);
+  assertEquals(gap.length, 10);
 });
 
 Deno.test("Freemail, Thread, HTML, Klassifikation", () => {
