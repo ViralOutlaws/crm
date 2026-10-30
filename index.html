@@ -3377,11 +3377,17 @@ function haptikKpis(pageId) {
   });
 }
 
+function dealShown(c) {
+  if (!c) return 0;
+  if (c.dealWert != null && c.dealWert !== '' && !isNaN(Number(c.dealWert))) return Number(c.dealWert);
+  if (c.kiWert != null && c.kiWert !== '' && !isNaN(Number(c.kiWert))) return Number(c.kiWert);
+  return 0;
+}
 function haptikSpec(pageId) {
   const contacts = (DB.contacts || []).filter(c => !c.archiviert);
   const openStages = ['lead', 'erstgespraech', 'angebot'];
   const openDeals = contacts.filter(c => openStages.includes(c.status));
-  const pipeline = openDeals.reduce((s, c) => s + (Number(c.dealWert) || 0), 0);
+  const pipeline = openDeals.reduce((s, c) => s + dealShown(c), 0);
   if(pageId === 'contacts') {
     return [
       { label: 'Kontakte', n: contacts.length, kind: 'n', tone: 'yellow', sub: 'ohne Archiv', tip: 'Alle nicht archivierten Kontakte, alphabetisch nach Firma.' },
@@ -3390,14 +3396,7 @@ function haptikSpec(pageId) {
       { label: 'Pipeline', n: pipeline, kind: 'eur', tone: 'green', sub: 'Deal-Wert netto', tip: 'Summe der Deal-Werte in Lead, Erstgespräch und Angebot.' }
     ];
   }
-  if(pageId === 'pipeline') {
-    return [
-      { label: 'Lead', n: contacts.filter(c => c.status === 'lead').length, kind: 'n', tone: 'yellow', sub: 'Karten', tip: 'Anzahl der Karten in Lead.' },
-      { label: 'Erstgespräch', n: contacts.filter(c => c.status === 'erstgespraech').length, kind: 'n', tone: 'blue', sub: 'Karten', tip: 'Anzahl der Karten im Erstgespräch.' },
-      { label: 'Angebot', n: contacts.filter(c => c.status === 'angebot').length, kind: 'n', tone: 'orange', sub: 'Karten', tip: 'Anzahl der Karten in Angebot.' },
-      { label: 'Offen', n: pipeline, kind: 'eur', tone: 'green', sub: 'Deal-Wert', tip: 'Dieselbe offene Pipeline wie im Dashboard.' }
-    ];
-  }
+  if(pageId === 'pipeline') return null;
   if(pageId === 'angebote') {
     const list = DB.angebote || [];
     const sum = list.filter(a => a.status !== 'abgelehnt').reduce((s, a) => s + (sumPositions(a.positions).netto || 0), 0);
@@ -4796,14 +4795,15 @@ function renderDashboard() {
     return s + Math.max(0, brutto - abzug);
   },0);
 
-  document.getElementById('kpi-pipeline').textContent = fmtEur(pipelineWert);
-  document.getElementById('kpi-pipeline-sub').textContent = offeneAngebote.length+' Angebote gesendet';
-  document.getElementById('kpi-umsatz').textContent = fmtEur(umsatz);
-  document.getElementById('kpi-umsatz-sub').textContent = bezahlteRg.length+' Rechnungen bezahlt';
-  document.getElementById('kpi-kunden').textContent = kunden;
-  document.getElementById('kpi-kunden-sub').textContent = 'von '+DB.contacts.length+' Kontakten';
-  document.getElementById('kpi-offen').textContent = fmtEur(offenWert);
-  document.getElementById('kpi-offen-sub').textContent = offeneRg.length+' Rechnungen ausstehend';
+  const kpiSet = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  kpiSet('kpi-pipeline', fmtEur(pipelineWert));
+  kpiSet('kpi-pipeline-sub', offeneAngebote.length+' Angebote gesendet');
+  kpiSet('kpi-umsatz', fmtEur(umsatz));
+  kpiSet('kpi-umsatz-sub', bezahlteRg.length+' Rechnungen bezahlt');
+  kpiSet('kpi-kunden', kunden);
+  kpiSet('kpi-kunden-sub', 'von '+DB.contacts.length+' Kontakten');
+  kpiSet('kpi-offen', fmtEur(offenWert));
+  kpiSet('kpi-offen-sub', offeneRg.length+' Rechnungen ausstehend');
 
   // Pipeline bars
   const statuses = ['lead','erstgespraech','angebot','gewonnen','verloren'];
