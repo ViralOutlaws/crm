@@ -956,31 +956,31 @@ window._loginFallback = function() {
 ════════════════════════════════════════ -->
 <div class="page active" id="page-dashboard">
   <div class="dash-grid kpi-grid-5">
-    <div class="kpi yellow">
+    <div class="kpi yellow dash-hit" role="button" tabindex="0" onclick="dashKpi('mrr')" onkeydown="dashKey(event)">
       <div class="kpi-label">MRR (Retainer)</div>
       <div class="kpi-val" id="kpi-mrr">0 €</div>
       <div class="kpi-sub" id="kpi-mrr-sub">0 aktive Retainer</div>
       <div class="kpi-icon">🔄</div>
     </div>
-    <div class="kpi green">
+    <div class="kpi green dash-hit" role="button" tabindex="0" onclick="dashKpi('umsatz')" onkeydown="dashKey(event)">
       <div class="kpi-label">Umsatz (bezahlt)</div>
       <div class="kpi-val" id="kpi-umsatz">0 €</div>
       <div class="kpi-sub" id="kpi-umsatz-sub">0 Rechnungen bezahlt</div>
       <div class="kpi-icon">✅</div>
     </div>
-    <div class="kpi blue">
+    <div class="kpi blue dash-hit" role="button" tabindex="0" onclick="dashKpi('kunden')" onkeydown="dashKey(event)">
       <div class="kpi-label">Aktive Kunden</div>
       <div class="kpi-val" id="kpi-kunden">0</div>
       <div class="kpi-sub" id="kpi-kunden-sub">von 0 Kontakten</div>
       <div class="kpi-icon">👥</div>
     </div>
-    <div class="kpi orange">
+    <div class="kpi orange dash-hit" role="button" tabindex="0" onclick="dashKpi('pipeline')" onkeydown="dashKey(event)">
       <div class="kpi-label">Offene Pipeline</div>
       <div class="kpi-val" id="kpi-pipeline">0 €</div>
       <div class="kpi-sub" id="kpi-pipeline-sub">0 Angebote offen</div>
       <div class="kpi-icon">💰</div>
     </div>
-    <div class="kpi">
+    <div class="kpi dash-hit" role="button" tabindex="0" onclick="dashKpi('offen')" onkeydown="dashKey(event)">
       <div class="kpi-label">Offen / Überfällig</div>
       <div class="kpi-val" id="kpi-offen">0 €</div>
       <div class="kpi-sub" id="kpi-offen-sub">0 Rechnungen ausstehend</div>
@@ -1009,7 +1009,7 @@ window._loginFallback = function() {
       <div id="dash-followups"></div>
     </div>
     <div class="dash-card">
-      <h3>📈 Lead-Quellen</h3>
+        <h3 class="dash-hit" role="button" tabindex="0" onclick="dashGo('contacts')" onkeydown="dashKey(event)" style="display:inline-flex;align-items:center;min-height:44px">📈 Lead-Quellen</h3>
       <div id="dash-quellen"></div>
     </div>
   </div>
@@ -3213,6 +3213,106 @@ function showPage(id) {
   // contact-detail is handled by openContactDetail()
 }
 
+function dashScrollTop() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  const main = document.getElementById('main-content');
+  if(main) main.scrollTop = 0;
+}
+function dashChips(attr, value, also) {
+  document.querySelectorAll('['+attr+']').forEach(b => {
+    const on = also ? also.indexOf(b.dataset[attr.slice(5)]||b.getAttribute(attr)) >= 0 : b.getAttribute(attr) === value;
+    b.classList.toggle('active', on);
+  });
+}
+function dashGo(page, opts) {
+  opts = opts || {};
+  if(page === 'contacts') {
+    contactFilter = opts.contactFilter || 'alle';
+    document.querySelectorAll('[data-cf]').forEach(b => b.classList.toggle('active', b.dataset.cf === contactFilter));
+  }
+  if(page === 'rechnungen') {
+    rechnungFilter = opts.rechnungFilter || 'alle';
+    document.querySelectorAll('[data-rf]').forEach(b => {
+      const on = rechnungFilter === 'offen-ueber' ? (b.dataset.rf === 'offen-rg' || b.dataset.rf === 'ueberfaellig') : b.dataset.rf === rechnungFilter;
+      b.classList.toggle('active', on);
+    });
+  }
+  if(page === 'angebote') {
+    angebotFilter = opts.angebotFilter || 'alle';
+    document.querySelectorAll('[data-af]').forEach(b => b.classList.toggle('active', b.dataset.af === angebotFilter));
+  }
+  if(opts.date) {
+    const d = new Date(opts.date + 'T00:00:00');
+    if(!isNaN(d.getTime())) { kalYear = d.getFullYear(); kalMonth = d.getMonth(); kalFocusDate = opts.date; }
+  }
+  showPage(page);
+  dashScrollTop();
+  if(opts.scroll) {
+    const el = document.querySelector(opts.scroll);
+    if(el) el.scrollIntoView({ block:'start' });
+  }
+  if(opts.mark) {
+    const row = document.querySelector(opts.mark);
+    if(row) row.classList.add('dash-mark');
+  }
+}
+function dashKey(e) {
+  if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); }
+}
+function dashKpi(which) {
+  if(which === 'mrr') {
+    const nav = document.querySelector('.nav-item[data-page="ziele"]');
+    const open = nav && nav.style.display !== 'none' && document.getElementById('retainer-tbody');
+    if(open) dashGo('ziele', { scroll:'#retainer-tbody' });
+    else dashGo('rechnungen');
+  } else if(which === 'umsatz') dashGo('rechnungen', { rechnungFilter:'bezahlt' });
+  else if(which === 'kunden') dashGo('contacts', { contactFilter:'gewonnen' });
+  else if(which === 'pipeline') dashGo('angebote', { angebotFilter:'gesendet' });
+  else if(which === 'offen') dashGo('rechnungen', { rechnungFilter:'offen-ueber' });
+}
+function dashRechnung(id) {
+  dashGo('rechnungen', { rechnungFilter:'alle', mark:'#rechnungen-tbody tr[data-rid="'+id+'"]' });
+  if(typeof openRechnungModal === 'function') openRechnungModal(id);
+}
+function dashKontakt(id) {
+  openContactDetail(id);
+  document.querySelectorAll('.nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === 'contacts'));
+  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === 'contacts'));
+  dashScrollTop();
+}
+function dashTermin(id, source) {
+  const list = (typeof getAllKalEvents === 'function' ? getAllKalEvents() : (DB.kalEvents||[]));
+  const e = list.find(x => x.id === id);
+  dashGo('kalender', { date: e && e.datum });
+  if(source === 'custom') openKalEventModal(id);
+  else if(source === 'wv') openWiedervorlageModal(e && e.kontaktId, String(id).replace(/^wv_/, ''));
+  else if(source === 'rg') openRechnungModal(String(id).replace(/^rg_/, ''));
+  else if(source === 'ret' && typeof openRetainerModal === 'function') openRetainerModal(String(id).replace(/^ret_/, ''));
+  else if(typeof kalEventClick === 'function') kalEventClick(id, source || 'custom');
+  const day = document.querySelector('[data-kal-date="'+(e&&e.datum||'')+'"]');
+  if(day) day.scrollIntoView({ block:'center' });
+}
+function dashActivity(i) {
+  const a = activityLog[i];
+  if(!a || !a.link) return;
+  const L = a.link;
+  if(L.type === 'kontakt') dashKontakt(L.id);
+  else if(L.type === 'rechnung') dashRechnung(L.id);
+  else if(L.type === 'angebot') { dashGo('angebote'); if(typeof openAngebotModal === 'function') openAngebotModal(L.id); }
+  else if(L.type === 'termin') dashTermin(L.id, L.source || 'custom');
+  else if(L.type === 'wv') { dashScrollTop(); showPage('dashboard'); openWiedervorlageModal(L.kontaktId || null, L.id); }
+  else if(L.type === 'aufgabe') { dashGo('kanban'); if(typeof openKanbanTaskModal === 'function') openKanbanTaskModal(L.id); }
+}
+window.dashGo = dashGo;
+window.dashKey = dashKey;
+window.dashKpi = dashKpi;
+window.dashRechnung = dashRechnung;
+window.dashKontakt = dashKontakt;
+window.dashTermin = dashTermin;
+window.dashActivity = dashActivity;
+
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
@@ -3868,7 +3968,7 @@ function saveContact() {
     updatedAt: new Date().toISOString()
   };
   if(editId) { const i = DB.contacts.findIndex(x=>x.id===editId); if(i>-1) DB.contacts[i]=obj; }
-  else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue'); }
+  else { DB.contacts.unshift(obj); addActivity(`Kontakt "${firma}" angelegt`, 'blue', {type:'kontakt', id:obj.id}); }
   const wasEdit = !!editId;
   sbSaveContact(obj);
   save(); closeModal('contact-modal'); renderContacts(); renderDashboard();
@@ -3882,7 +3982,7 @@ function toggleArchivContact(id) {
   c.archiviert = !c.archiviert;
   c.updatedAt = new Date().toISOString();
   const action = c.archiviert ? 'archiviert' : 'aus Archiv geholt';
-  addActivity(`Kontakt "${c.firma}" ${action}`, 'gray');
+  addActivity(`Kontakt "${c.firma}" ${action}`, 'gray', {type:'kontakt', id:c.id});
   sbSaveContact(c);
   save(); renderContacts(); renderDashboard();
 }
@@ -4015,7 +4115,7 @@ function saveAngebot(forceStatus) {
     createdAt: editId ? DB.angebote.find(x=>x.id===editId)?.createdAt : new Date().toISOString()
   };
   if(editId) { const i=DB.angebote.findIndex(x=>x.id===editId); if(i>-1) DB.angebote[i]=obj; }
-  else { DB.angebote.unshift(obj); DB.nextAngebotNr++; const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr} für "${c?.firma||'?'}" erstellt`,'orange'); }
+  else { DB.angebote.unshift(obj); DB.nextAngebotNr++; const c=DB.contacts.find(x=>x.id===kundeId); addActivity(`Angebot ${obj.nr} für "${c?.firma||'?'}" erstellt`,'orange', {type:'angebot', id:obj.id}); }
   sbSaveAngebot(obj);
   save(); closeModal('angebot-modal'); renderAngebote(); renderDashboard();
   if(!forceStatus) printDoc('angebot', obj.id);
@@ -4138,7 +4238,7 @@ function saveRechnung() {
     createdAt:editId?DB.rechnungen.find(x=>x.id===editId)?.createdAt:new Date().toISOString()
   };
   if(editId){const i=DB.rechnungen.findIndex(x=>x.id===editId);if(i>-1)DB.rechnungen[i]=obj;}
-  else{DB.rechnungen.unshift(obj);DB.nextRechnungNr++;const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`Rechnung ${obj.nr} für "${c?.firma||'?'}" erstellt`,'green');}
+  else{DB.rechnungen.unshift(obj);DB.nextRechnungNr++;const c=DB.contacts.find(x=>x.id===kundeId);addActivity(`Rechnung ${obj.nr} für "${c?.firma||'?'}" erstellt`,'green', {type:'rechnung', id:obj.id});}
   sbSaveRechnung(obj);
   save();closeModal('rechnung-modal');renderRechnungen();renderDashboard();
   haptikToast('Rechnung gespeichert');
@@ -4460,7 +4560,7 @@ function markBezahlt(id){
   if(!r)return;
   r.status='bezahlt';
   const c=DB.contacts.find(x=>x.id===r.kundeId);
-  addActivity(`Rechnung ${r.nr} bezahlt von "${c?.firma||'?'}"`, 'green');
+  addActivity(`Rechnung ${r.nr} bezahlt von "${c?.firma||'?'}"`, 'green', {type:'rechnung', id:r.id});
   sbSaveRechnung(r);
   save();renderRechnungen();renderDashboard();
 }
@@ -4474,7 +4574,7 @@ function setRechnungFilter(f,btn){
 function renderRechnungen(){
   const q=(document.getElementById('rechnung-search')?.value||'').toLowerCase();
   let list=DB.rechnungen.filter(r=>{
-    const matchF=rechnungFilter==='archiv'?r.archiviert===true:(rechnungFilter==='alle'?!r.archiviert:(!r.archiviert&&r.status===rechnungFilter));
+    const matchF=rechnungFilter==='archiv'?r.archiviert===true:(rechnungFilter==='alle'?!r.archiviert:(rechnungFilter==='offen-ueber'?(!r.archiviert&&isOpenRechnung(r)):(!r.archiviert&&r.status===rechnungFilter)));
     const c=DB.contacts.find(x=>x.id===r.kundeId);
     const matchQ=!q||r.nr?.toLowerCase().includes(q)||r.betreff.toLowerCase().includes(q)||(c?.firma||'').toLowerCase().includes(q);
     return matchF&&matchQ;
@@ -4487,7 +4587,7 @@ function renderRechnungen(){
     const sum=sumPositions(r.positions);
     const isUeber=r.status==='offen-rg'&&r.faellig&&new Date(r.faellig)<new Date();
     if(isUeber&&r.status==='offen-rg'){r.status='ueberfaellig';}
-    return `<tr style="cursor:pointer" onclick="printDoc('rechnung','${r.id}')">
+    return `<tr data-rid="${esc(r.id)}" style="cursor:pointer" onclick="printDoc('rechnung','${r.id}')">
       <td data-label="Nr." class="mono" style="font-weight:600;color:var(--blue)">${esc(r.nr||'–')}</td>
       <td data-label="Kunde" class="bold">${esc(c?.firma||'Unbekannt')}</td>
       <td data-label="Betreff">${esc(r.betreff)}</td>
@@ -4674,8 +4774,8 @@ function printDoc(type, id) {
 // DASHBOARD
 // ==================================================
 let activityLog = [];
-function addActivity(text, color) {
-  activityLog.unshift({ text, color: color||'blue', time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) });
+function addActivity(text, color, link) {
+  activityLog.unshift({ text, color: color||'blue', time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}), link: link||null });
   if(activityLog.length>20) activityLog.pop();
 }
 
@@ -4715,7 +4815,8 @@ function renderDashboard() {
   const max = Math.max(...statuses.map(s=>DB.contacts.filter(c=>c.status===s).length),1);
   document.getElementById('dash-pipeline').innerHTML = statuses.map(s=>{
     const count = DB.contacts.filter(c=>c.status===s).length;
-    return `<div class="pipe-row">
+    const hit = count ? ` class="pipe-row dash-hit" role="button" tabindex="0" onclick="dashGo('contacts',{contactFilter:'${s}'})" onkeydown="dashKey(event)"` : ` class="pipe-row"`;
+    return `<div${hit}>
       <span class="pipe-label">${labels[s]}</span>
       <div class="pipe-track"><div class="pipe-fill" style="width:${Math.round(count/max*100)}%;background:${colors[s]}"></div></div>
       <span class="pipe-count">${count}</span>
@@ -4726,7 +4827,7 @@ function renderDashboard() {
   const recentRg = [...DB.rechnungen].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,5);
   document.getElementById('dash-recent-rg').innerHTML = recentRg.length ? recentRg.map(r=>{
     const c=DB.contacts.find(x=>x.id===r.kundeId);
-    return `<div class="recent-item">
+    return `<div class="recent-item dash-hit" role="button" tabindex="0" onclick="dashRechnung('${esc(r.id)}')" onkeydown="dashKey(event)">
       <div class="recent-name">${esc(c?.firma||'?')}</div>
       <div class="recent-date">${getBadge(r.status)}</div>
       <div class="recent-amt">${fmtEur(sumPositions(r.positions).brutto)}</div>
@@ -4734,8 +4835,8 @@ function renderDashboard() {
   }).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">Noch keine Rechnungen</div>';
 
   // Activity
-  document.getElementById('dash-activity').innerHTML = activityLog.length ? activityLog.slice(0,8).map(a=>`
-    <div class="activity-item">
+  document.getElementById('dash-activity').innerHTML = activityLog.length ? activityLog.slice(0,8).map((a,i)=>`
+    <div class="activity-item${a.link?' dash-hit':''}" ${a.link?`role="button" tabindex="0" onclick="dashActivity(${i})" onkeydown="dashKey(event)"`:''}>
       <div class="activity-dot" style="background:var(--${esc(a.color)})"></div>
       <span class="activity-text">${esc(a.text)}</span>
       <span class="activity-time">${esc(a.time)}</span>
@@ -5660,7 +5761,7 @@ function saveWiedervorlage() {
   if(editId) { const i=DB.wiedervorlagen.findIndex(x=>x.id===editId); if(i>-1) DB.wiedervorlagen[i]=obj; }
   else { DB.wiedervorlagen.push(obj); }
   sbSaveWv(obj); save(); closeModal('wv-modal'); renderDashboard();
-  addActivity(`Erinnerung gesetzt: "${text}" am ${fmtDate(datum)}`, 'yellow');
+  addActivity(`Erinnerung gesetzt: "${text}" am ${fmtDate(datum)}`, 'yellow', {type:'wv', id:obj.id, kontaktId:obj.kontaktId});
 }
 
 function doneWiedervorlage(id) {
@@ -5697,6 +5798,7 @@ function renderTodoSection() {
         const c = w.kontaktId ? DB.contacts.find(x=>x.id===w.kontaktId) : null;
         const isOverdue = w.datum < todayStr;
         return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div class="dash-hit" role="button" tabindex="0" onclick="openWiedervorlageModal(null,'${esc(w.id)}')" onkeydown="dashKey(event)" style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0">
           <div style="font-size:16px;flex-shrink:0;margin-top:1px">${typIcon[w.typ]||'📌'}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(w.text)}</div>
@@ -5704,6 +5806,7 @@ function renderTodoSection() {
             <div style="font-size:10px;margin-top:2px;color:${isOverdue?'var(--red)':'var(--muted)'}">
               ${isOverdue?'⚠ Überfällig: ':''}${fmtDate(w.datum)}
             </div>
+          </div>
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0">
             ${c?`<button class="btn-ghost btn-sm" onclick="openEmailModal('${c.id}')" title="E-Mail">✉</button>`:''}
@@ -5725,6 +5828,7 @@ function renderTodoSection() {
         const c = w.kontaktId ? DB.contacts.find(x=>x.id===w.kontaktId) : null;
         const daysLeft = Math.ceil((new Date(w.datum)-new Date(today()))/(1000*60*60*24));
         return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div class="dash-hit" role="button" tabindex="0" onclick="openWiedervorlageModal(null,'${esc(w.id)}')" onkeydown="dashKey(event)" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
           <div style="font-size:14px;flex-shrink:0">${typIcon[w.typ]||'📌'}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.text)}</div>
@@ -5733,6 +5837,7 @@ function renderTodoSection() {
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:11px;font-weight:600;color:var(--yellow2)">${daysLeft===1?'Morgen':'in '+daysLeft+' Tagen'}</div>
             <div style="font-size:10px;color:var(--muted)">${fmtDate(w.datum)}</div>
+          </div>
           </div>
           <button class="btn-ghost btn-sm" style="color:var(--green);border-color:var(--green)" onclick="doneWiedervorlage('${w.id}')" title="Erledigt">✓</button>
           <button class="btn-ghost btn-sm" onclick="deleteWiedervorlage('${w.id}')" title="Löschen" style="color:var(--red)">✕</button>
@@ -5921,6 +6026,7 @@ document.querySelectorAll('.overlay').forEach(o=>{
 if(!DB.kalEvents) DB.kalEvents = [];
 
 let kalYear  = new Date().getFullYear();
+let kalFocusDate = null;
 let kalMonth = new Date().getMonth(); // 0-based
 let kalView  = 'month';
 
@@ -6037,7 +6143,7 @@ function renderKalAgenda() {
   all.slice(0, 60).forEach(e => { (by[e.datum] = by[e.datum] || []).push(e); });
   const days = Object.keys(by);
   grid.style.overflowX = 'hidden';
-  grid.innerHTML = days.length ? days.map(d => `<section class="kal-day-block"><h4>${d===todayStr?'Heute':fmtDate(d)}</h4>${by[d].map(e => `<button type="button" class="kal-agenda-row" onclick="kalEventClick('${esc(e.id)}','${esc(e.source||'custom')}')"><span class="kal-dot" style="background:${esc(e.color||'#888')}"></span><span class="kal-agenda-main"><b>${esc(e.titel||'Termin')}</b><small>${esc(e.zeit||'Ganztägig')}</small></span></button>`).join('')}</section>`).join('') : '<div class="empty-state"><p>Keine anstehenden Termine.</p></div>';
+  grid.innerHTML = days.length ? days.map(d => `<section class="kal-day-block" data-kal-date="${d}"><h4>${d===todayStr?'Heute':fmtDate(d)}</h4>${by[d].map(e => `<button type="button" class="kal-agenda-row" onclick="kalEventClick('${esc(e.id)}','${esc(e.source||'custom')}')"><span class="kal-dot" style="background:${esc(e.color||'#888')}"></span><span class="kal-agenda-main"><b>${esc(e.titel||'Termin')}</b><small>${esc(e.zeit||'Ganztägig')}</small></span></button>`).join('')}</section>`).join('') : '<div class="empty-state"><p>Keine anstehenden Termine.</p></div>';
 }
 
 function getWeekStart(offset) {
@@ -6090,7 +6196,7 @@ function renderKalMonth() {
     const dayEvents = allEvents.filter(e=>e.datum===ds);
     const bgColor = isToday?'#fffbea':isWeekend?'#faf9f6':'#fff';
 
-    html += `<div class="kal-day" onclick="kalDayClick('${ds}')" style="min-height:60px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px;cursor:pointer;background:${bgColor};overflow:hidden">
+    html += `<div class="kal-day" data-kal-date="${ds}" onclick="kalDayClick('${ds}')" style="min-height:60px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px;cursor:pointer;background:${bgColor};overflow:hidden">
       <div style="font-size:11px;font-weight:${isToday?'700':'500'};color:${isToday?'#fff':'var(--ink)'};background:${isToday?'var(--yellow)':'transparent'};width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:2px">${d}</div>
       ${dayEvents.slice(0,2).map(e=>`
         <div onclick="event.stopPropagation();kalEventClick('${e.id}','${esc(e.source)}')"
@@ -6303,7 +6409,7 @@ function saveKalEvent() {
       sbSaveWv(wvObj);
     }
     const c = obj.kontaktId ? DB.contacts.find(x=>x.id===obj.kontaktId) : null;
-    addActivity(`Termin "${titel}" am ${fmtDate(datum)} angelegt${c?' für '+c.firma:''}`, 'blue');
+    addActivity(`Termin "${titel}" am ${fmtDate(datum)} angelegt${c?' für '+c.firma:''}`, 'blue', {type:'termin', id:obj.id, source:'custom'});
   }
   sbSaveKalEvent(obj); save(); closeModal('kal-event-modal'); renderKalender();
   // Send notification email to self
@@ -6717,11 +6823,11 @@ function renderMiniCal(){
     const ds=`${miniCalYear}-${String(miniCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=ds===todayStr;
     const hasEv=eventDates.has(ds);
-    html+=`<div class="mini-cal-cell${isToday?' today':''}${hasEv&&!isToday?' has-event':''}" onclick="miniCalDayClick('${ds}')">${d}</div>`;
+    html+=`<div class="mini-cal-cell${isToday?' today':''}${hasEv&&!isToday?' has-event':''} dash-hit" role="button" tabindex="0" onclick="miniCalDayClick('${ds}')" onkeydown="dashKey(event)">${d}</div>`;
   }
   grid.innerHTML=html;
 }
-function miniCalDayClick(ds){const d=new Date(ds);kalYear=d.getFullYear();kalMonth=d.getMonth();showPage('kalender');}
+function miniCalDayClick(ds){const d=new Date(ds+'T00:00:00');kalYear=d.getFullYear();kalMonth=d.getMonth();kalFocusDate=ds;showPage('kalender');dashScrollTop();const el=document.querySelector('[data-kal-date="'+ds+'"]');if(el) el.scrollIntoView({block:'center'});}
 function renderDashCalEvents(){
   const el=document.getElementById('dash-cal-events');
   if(!el) return;
@@ -6733,7 +6839,7 @@ function renderDashCalEvents(){
   el.innerHTML=relevant.map(e=>{
     const c=e.kontaktId?DB.contacts.find(x=>x.id===e.kontaktId):null;
     const isToday=e.datum===todayStr;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+    return `<div class="dash-hit" role="button" tabindex="0" onclick="dashTermin('${esc(e.id)}','${esc(e.source||'custom')}')" onkeydown="dashKey(event)" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="width:4px;align-self:stretch;border-radius:2px;background:${esc(e.color)};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(e.titel)}</div>
@@ -10964,7 +11070,7 @@ window.plMove=function(id,stage){
   const c=DB.contacts.find(x=>x.id===id); if(!c||c.status===stage) return;
   const alt=c.status; c.status=stage; c.updatedAt=new Date().toISOString();
   const lbl=STAGES.find(s=>s.k===stage)?.l||stage;
-  addActivity(`"${c.firma}" → ${lbl}`, stage==='gewonnen'?'green':(stage==='verloren'?'red':'blue'));
+  addActivity(`"${c.firma}" → ${lbl}`, stage==='gewonnen'?'green':(stage==='verloren'?'red':'blue'), {type:'kontakt', id:c.id});
   sbSaveContact(c); save(); renderPipeline();
   if(typeof renderDashboard==='function' && document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
   nudgeNextStep(c);
@@ -10987,9 +11093,11 @@ function renderFollowups(){
   const due=open.filter(c=>c.naechsterSchritt&&c.naechsterSchritt<=t).sort((a,b)=>a.naechsterSchritt.localeCompare(b.naechsterSchritt));
   const missing=open.filter(c=>!c.naechsterSchritt).length;
   el.innerHTML=(due.length?due.slice(0,8).map(c=>`<div class="fu-row">
+      <div class="dash-hit" role="button" tabindex="0" onclick="dashKontakt('${esc(c.id)}')" onkeydown="dashKey(event)" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
       <span class="fu-date ${c.naechsterSchritt<t?'over':''}">${c.naechsterSchritt<t?'überfällig ':''}${esc(fmtD(c.naechsterSchritt))}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="#" onclick="event.preventDefault();openContactDetail('${esc(c.id)}')" style="color:var(--ink);font-weight:600">${esc(c.firma)}</a>${c.naechsterSchrittText?' · '+esc(c.naechsterSchrittText):''}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);font-weight:600">${esc(c.firma)}${c.naechsterSchrittText?' · '+esc(c.naechsterSchrittText):''}</span>
       ${getBadge(c.status)}
+      </div>
       <button class="btn-ghost btn-sm" onclick="openContactModal('${esc(c.id)}')">Verschieben</button></div>`).join('')+(due.length>8?`<div style="font-size:11px;color:var(--muted);padding-top:6px">+${due.length-8} weitere</div>`:'')
     :'<div style="font-size:12px;color:var(--muted);padding:6px 0">✅ Heute nichts fällig.</div>')
     +(missing?`<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 ${missing} offene Deals ohne nächsten Schritt · <a href="#" onclick="event.preventDefault();showPage('pipeline')" style="color:var(--blue)">in der Pipeline ansehen</a></div>`:'');
@@ -11000,8 +11108,8 @@ function renderQuellen(){
   const rows=Object.entries(QUELLEN).map(([k,l])=>{const all=cs.filter(c=>c.quelle===k);return {l,n:all.length,w:all.filter(c=>c.status==='gewonnen').length};});
   const none=cs.filter(c=>!c.quelle||!QUELLEN[c.quelle]).length;
   const max=Math.max(1,...rows.map(r=>r.n));
-  el.innerHTML=rows.filter(r=>r.n).map(r=>`<div class="qs-row"><span class="qs-label">${r.l}</span><div class="qs-track"><div class="qs-fill" style="width:${Math.round(r.n/max*100)}%"></div></div><span class="qs-count" title="Kontakte / davon gewonnen">${r.n}${r.w?' · ✅'+r.w:''}</span></div>`).join('')
-    +(none?`<div style="font-size:11px;color:var(--muted);margin-top:8px">${none} Kontakte ohne Quelle</div>`:'')
+  el.innerHTML=rows.filter(r=>r.n).map(r=>`<div class="qs-row dash-hit" role="button" tabindex="0" onclick="dashGo('contacts')" onkeydown="dashKey(event)"><span class="qs-label">${r.l}</span><div class="qs-track"><div class="qs-fill" style="width:${Math.round(r.n/max*100)}%"></div></div><span class="qs-count" title="Kontakte / davon gewonnen">${r.n}${r.w?' · ✅'+r.w:''}</span></div>`).join('')
+    +(none?`<div class="dash-hit" role="button" tabindex="0" onclick="dashGo('contacts')" onkeydown="dashKey(event)" style="font-size:11px;color:var(--muted);margin-top:8px">${none} Kontakte ohne Quelle</div>`:'')
     +(!rows.some(r=>r.n)&&!none?'<div style="font-size:12px;color:var(--muted)">Noch keine Daten.</div>':'');
 }
 const _origDash=window.renderDashboard;
@@ -11122,9 +11230,9 @@ body::before{
   left:-18vw;top:-18vh;width:136vw;height:136vh;
   z-index:-1;pointer-events:none;
   background:
-    radial-gradient(circle at 16% 12%, #e2a428 0 170px, transparent 172px),
-    radial-gradient(circle at 86% 18%, #c5d4e2 0 200px, transparent 202px),
-    radial-gradient(circle at 42% 86%, #f4e3bc 0 180px, transparent 182px);
+    radial-gradient(circle at 62% 14%, #e2a428 0 170px, transparent 172px),
+    radial-gradient(circle at 92% 28%, #c5d4e2 0 200px, transparent 202px),
+    radial-gradient(circle at 48% 92%, #f4e3bc 0 180px, transparent 182px);
   filter:blur(120px);
   -webkit-filter:blur(120px);
 }
@@ -11164,12 +11272,17 @@ body.dark-mode{
 #bottom-nav{border-bottom:none}
 body.dark-mode #top-header,body.dark-mode #bottom-nav{background:rgba(255,255,255,.07)}
 #sidebar{
-  background:rgba(10,10,10,.62);
+  background:rgba(10,10,10,.92);
+  -webkit-backdrop-filter:blur(8px) saturate(100%);
+  backdrop-filter:blur(8px) saturate(100%);
+  border-right:1px solid rgba(255,255,255,.08);
+}
+body.dark-mode #sidebar{
+  background:rgba(8,8,8,.55);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
   backdrop-filter:blur(24px) saturate(160%);
-  border-right:1px solid rgba(255,255,255,.14);
+  border-right-color:rgba(255,255,255,.1);
 }
-body.dark-mode #sidebar{background:rgba(8,8,8,.55);border-right-color:rgba(255,255,255,.1)}
 #sidebar .nav-item{color:rgba(255,255,255,.86)}
 #sidebar .nav-item.active{color:#fff}
 #sidebar .nav-section{color:rgba(255,255,255,.66)}
@@ -11228,6 +11341,14 @@ body.dark-mode .kpi{box-shadow:var(--glass-sh), var(--glass-hi)}
   .kpi,.dash-card,.table-wrap,.detail-header,#top-header,#bottom-nav,.modal,.vo-menu,.haptik-toast,#global-search-box,.fab-item,#contacts-tbody tr,#angebote-tbody tr,#rechnungen-tbody tr,.kb-card{
     -webkit-backdrop-filter:none;backdrop-filter:none;
   }
+}
+.dash-hit{cursor:pointer}
+.dash-hit:hover{transform:translateY(-1px);box-shadow:0 12px 28px rgba(20,16,8,.12), inset 0 1px 0 rgba(255,255,255,.85)}
+.dash-hit:focus-visible{outline:2px solid rgba(245,196,0,.95);outline-offset:2px}
+tr.dash-mark td{background:rgba(245,196,0,.16)}
+.pipe-row.dash-hit,.recent-item.dash-hit,.activity-item.dash-hit,.qs-row.dash-hit{border-radius:8px}
+@media(max-width:768px){
+  .dash-hit,.mini-cal-cell:not(.empty){min-height:44px}
 }
 @media(prefers-reduced-transparency:reduce){
   :root{--glass-bg:rgba(255,255,255,.94)}
