@@ -23,6 +23,7 @@ export async function userClient(req: Request): Promise<{ sb: SupabaseClient; us
   const { data, error } = await sb.auth.getUser();
   if (error || !data.user) throw new Error("Anmeldung fehlt");
   const profile = await sb.from("profiles").select("workspace_id").eq("id", data.user.id).maybeSingle();
+  if (profile.error) throw new Error(profile.error.message || "Kein Workspace");
   const workspaceId = profile.data?.workspace_id || "";
   if (!workspaceId) throw new Error("Kein Workspace");
   return { sb, userId: data.user.id, workspaceId };
