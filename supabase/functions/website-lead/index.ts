@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   const message = clip(b.message, 5000);
   const m = (b.meta && typeof b.meta === "object" ? b.meta : {}) as Record<string, unknown>;
   const meta: Record<string, string> = {};
-  for (const k of ["page", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "topic", "size", "contactPref", "check"]) {
+  for (const k of ["page", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "topic", "size", "contactPref", "check"]) {
     const v = clip(m[k], 500);
     if (v) meta[k] = v;
   }
