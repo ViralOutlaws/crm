@@ -8,8 +8,17 @@ import {
   pickSentFolder,
   sanitizeHtml,
   shouldDraft,
+  mailFingerprint,
   threadKey,
 } from "./mail.ts";
+
+Deno.test("Gelöschte Mails haben einen stabilen Fingerabdruck", () => {
+  const a = mailFingerprint("Beispielbetrieb <demo@example.test>", "Website: Beispielbetrieb", "Bitte um Rückruf.");
+  const b = mailFingerprint("demo@example.test", "  Website: Beispielbetrieb ", "Bitte   um Rückruf.");
+  assertEquals(a, b);
+  assertEquals(a.includes("demo@example.test"), true);
+  assertEquals(mailFingerprint("Andere <andere@example.test>", "Website: Beispielbetrieb", "Bitte um Rückruf.") === a, false);
+});
 
 Deno.test("Ordnerrollen und Sent-Erkennung", () => {
   assertEquals(folderRole("INBOX", ["\\Inbox"]), "inbox");

@@ -11,6 +11,7 @@ import {
   imapRename,
   isFreemail,
   mailConfig,
+  mailFingerprint,
   parentPath,
   threadKey,
 } from "../_shared/mail.ts";
@@ -67,6 +68,9 @@ Deno.serve(async (req) => {
     const deadline = Date.now() + 45000;
     const seenRows = await sb.from("conversations").select("external_id").eq("workspace_id", workspaceId).not("external_id", "is", null);
     const seen = new Set((seenRows.data || []).map((row: { external_id?: string }) => row.external_id).filter(Boolean));
+    // Fehlende Tabelle darf den Sync nicht stoppen. Ohne sie kann eine gelöschte Mail wiederkommen.
+    const suppressedRows = await sb.from("mail_suppressions").select("fingerprint").eq("workspace_id", workspaceId).limit(2000);
+    const suppressed = new Set<string>((suppressedRows.error ? [] : (suppressedRows.data || [])).map((row: { fingerprint?: string }) => row.fingerprint || "").filter(Boolean));
     let imported = 0;
     let partial = false;
     for (const path of order) {
@@ -101,7 +105,7 @@ Deno.serve(async (req) => {
           continue;
         }
         try {
-          const got = await storeMail(sb, workspaceId, path, mail, external);
+          const got = await storeMail(sb, workspaceId, path, mail, external, suppressed);
           if (got) { seen.add(external); imported++; }
           maxUid = Math.max(maxUid, mail.uid);
         } catch { /* eine Mail darf den Sync nicht abbrechen */ }
@@ -120,11 +124,12 @@ Deno.serve(async (req) => {
   }
 });
 
-async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string) {
+async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string, suppressed: Set<string>) {
   const from = headerValue(mail.header, "from");
   const to = headerValue(mail.header, "to");
   const cc = headerValue(mail.header, "cc");
   const subject = headerValue(mail.header, "subject") || "(ohne Betreff)";
+  if (suppressed.has(mailFingerprint(from, subject, mail.text))) return false;
   const email = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
   const match = await matchContact(sb, workspaceId, [email, to, cc].join(" "), mail.text);
   const klass = classifyHeuristic(`${subject}\n${mail.text}`, match.certain);

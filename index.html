@@ -11354,6 +11354,7 @@ function contactBundle(c){
     aufgaben:(DB.kanban||[]).filter(t=>t.kontaktId===c.id),
     termine:(DB.kalEvents||[]).filter(e=>e.kontaktId===c.id),
     wiedervorlagen:(DB.wiedervorlagen||[]).filter(w=>w.kontaktId===c.id),
+    anrufe:(DB.anrufe||[]).filter(a=>a.contactId===c.id),
     retainer:(DB.retainer||[]).filter(r=>r.kundeId===c.id)
   };
 }
@@ -11379,7 +11380,7 @@ window.dsgvoDelete=async function(id){
   const b=contactBundle(c);
   const n=b.angebote.length+b.aufgaben.length+b.termine.length+b.wiedervorlagen.length;
   const keep=b.rechnungen.length+b.retainer.length;
-  let msg=`„${c.firma}“ VOLLSTÄNDIG löschen?\n\nGelöscht werden: der Kontakt mit Notizen und Dokumenten, ${b.angebote.length} Angebote, ${b.aufgaben.length} Aufgaben, ${b.termine.length} Termine, ${b.wiedervorlagen.length} Wiedervorlagen.`;
+  let msg=`„${c.firma}“ VOLLSTÄNDIG löschen?\n\nGelöscht werden: der Kontakt mit Notizen und Dokumenten, ${b.angebote.length} Angebote, ${b.aufgaben.length} Aufgaben, ${b.termine.length} Termine, ${b.wiedervorlagen.length} Wiedervorlagen, ${(b.anrufe||[]).length} Anrufe.`;
   if(keep) msg+=`\n\n⚠ ${b.rechnungen.length} Rechnung(en)${b.retainer.length?' und '+b.retainer.length+' Retainer':''} bleiben erhalten (gesetzliche Aufbewahrungspflicht, 10 Jahre) und werden nur vom Kontakt gelöst.`;
   msg+='\n\nDas kann nicht rückgängig gemacht werden. Tipp: vorher exportieren.';
   if(!confirm(msg)) return;
@@ -11600,6 +11601,8 @@ tr.dash-mark td{background:rgba(245,196,0,.16)}
   }
 }
 </style>
+<script src="/anruf-rules.js"></script>
+<script src="/anruf-cockpit.js"></script>
 <script src="/crm-reel.js"></script>
 </body>
 </html>

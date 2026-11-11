@@ -40,6 +40,17 @@ import {
   withWorkspaceLock,
   type ContactKey,
 } from "../_shared/bot_contacts.ts";
+import {
+  ilikeExact,
+  matchOpenLead,
+  normTel,
+  planCall,
+  planDoNotCall,
+  planList,
+  terminTitel,
+  wiedervorlageText,
+  type LeadFields,
+} from "../_shared/bot_calls.ts";
 
 const rates = { valid: new Map<string, number[]>(), invalid: new Map<string, number[]>() };
 
@@ -121,6 +132,9 @@ Deno.serve(async (req) => {
     if (op === "update") return json(await updateRun(admin, scope, body), 200, headers);
     if (op === "mirror") return json(await mirrorRun(admin, scope, String(body.run_id || "")), 200, headers);
     if (op === "create_contacts" || op === "create_contact") return json(await createContacts(admin, scope, body, op), 200, headers);
+    if (op === "log_call") return json(await logCall(admin, scope, body), 200, headers);
+    if (op === "list_calls") return json(await listCalls(admin, scope, body), 200, headers);
+    if (op === "set_do_not_call") return json(await setDoNotCall(admin, scope, body), 200, headers);
     return json({ error: "Unbekannte Operation." }, 400, headers);
   } catch (e) {
     const msg = publicError(e);
@@ -358,6 +372,264 @@ async function noteContactBatch(
       .eq("bot", scope.bot)
       .eq("workspace_id", scope.workspace_id);
   } catch { /* Nachweis am Lauf ist optional und blockiert das Anlegen nicht. */ }
+}
+
+const LEAD_COLS = "id, firma, person, tel, email, note, do_not_call, sperre_seit, converted_contact_id, created_at, updated_at";
+const CALL_COLS = "id, contact_id, lead_id, created_at, result, objection, note, next_step, next_date, befund, slot1, slot2, zeit, wiedervorlage_id, kal_event_id";
+
+function publicCall(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    contact_id: row.contact_id ?? null,
+    lead_id: row.lead_id ?? null,
+    created_at: row.created_at,
+    result: row.result,
+    objection: row.objection ?? null,
+    note: row.note ?? null,
+    next_step: row.next_step ?? null,
+    next_date: row.next_date ?? null,
+    befund: row.befund ?? null,
+    slot1: row.slot1 ?? null,
+    slot2: row.slot2 ?? null,
+    zeit: row.zeit ?? null,
+    wiedervorlage_id: row.wiedervorlage_id ?? null,
+    kal_event_id: row.kal_event_id ?? null,
+  };
+}
+
+function publicLead(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    firma: row.firma,
+    person: row.person ?? null,
+    tel: row.tel ?? null,
+    email: row.email ?? null,
+    note: row.note ?? null,
+    do_not_call: row.do_not_call === true,
+    sperre_seit: row.sperre_seit ?? null,
+    converted_contact_id: row.converted_contact_id ?? null,
+    created_at: row.created_at,
+  };
+}
+
+async function findOpenLead(admin: SupabaseClient, workspaceId: string, lead: LeadFields) {
+  const found = new Map<string, { id: string; firma: string | null; person: string | null; tel: string | null; converted_contact_id: string | null }>();
+  const add = (rows: Record<string, unknown>[] | null) => {
+    for (const row of rows || []) {
+      found.set(String(row.id), {
+        id: String(row.id),
+        firma: row.firma == null ? null : String(row.firma),
+        person: row.person == null ? null : String(row.person),
+        tel: row.tel == null ? null : String(row.tel),
+        converted_contact_id: row.converted_contact_id == null ? null : String(row.converted_contact_id),
+      });
+    }
+  };
+  const base = () => admin.from("call_leads").select(LEAD_COLS).eq("workspace_id", workspaceId).is("converted_contact_id", null);
+  const byName = await base().ilike("firma", ilikeExact(lead.firma)).limit(20);
+  if (byName.error) throw new Error("Leads nicht lesbar.");
+  add(byName.data);
+  const tail = normTel(lead.tel || "").slice(-8);
+  if (tail.length >= 8) {
+    const byTel = await base().ilike("tel", `%${tail}%`).limit(20);
+    if (byTel.error) throw new Error("Leads nicht lesbar.");
+    add(byTel.data);
+  }
+  const id = matchOpenLead(lead, [...found.values()]);
+  if (!id) return null;
+  return found.get(id) || null;
+}
+
+async function logCall(admin: SupabaseClient, scope: { bot: BotId; workspace_id: string }, body: Record<string, unknown>) {
+  const plan = planCall(body);
+  if (!plan.ok) throw new Error(plan.error);
+  const now = new Date().toISOString();
+  let contact: { id: string; firma: string; person: string | null; status: string; doNotCall: boolean } | null = null;
+  let leadId = plan.leadId;
+  let lead: Record<string, unknown> | null = null;
+
+  if (plan.contactId) {
+    const res = await admin.from("contacts").select("id, firma, person, status, do_not_call").eq("id", plan.contactId).eq("workspace_id", scope.workspace_id).maybeSingle();
+    if (res.error) throw new Error("Kontakt nicht lesbar.");
+    if (!res.data) throw new Error("Kontakt nicht gefunden.");
+    contact = { id: String(res.data.id), firma: String(res.data.firma || "Betrieb"), person: res.data.person == null ? null : String(res.data.person), status: String(res.data.status || ""), doNotCall: res.data.do_not_call === true };
+  } else if (plan.leadId) {
+    const res = await admin.from("call_leads").select(LEAD_COLS).eq("id", plan.leadId).eq("workspace_id", scope.workspace_id).maybeSingle();
+    if (res.error) throw new Error("Lead nicht lesbar.");
+    if (!res.data) throw new Error("Lead nicht gefunden.");
+    if (res.data.converted_contact_id) throw new Error("Lead ist schon ein Kontakt.");
+    lead = res.data;
+    leadId = String(res.data.id);
+  } else if (plan.newLead) {
+    const existing = await findOpenLead(admin, scope.workspace_id, plan.newLead);
+    if (existing) {
+      leadId = existing.id;
+      const res = await admin.from("call_leads").select(LEAD_COLS).eq("id", existing.id).eq("workspace_id", scope.workspace_id).maybeSingle();
+      if (res.error || !res.data) throw new Error("Lead nicht lesbar.");
+      lead = res.data;
+    } else {
+      const id = crypto.randomUUID();
+      const row = {
+        id,
+        workspace_id: scope.workspace_id,
+        firma: plan.newLead.firma,
+        person: plan.newLead.person,
+        tel: plan.newLead.tel,
+        email: plan.newLead.email,
+        note: plan.newLead.note,
+        do_not_call: false,
+        sperre_seit: null,
+        created_at: now,
+        updated_at: now,
+      };
+      const ins = await admin.from("call_leads").insert(row);
+      if (ins.error) throw new Error("Lead nicht angelegt.");
+      lead = row;
+      leadId = id;
+    }
+  }
+
+  const firma = contact?.firma || (lead?.firma == null ? "Betrieb" : String(lead.firma));
+  const person = contact?.person || (lead?.person == null ? null : String(lead.person));
+  const callId = crypto.randomUUID();
+  const callRow: Record<string, unknown> = {
+    id: callId,
+    workspace_id: scope.workspace_id,
+    contact_id: contact?.id || null,
+    lead_id: contact ? null : leadId,
+    created_at: now,
+    result: plan.call.result,
+    objection: plan.call.objection,
+    note: plan.call.note,
+    next_step: plan.call.nextStep,
+    next_date: plan.call.nextDate,
+    befund: plan.call.befund,
+    slot1: plan.call.slot1,
+    slot2: plan.call.slot2,
+    zeit: plan.call.zeit,
+  };
+  const inserted = await admin.from("anrufe").insert(callRow);
+  if (inserted.error) throw new Error("Anruf nicht gespeichert.");
+
+  let wiedervorlageId: string | null = null;
+  if (plan.wiedervorlage) {
+    wiedervorlageId = crypto.randomUUID();
+    const wv = await admin.from("wiedervorlagen").insert({
+      id: wiedervorlageId,
+      workspace_id: scope.workspace_id,
+      kontakt_id: contact?.id || null,
+      text: wiedervorlageText(firma, person),
+      datum: plan.wiedervorlage.datum,
+      done: false,
+    });
+    if (wv.error) throw new Error("Wiedervorlage nicht angelegt.");
+  }
+  let kalEventId: string | null = null;
+  if (plan.termin) {
+    kalEventId = crypto.randomUUID();
+    const ev = await admin.from("kal_events").insert({
+      id: kalEventId,
+      workspace_id: scope.workspace_id,
+      titel: terminTitel(firma),
+      datum: plan.termin.datum,
+      zeit: plan.termin.zeit,
+      typ: "termin",
+      kontakt_id: contact?.id || null,
+      notiz: plan.termin.notiz,
+    });
+    if (ev.error) throw new Error("Termin nicht angelegt.");
+  }
+  if (wiedervorlageId || kalEventId) {
+    await admin.from("anrufe").update({ wiedervorlage_id: wiedervorlageId, kal_event_id: kalEventId })
+      .eq("id", callId)
+      .eq("workspace_id", scope.workspace_id);
+    callRow.wiedervorlage_id = wiedervorlageId;
+    callRow.kal_event_id = kalEventId;
+  }
+
+  let doNotCall = contact ? contact.doNotCall : lead?.do_not_call === true;
+  if (plan.sperre) {
+    doNotCall = true;
+    if (lead) {
+      lead.do_not_call = true;
+      lead.sperre_seit = now;
+    }
+    const patch = { do_not_call: true, sperre_seit: now, updated_at: now };
+    if (contact) {
+      const upd = await admin.from("contacts").update(patch).eq("id", contact.id).eq("workspace_id", scope.workspace_id);
+      if (upd.error) throw new Error("Sperre nicht gesetzt.");
+    } else if (leadId) {
+      const upd = await admin.from("call_leads").update(patch).eq("id", leadId).eq("workspace_id", scope.workspace_id);
+      if (upd.error) throw new Error("Sperre nicht gesetzt.");
+    }
+  } else if (contact && plan.termin) {
+    const patch: Record<string, unknown> = {
+      naechster_schritt: plan.termin.datum,
+      naechster_schritt_text: "Entwurf zeigen",
+      updated_at: now,
+    };
+    if (contact.status === "lead") patch.status = "erstgespraech";
+    await admin.from("contacts").update(patch).eq("id", contact.id).eq("workspace_id", scope.workspace_id);
+  } else if (contact && plan.wiedervorlage) {
+    await admin.from("contacts").update({
+      naechster_schritt: plan.wiedervorlage.datum,
+      naechster_schritt_text: "Rückruf",
+      updated_at: now,
+    }).eq("id", contact.id).eq("workspace_id", scope.workspace_id);
+  }
+
+  const countQuery = admin.from("anrufe").select("id", { count: "exact", head: true }).eq("workspace_id", scope.workspace_id);
+  const counted = contact
+    ? await countQuery.eq("contact_id", contact.id)
+    : await countQuery.eq("lead_id", leadId);
+  return {
+    ok: true,
+    call: publicCall(callRow),
+    lead: !contact && lead ? publicLead(lead) : null,
+    do_not_call: doNotCall,
+    wiedervorlage_id: wiedervorlageId,
+    kal_event_id: kalEventId,
+    attempt: counted.count,
+  };
+}
+
+async function listCalls(admin: SupabaseClient, scope: { bot: BotId; workspace_id: string }, body: Record<string, unknown>) {
+  const plan = planList(body);
+  if (!plan.ok) throw new Error(plan.error);
+  let query = admin.from("anrufe").select(CALL_COLS).eq("workspace_id", scope.workspace_id).order("created_at", { ascending: false }).limit(plan.limit);
+  if (plan.contactId) query = query.eq("contact_id", plan.contactId);
+  if (plan.leadId) query = query.eq("lead_id", plan.leadId);
+  const { data, error } = await query;
+  if (error) throw new Error("Anrufe nicht lesbar.");
+  let leads: Record<string, unknown>[] = [];
+  if (plan.openLeads) {
+    const listed = await admin.from("call_leads").select(LEAD_COLS).eq("workspace_id", scope.workspace_id).is("converted_contact_id", null).order("created_at", { ascending: false }).limit(plan.limit);
+    if (listed.error) throw new Error("Leads nicht lesbar.");
+    leads = listed.data || [];
+  }
+  return { ok: true, calls: (data || []).map(publicCall), leads: leads.map(publicLead) };
+}
+
+async function setDoNotCall(admin: SupabaseClient, scope: { bot: BotId; workspace_id: string }, body: Record<string, unknown>) {
+  const plan = planDoNotCall(body);
+  if (!plan.ok) throw new Error(plan.error);
+  const now = new Date().toISOString();
+  const patch = { do_not_call: plan.on, sperre_seit: plan.on ? now : null, updated_at: now };
+  if (plan.contactId) {
+    const row = await admin.from("contacts").select("id").eq("id", plan.contactId).eq("workspace_id", scope.workspace_id).maybeSingle();
+    if (row.error) throw new Error("Kontakt nicht lesbar.");
+    if (!row.data) throw new Error("Kontakt nicht gefunden.");
+    const upd = await admin.from("contacts").update(patch).eq("id", plan.contactId).eq("workspace_id", scope.workspace_id);
+    if (upd.error) throw new Error("Sperre nicht gesetzt.");
+    return { ok: true, contact_id: plan.contactId, do_not_call: plan.on, sperre_seit: patch.sperre_seit };
+  }
+  if (!plan.leadId) throw new Error("Lead nicht gefunden.");
+  const row = await admin.from("call_leads").select("id, converted_contact_id").eq("id", plan.leadId).eq("workspace_id", scope.workspace_id).maybeSingle();
+  if (row.error) throw new Error("Lead nicht lesbar.");
+  if (!row.data) throw new Error("Lead nicht gefunden.");
+  const upd = await admin.from("call_leads").update(patch).eq("id", plan.leadId).eq("workspace_id", scope.workspace_id);
+  if (upd.error) throw new Error("Sperre nicht gesetzt.");
+  return { ok: true, lead_id: plan.leadId, do_not_call: plan.on, sperre_seit: patch.sperre_seit };
 }
 
 function publicRun(row: Record<string, unknown>) {
