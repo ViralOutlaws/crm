@@ -77,6 +77,9 @@
   .folder-tree button.fld{display:flex;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:6px 8px;border-radius:8px;cursor:pointer}
   .folder-tree button.fld.on,.folder-tree button.fld:hover{background:rgba(245,196,0,.16)}
   .mail-row{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;padding:10px 8px;border-radius:8px;cursor:pointer;position:relative}
+  .mail-del{position:absolute;right:6px;top:8px;width:32px;height:32px;border:0;border-radius:8px;background:var(--paper,#fff);color:var(--red,#d63030);cursor:pointer;display:none;align-items:center;justify-content:center}
+  .mail-row:hover .mail-del,.mail-row.on .mail-del,.mail-del:focus-visible{display:inline-flex}
+  .anfrage-undo{position:fixed;right:16px;bottom:88px;z-index:8100;display:flex;align-items:center;gap:12px;background:var(--paper,#fff);color:var(--ink,#111);border:1px solid var(--border);border-left:3px solid var(--yellow,#f5c400);border-radius:8px;box-shadow:var(--shadow-lg);padding:10px 14px;font-size:13px;font-weight:600}
   .mail-row > div{min-width:0}
   .mail-row:hover,.mail-row.on{background:rgba(245,196,0,.12)}
   .mail-row input{opacity:0}
@@ -137,6 +140,7 @@
     .inbox.detail .inbox-list,.inbox.detail .reel-folder-select{display:none}
     .inbox:not(.detail) .inbox-read{display:none}
     .reel-back{display:inline-flex}
+    .mail-del{display:inline-flex}
     #page-posteingang .sec-header{flex-wrap:nowrap;gap:8px;align-items:center}
     #page-posteingang .inbox-actions{width:auto}
     #page-posteingang .inbox-actions .btn-ghost{min-height:32px;height:32px;padding:0 10px;border-radius:99px;font-size:11px;font-weight:600}
@@ -596,7 +600,8 @@
       <div><div class="mail-top"><span class="mail-who"><span class="dot ${esc(c.status || 'neu')}"></span> ${esc(who.replace(/<[^>]+>/g, '').trim())}</span><span class="mail-time">${esc(when)}</span></div>
       <div class="mail-sub">${esc(c.subject || '')}</div>
       <div class="mail-snip">${esc((msg && msg.body_text) || '')}</div>
-      <div style="margin-top:4px"><span class="chip muted">${esc(labelOf(c.klassifikation))}</span>${chip(c)}</div></div></div>`;
+      <div style="margin-top:4px"><span class="chip muted">${esc(labelOf(c.klassifikation))}</span>${chip(c)}</div></div>
+      <button type="button" class="mail-del" title="Anfrage löschen" aria-label="Anfrage löschen" onclick="event.stopPropagation();reelDeleteInquiry('${esc(c.id)}')">${ico('trash', 16)}</button></div>`;
   }
   function labelOf(k) {
     return { anfrage: 'Anfrage', kunde: 'Kunde', rechnung: 'Rechnung', newsletter: 'Newsletter', sonstiges: 'Sonstiges' }[k] || k || 'Mail';
@@ -619,6 +624,7 @@
         <button type="button" title="Allen antworten" aria-label="Allen antworten" onclick="reelCompose('${esc(c.id)}','all')">${ico('users', 16)}</button>
         <button type="button" title="Weiterleiten" aria-label="Weiterleiten" onclick="reelCompose('${esc(c.id)}','fwd')">${ico('arrow', 16)}</button>
         <button type="button" title="Verschieben nach" aria-label="Verschieben nach" onclick="reelMoveDialog('${esc(c.id)}')">${ico('archive', 16)}</button>
+        <button type="button" title="Anfrage löschen" aria-label="Anfrage löschen" onclick="reelDeleteInquiry('${esc(c.id)}')">${ico('trash', 16)}</button>
         <button type="button" title="Bilder laden" aria-label="Bilder laden" onclick="inboxImages=!inboxImages;renderInbox()">${ico('image', 16)}</button>
       </div></div>
       ${sug && !contact ? `<div class="suggest">Zu Kunde ${esc(sug.firma)} zuordnen? <button class="btn-yellow btn-sm" onclick="reelAssign('${esc(c.id)}','${esc(sug.id)}',true)">Ja</button> <button class="btn-ghost btn-sm" onclick="reelAssignPick('${esc(c.id)}')">Ändern</button></div>` : ''}
@@ -749,6 +755,88 @@
       const sb = await getSupabase();
       await sb.functions.invoke('mail-sync', { body: { op: 'rename', from: path, to } });
     }
+  };
+  // Gleiche Formel wie mailFingerprint in supabase/functions/_shared/mail.ts.
+  function mailFingerprint(from, subject, text) {
+    const raw = String(from || '');
+    const email = ((raw.match(/<([^>]+)>/) || [])[1] || raw).trim().toLowerCase();
+    const sub = String(subject || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const body = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180);
+    return email + '|' + sub + '|' + body;
+  }
+  const pendingDeletes = new Map();
+  function trashPath() {
+    const ws = workspaceId();
+    const hit = (DB.mailFolders || []).find((f) => f && f.role === 'trash' && (!signedIn() || !ws || f.workspace_id === ws));
+    return hit ? hit.imap_path : '';
+  }
+  function showUndo(text, onUndo) {
+    const old = document.getElementById('anfrage-undo');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'anfrage-undo';
+    el.className = 'anfrage-undo';
+    el.innerHTML = '<span>' + esc(text) + '</span><button type="button" class="btn-ghost btn-sm">Rückgängig</button>';
+    document.body.appendChild(el);
+    const btn = el.querySelector('button');
+    if (btn) btn.onclick = () => { el.remove(); onUndo(); };
+    setTimeout(() => { if (el.isConnected && !el.dataset.keep) el.remove(); }, 6500);
+  }
+  async function commitInquiryDelete(snap) {
+    if (!(signedIn() && typeof getSupabase === 'function')) return;
+    const sb = await getSupabase();
+    const ws = workspaceId();
+    const c = snap.conv;
+    const msgs = snap.msgs || [];
+    // Nur diese Anfrage. Kein Kontakt, kein Angebot, keine Rechnung.
+    if (c.channel === 'email') {
+      const msg = msgs[0] || {};
+      const fp = mailFingerprint(msg.from_addr || '', c.subject || msg.subject || '', msg.body_text || '');
+      const saved = await sb.from('mail_suppressions').upsert({ workspace_id: ws, fingerprint: fp }, { onConflict: 'workspace_id,fingerprint' });
+      const imap = msgs.find((m) => m && m.imap_uid);
+      const trash = trashPath();
+      if (!saved.error && imap && trash) {
+        try {
+          await sb.functions.invoke('mail-sync', { body: { op: 'move', from: imap.imap_folder || c.folder_path || 'INBOX', to: trash, uid: Number(imap.imap_uid), conversationId: c.id } });
+        } catch (e) { /* Mail bleibt im Postfach, im CRM ist sie weg und wird nicht neu angelegt. */ }
+      }
+    }
+    if (ws) {
+      await sb.from('messages').delete().eq('workspace_id', ws).eq('conversation_id', c.id);
+      await sb.from('conversations').delete().eq('workspace_id', ws).eq('id', c.id);
+    }
+  }
+  window.reelDeleteInquiry = function (id) {
+    const c = (DB.conversations || []).find((x) => x.id === id);
+    if (!c) return;
+    const msgs = (DB.messages || []).filter((m) => m.conversation_id === id);
+    const imap = c.channel === 'email' && msgs.some((m) => m.imap_uid);
+    let text = 'Diese Anfrage im CRM löschen?\n\nWeg sind nur diese Anfrage und ihre Nachrichten. Kontakte, Angebote und Rechnungen bleiben.';
+    if (imap) text += trashPath()
+      ? '\n\nDie Mail wird danach in den Papierkorb des Postfachs verschoben.'
+      : '\n\nIm Postfach bleibt die Mail liegen. Sie kommt im CRM nicht wieder.';
+    if (!confirm(text)) return;
+    DB.conversations = (DB.conversations || []).filter((x) => x.id !== id);
+    DB.messages = (DB.messages || []).filter((m) => m.conversation_id !== id);
+    if (inboxId === id) inboxId = null;
+    selected.delete(id);
+    renderInbox();
+    paintBadge();
+    const timer = setTimeout(() => {
+      pendingDeletes.delete(id);
+      commitInquiryDelete({ conv: c, msgs }).catch(() => {});
+    }, 6000);
+    pendingDeletes.set(id, timer);
+    showUndo('Anfrage gelöscht', () => {
+      const job = pendingDeletes.get(id);
+      if (!job) return;
+      clearTimeout(job);
+      pendingDeletes.delete(id);
+      DB.conversations = [c].concat(DB.conversations || []);
+      DB.messages = (DB.messages || []).concat(msgs);
+      renderInbox();
+      paintBadge();
+    });
   };
   window.reelDeleteFolder = async function (path) {
     if (!confirm('Ordner „' + path + '“ wirklich löschen?')) return;

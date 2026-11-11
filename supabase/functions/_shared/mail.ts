@@ -81,6 +81,15 @@ export function pickSentFolder(folders: ListedFolder[], override = ""): string |
   return flagged?.path || null;
 }
 
+/** Stabiler Schlüssel, damit eine im CRM gelöschte Mail beim Sync nicht wieder auftaucht. */
+export function mailFingerprint(from: string, subject: string, text: string): string {
+  const raw = String(from || "");
+  const email = (raw.match(/<([^>]+)>/)?.[1] || raw).trim().toLowerCase();
+  const sub = String(subject || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const body = String(text || "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 180);
+  return `${email}|${sub}|${body}`;
+}
+
 export function threadKey(subject: string): string {
   let s = String(subject || "").toLowerCase().replace(/\s+/g, " ").trim();
   let prev = "";
