@@ -10863,7 +10863,8 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #page-social select,#page-social .sm-btn{font:inherit;font-size:12px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer}
 #page-social .sm-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 #page-social .sm-week{margin:22px 0 10px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px}
-#page-social .sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+#page-social .sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
+@media(max-width:760px){#page-social .sm-grid{grid-template-columns:1fr}}
 #page-social .sm-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
 #page-social .sm-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
 #page-social .sm-date{font-weight:700;font-size:12px}
@@ -10876,14 +10877,17 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #page-social details summary{cursor:pointer;color:#555;font-weight:600}
 #page-social pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;margin:6px 0 0;background:#faf9f6;padding:8px;border-radius:6px}
 #page-social .sm-tags{font-size:11px;color:#7a6200;word-break:break-word}
-#page-social .sm-cover{position:relative;margin:-14px -14px 2px;width:calc(100% + 28px);max-width:none;box-sizing:border-box;flex:0 0 auto;height:200px;border-radius:10px 10px 0 0;overflow:hidden;background:linear-gradient(135deg,#141414,#2a2418);cursor:pointer}
-#page-social .sm-cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
-#page-social .sm-cover:hover img{transform:scale(1.03)}
-#page-social .sm-cover::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(to top,rgba(0,0,0,.72),transparent);pointer-events:none}
-#page-social .sm-cover.broken::before{content:"Vorschau nicht verfügbar";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-size:12px}
-#page-social .sm-cover-fmt{position:absolute;left:10px;bottom:9px;z-index:1;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.3px;color:#fff;padding:4px 9px;border-radius:999px;background:rgba(10,10,10,.45);border:1px solid rgba(245,196,0,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+#page-social .sm-card.has-cover{display:grid;grid-template-columns:132px minmax(0,1fr);column-gap:14px;align-items:start}
+#page-social .sm-info{display:flex;flex-direction:column;gap:8px;min-width:0;height:100%}
+#page-social .sm-cover{position:relative;width:100%;border-radius:8px;overflow:hidden;background:linear-gradient(160deg,#141414,#2a2418);cursor:pointer;border:1px solid rgba(245,196,0,.35);box-shadow:0 10px 24px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.12)}
+#page-social .sm-cover.r916{aspect-ratio:9/16}
+#page-social .sm-cover.r45{aspect-ratio:4/5}
+#page-social .sm-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block;transition:transform .35s ease}
+#page-social .sm-cover:hover img{transform:scale(1.04)}
+#page-social .sm-cover::after{content:"";position:absolute;inset:auto 0 0 0;height:45%;background:linear-gradient(to top,rgba(0,0,0,.7),transparent);pointer-events:none}
+#page-social .sm-cover.broken::before{content:"Keine Vorschau";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(255,255,255,.55);font-size:11px}
+#page-social .sm-cover-fmt{position:absolute;left:7px;bottom:7px;z-index:1;display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.3px;color:#fff;padding:3px 8px;border-radius:999px;background:rgba(10,10,10,.5);border:1px solid rgba(245,196,0,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);white-space:nowrap}
 #page-social .sm-cover-fmt .vo-ico{color:var(--yellow)}
-#page-social .sm-cover .sm-badge{position:absolute;right:10px;top:10px;z-index:1}
 #page-social .sm-badges{display:flex;gap:6px}
 #page-social .sm-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);white-space:nowrap}
 #page-social .sm-badge.err{background:rgba(185,28,28,.85);color:#fff;border:1px solid rgba(255,255,255,.25)}
@@ -10891,12 +10895,29 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #page-social .sm-actions a.sm-ig{font-size:11px;padding:5px 9px;border-radius:6px;border:1px solid #ddd;background:#fff;color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
 #page-social .sm-actions button{display:inline-flex;align-items:center;gap:4px}
 #page-social .sm-lthumb{width:46px}
-#page-social .sm-lthumb img{width:40px;height:50px;object-fit:cover;border-radius:6px;display:block;cursor:pointer;border:1px solid rgba(245,196,0,.35)}
-#page-social .sm-chip-img{width:18px;height:22px;object-fit:cover;border-radius:3px;flex:0 0 auto}
-#page-social .sm-agenda .sm-chip-img{width:30px;height:38px;border-radius:4px}
+#page-social .sm-lthumb img{width:36px;height:64px;object-fit:cover;border-radius:6px;display:block;cursor:pointer;border:1px solid rgba(245,196,0,.35)}
+#page-social .sm-chip-img{width:14px;height:24px;object-fit:cover;border-radius:3px;flex:0 0 auto}
+#page-social .sm-agenda .sm-chip-img{width:27px;height:48px;border-radius:4px}
+#page-social .sm-lmob{display:none}
 #page-social .sm-chip-warn{width:7px;height:7px;border-radius:50%;background:#dc2626;flex:0 0 auto}
-#sm-detail .sm-cover{margin-top:-40px;height:260px}
-#sm-detail .sm-cover .sm-badge{right:auto;left:10px}
+#sm-detail .sm-card.has-cover{grid-template-columns:180px minmax(0,1fr)}
+@media(max-width:760px){
+  #page-social .sm-card.has-cover{grid-template-columns:104px minmax(0,1fr);column-gap:12px;padding:12px}
+  #sm-detail .sm-card.has-cover{grid-template-columns:120px minmax(0,1fr)}
+  #page-social table.sm-list tr{display:grid;grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"th d a" "th t t" "th s s";column-gap:12px;row-gap:3px;padding:10px 12px;align-items:start}
+  #page-social table.sm-list td{display:block;padding:0;border:none!important;box-shadow:none!important;min-height:0}
+  #page-social table.sm-list td:before{display:none}
+  #page-social table.sm-list td.sm-lx{display:none}
+  #page-social table.sm-list td.sm-lthumb{grid-area:th;width:auto}
+  #page-social table.sm-list td.sm-ld{grid-area:d;font-weight:700}
+  #page-social table.sm-list td.sm-ld br{display:none}
+  #page-social table.sm-list td.sm-ld span{margin-left:4px}
+  #page-social .sm-lmob{display:inline}
+  #page-social table.sm-list td.sm-lt{grid-area:t}
+  #page-social table.sm-list td.sm-lst{grid-area:s;color:var(--muted);font-size:11px}
+  #page-social table.sm-list td.sm-la{grid-area:a;display:flex;gap:4px}
+  #page-social table.sm-list td.sm-la .sm-btn{padding:4px 8px}
+}
 #page-social .sm-thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
 #page-social .sm-thumb{position:relative;flex:0 0 auto;width:74px;height:92px;border-radius:6px;overflow:hidden;background:#111;cursor:pointer;border:1px solid #ddd}
 #page-social .sm-thumb img,#page-social .sm-thumb video{width:100%;height:100%;object-fit:cover;display:block}
@@ -11105,11 +11126,13 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
   function card(p){
     const assets = smMedia(p);
     const cover = smCover(p);
-    const coverHtml = cover ? `<div class="sm-cover" onclick="smPreview('${esc(p.id)}',0)" role="button" aria-label="Vorschau öffnen">
+    // Hochformat: Reels/Storys 9:16, Feed-Posts/Karussells 4:5 (wie auf Instagram).
+    const ratio = (p.format==='Reel' || p.format==='Story') ? 'r916' : 'r45';
+    const coverHtml = cover ? `<div class="sm-cover ${ratio}" onclick="smPreview('${esc(p.id)}',0)" role="button" aria-label="Vorschau öffnen">
         <img src="${esc(cover)}" loading="lazy" alt="Vorschau ${esc(p.thema||'')}" onerror="this.parentNode.classList.add('broken');this.remove()">
-        <span class="sm-cover-fmt">${smIco(SM_FICO[p.format]||'image',13)}${esc(p.format||'Post')}${assets.length>1?` · ${assets.length}`:''}</span>
-        ${smBadge(p)}
-      </div>` : (smBadge(p) ? `<div class="sm-badges">${smBadge(p)}</div>` : '');
+        <span class="sm-cover-fmt">${smIco(SM_FICO[p.format]||'image',12)}${esc(p.format||'Post')}${assets.length>1?` · ${assets.length}`:''}</span>
+      </div>` : '';
+    const badges = smBadge(p) ? `<div class="sm-badges">${smBadge(p)}</div>` : '';
     const thumbs = assets.length > 1 ? assets.map((a,i) => {
       const u = a.type==='video' && a.path ? SM.urls[a.path] : smStill(a); if(!u) return '';
       const media = a.type==='video' && a.path ? `<video src="${esc(u)}#t=0.5" muted preload="metadata"></video><span>${smIco('play',10)} ${esc(fmtSize(a.size))}</span>` : `<img src="${esc(u)}" loading="lazy" alt="${esc(a.filename||'')}"><span>${a.type==='video'?smIco('play',10):i+1}</span>`;
@@ -11117,8 +11140,9 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     }).join('') : '';
     const statusOpts = (p.status && !STATUS.includes(p.status) ? [p.status, ...STATUS] : STATUS);
     const statusSel = `<select onchange="smSetStatus('${esc(p.id)}',this.value)" style="font-size:11px;padding:2px 4px">${statusOpts.map(s=>`<option value="${esc(s)}" ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
-    return `<div class="sm-card">
-      ${coverHtml}
+    return `<div class="sm-card${cover?' has-cover':''}">
+      ${coverHtml}<div class="sm-info">
+      ${badges}
       <div class="sm-head"><span class="sm-date">${esc(fmtD(p.datum))}${p.uhrzeit?' · '+esc(p.uhrzeit):''}</span>
         ${cover?'':`<span class="sm-pill fmt" title="${esc(p.format_detail||'')}">${esc(p.format||'–')}</span>`}
         ${p.saeule?`<span class="sm-pill pil">${esc(p.saeule)}</span>`:''}
@@ -11136,7 +11160,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
         ${assets.length?`<button onclick="smZip('${esc(p.id)}',this)">${smIco('download',13)} Alle als ZIP (${assets.length})</button>`:''}
         ${p.quelle && /^https:\/\/(www\.)?instagram\.com\//.test(p.quelle)?`<a class="sm-ig" href="${esc(p.quelle)}" target="_blank" rel="noopener">${smIco('globe',13)} Auf Instagram</a>`:''}
       </div>
-    </div>`;
+    </div></div>`;
   }
   function smRender(){
     const body = document.getElementById('sm-body'); if(!body) return;
@@ -11147,9 +11171,9 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     if(SM.view === 'list'){
       body.innerHTML = `<div style="overflow-x:auto"><table class="sm-list"><thead><tr><th></th><th>Datum</th><th>Format</th><th>Säule</th><th>Thema</th><th>Status</th><th>Dateien</th><th></th></tr></thead><tbody>${list.map(p=>{ const cv = smCover(p); return `<tr>
         <td class="sm-lthumb">${cv?`<img src="${esc(cv)}" loading="lazy" alt="" onclick="smPreview('${esc(p.id)}',0)">`:''}</td>
-        <td style="white-space:nowrap">${esc(fmtD(p.datum))}${p.uhrzeit?'<br><span style="color:#888">'+esc(p.uhrzeit)+'</span>':''}</td><td>${esc(p.format||'')}</td><td>${esc(p.saeule||'')}</td>
-        <td><b>${esc(p.thema||'')}</b>${p.hook?'<br><span style="color:#666">'+esc(p.hook)+'</span>':''}</td><td>${esc(p.status)}${smBadge(p)?'<br>'+smBadge(p):''}</td><td>${smMedia(p).length||'–'}</td>
-        <td style="white-space:nowrap">${p.caption?`<button class="sm-btn" onclick="smCopy('${esc(p.id)}',this)">📋</button>`:''} ${smMedia(p).length?`<button class="sm-btn" onclick="smZip('${esc(p.id)}',this)">ZIP</button>`:''}</td></tr>`; }).join('')}</tbody></table></div>`;
+        <td class="sm-ld" style="white-space:nowrap">${esc(fmtD(p.datum))}${p.uhrzeit?'<br><span style="color:#888">'+esc(p.uhrzeit)+'</span>':''}<span class="sm-lmob"> · ${esc(p.format||'')}</span></td><td class="sm-lx">${esc(p.format||'')}</td><td class="sm-lx">${esc(p.saeule||'')}</td>
+        <td class="sm-lt"><b>${esc(p.thema||'')}</b>${p.hook?'<br><span style="color:#666">'+esc(p.hook)+'</span>':''}</td><td class="sm-lst">${esc(p.status)}${smBadge(p)?'<br>'+smBadge(p):''}</td><td class="sm-lx">${smMedia(p).length||'–'}</td>
+        <td class="sm-la" style="white-space:nowrap">${p.caption?`<button class="sm-btn" onclick="smCopy('${esc(p.id)}',this)" aria-label="Caption kopieren">${smIco('file',13)}</button>`:''} ${smMedia(p).length?`<button class="sm-btn" onclick="smZip('${esc(p.id)}',this)">ZIP</button>`:''}</td></tr>`; }).join('')}</tbody></table></div>`;
       return;
     }
     const groups = {};
