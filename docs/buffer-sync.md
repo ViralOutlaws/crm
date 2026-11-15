@@ -21,3 +21,11 @@ Channel `6af8e4ed62b70b94b0345d48`) nach `social_media_posts`. pg_cron-Job `buff
 Secrets (nie ins Repo): `BUFFER_API_KEY`, `BUFFER_SYNC_SECRET` (Function-Secrets) und Vault-Eintrag `buffer_sync_secret`
 (gleicher Wert wie `BUFFER_SYNC_SECRET`). Manuell testen: `POST /functions/v1/buffer-sync` mit Header `x-sync-secret`,
 Body `{"dry_run": true}` zeigt nur die geplanten Änderungen.
+
+## Vorschaubilder
+
+Pro Buffer-Post lädt der Sync das Buffer-Thumbnail (bzw. das erste Bild) einmal herunter und legt es privat in
+`social-assets/<workspace_id>/buffer/<buffer_id>/thumb.jpg` ab. In `assets` steht es als Eintrag mit
+`role: "thumbnail"` und `source_url`. Neu geladen wird nur, wenn Buffer ein anderes Thumbnail liefert; es gibt immer
+genau einen Eintrag. Kims hochgeladene Dateien bleiben unverändert, das Vorschaubild zählt nicht als CRM-Datei.
+Die Oberfläche zeigt es als Cover (signierte URL) und blendet es aus Dateiliste und ZIP aus.

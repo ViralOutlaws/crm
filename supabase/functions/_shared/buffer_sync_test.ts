@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { berlinParts, buildPatch, type BufferPost, crmFormat, removedPatch } from "./buffer_sync.ts";
+import { berlinParts, buildPatch, type BufferPost, crmFormat, currentThumb, hasStorageAssets, removedPatch, thumbSource, withThumb } from "./buffer_sync.ts";
 
 const CH = "6af8e4ed62b70b94b0345d48";
 const reel: BufferPost = {
@@ -66,4 +66,20 @@ Deno.test("Entfernt: nur geplante Buffer-Zeilen, manuelle nie", () => {
   assertEquals(removedPatch({ external_id: reel.id, status: "Veröffentlicht", meta: {} }, seen), null);
   assertEquals(removedPatch({ external_id: "manuell-1", status: "Geplant", meta: {} }, seen), null);
   assertEquals(removedPatch({ external_id: reel.id, status: "Geplant", meta: {} }, new Set([reel.id])), null);
+});
+
+Deno.test("Vorschaubild: zählt nicht als CRM-Datei, bleibt beim Sync erhalten, keine Duplikate", () => {
+  const thumb = { role: "thumbnail", type: "image", order: 0, filename: "thumb.jpg", path: "ws/buffer/x/thumb.jpg", source_url: "https://images.buffer.com/t" };
+  assertEquals(hasStorageAssets([thumb]), false);
+  assertEquals(thumbSource(reel), "https://images.buffer.com/t");
+  const fresh = buildPatch(reel, null, CH)!;
+  const existing = { id: "x", external_id: reel.id, ...fresh, assets: withThumb(fresh.assets, thumb) };
+  assertEquals(buildPatch(reel, existing, CH), null);
+  const twice = withThumb(withThumb(existing.assets, thumb), thumb);
+  assertEquals(twice.filter((a) => (a as Record<string, unknown>).role === "thumbnail").length, 1);
+  assertEquals(twice.length, 2);
+  // Kims Dateien bleiben
+  const kim = [{ path: "ws/x/a.mp4", filename: "a.mp4" }];
+  assertEquals(withThumb(kim, thumb), [thumb, kim[0]]);
+  assertEquals(currentThumb(withThumb(kim, thumb)), thumb);
 });
