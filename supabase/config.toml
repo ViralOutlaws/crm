@@ -36,3 +36,7 @@ verify_jwt = false
 
 [functions.deal-estimate]
 verify_jwt = false
+
+# Buffer -> CRM Sync (pg_cron). Auth ist x-sync-secret (BUFFER_SYNC_SECRET) oder der Service-Role-Key.
+[functions.buffer-sync]
+verify_jwt = false
