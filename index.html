@@ -10876,6 +10876,27 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 #page-social details summary{cursor:pointer;color:#555;font-weight:600}
 #page-social pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;margin:6px 0 0;background:#faf9f6;padding:8px;border-radius:6px}
 #page-social .sm-tags{font-size:11px;color:#7a6200;word-break:break-word}
+#page-social .sm-cover{position:relative;margin:-14px -14px 2px;width:calc(100% + 28px);max-width:none;box-sizing:border-box;flex:0 0 auto;height:200px;border-radius:10px 10px 0 0;overflow:hidden;background:linear-gradient(135deg,#141414,#2a2418);cursor:pointer}
+#page-social .sm-cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
+#page-social .sm-cover:hover img{transform:scale(1.03)}
+#page-social .sm-cover::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(to top,rgba(0,0,0,.72),transparent);pointer-events:none}
+#page-social .sm-cover.broken::before{content:"Vorschau nicht verfügbar";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-size:12px}
+#page-social .sm-cover-fmt{position:absolute;left:10px;bottom:9px;z-index:1;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.3px;color:#fff;padding:4px 9px;border-radius:999px;background:rgba(10,10,10,.45);border:1px solid rgba(245,196,0,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+#page-social .sm-cover-fmt .vo-ico{color:var(--yellow)}
+#page-social .sm-cover .sm-badge{position:absolute;right:10px;top:10px;z-index:1}
+#page-social .sm-badges{display:flex;gap:6px}
+#page-social .sm-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);white-space:nowrap}
+#page-social .sm-badge.err{background:rgba(185,28,28,.85);color:#fff;border:1px solid rgba(255,255,255,.25)}
+#page-social .sm-badge.rem{background:rgba(20,20,20,.7);color:#e9e4d8;border:1px solid rgba(255,255,255,.2)}
+#page-social .sm-actions a.sm-ig{font-size:11px;padding:5px 9px;border-radius:6px;border:1px solid #ddd;background:#fff;color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+#page-social .sm-actions button{display:inline-flex;align-items:center;gap:4px}
+#page-social .sm-lthumb{width:46px}
+#page-social .sm-lthumb img{width:40px;height:50px;object-fit:cover;border-radius:6px;display:block;cursor:pointer;border:1px solid rgba(245,196,0,.35)}
+#page-social .sm-chip-img{width:18px;height:22px;object-fit:cover;border-radius:3px;flex:0 0 auto}
+#page-social .sm-agenda .sm-chip-img{width:30px;height:38px;border-radius:4px}
+#page-social .sm-chip-warn{width:7px;height:7px;border-radius:50%;background:#dc2626;flex:0 0 auto}
+#sm-detail .sm-cover{margin-top:-40px;height:260px}
+#sm-detail .sm-cover .sm-badge{right:auto;left:10px}
 #page-social .sm-thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
 #page-social .sm-thumb{position:relative;flex:0 0 auto;width:74px;height:92px;border-radius:6px;overflow:hidden;background:#111;cursor:pointer;border:1px solid #ddd}
 #page-social .sm-thumb img,#page-social .sm-thumb video{width:100%;height:100%;object-fit:cover;display:block}
@@ -11063,18 +11084,43 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     const fs = document.getElementById('sm-f-saeule').value, ff = document.getElementById('sm-f-format').value, fst = document.getElementById('sm-f-status').value;
     return SM.posts.filter(p => (!fs || p.saeule===fs) && (!ff || p.format===ff) && (!fst || p.status===fst));
   }
+  // Medien ohne das vom Buffer-Sync gespeicherte Vorschaubild (role: 'thumbnail').
+  const smMedia = p => (p.assets||[]).filter(a => a && a.role !== 'thumbnail').slice().sort((a,b)=>(a.order||0)-(b.order||0));
+  const smSrc = a => a.path ? (SM.urls[a.path] || '') : (a.url || '');
+  const smStill = a => a.path ? (a.type==='image' ? SM.urls[a.path] : '') : (a.thumbnail || (a.type==='image' ? a.url : '')) || '';
+  function smCover(p){
+    const t = (p.assets||[]).find(a => a && a.role === 'thumbnail' && SM.urls[a.path]);
+    if(t) return SM.urls[t.path];
+    for(const a of smMedia(p)){ const u = smStill(a); if(u) return u; }
+    return '';
+  }
+  const SM_FICO = {Reel:'play', Story:'clock', Karussell:'box', Beitrag:'image'};
+  const smIco = (n, s) => (typeof voSvg === 'function' ? voSvg(n, s||14) : '');
+  function smBadge(p){
+    const st = p.meta && p.meta.buffer_status;
+    if(st === 'error') return `<span class="sm-badge err" title="${esc(p.meta.buffer_error||'Buffer konnte den Post nicht veröffentlichen')}">${smIco('alert',12)}Buffer-Fehler</span>`;
+    if(st === 'removed') return `<span class="sm-badge rem" title="Dieser Post ist in Buffer nicht mehr eingeplant">${smIco('x',12)}Nicht mehr in Buffer</span>`;
+    return '';
+  }
   function card(p){
-    const assets = (p.assets||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
-    const thumbs = assets.map((a,i) => {
-      const u = SM.urls[a.path]; if(!u) return '';
-      const media = a.type==='video' ? `<video src="${esc(u)}#t=0.5" muted preload="metadata"></video><span>▶ ${esc(fmtSize(a.size))}</span>` : `<img src="${esc(u)}" loading="lazy" alt="${esc(a.filename)}"><span>${i+1}</span>`;
-      return `<div class="sm-thumb" title="${esc(a.filename)}" onclick="smPreview('${esc(p.id)}',${i})">${media}</div>`;
-    }).join('');
+    const assets = smMedia(p);
+    const cover = smCover(p);
+    const coverHtml = cover ? `<div class="sm-cover" onclick="smPreview('${esc(p.id)}',0)" role="button" aria-label="Vorschau öffnen">
+        <img src="${esc(cover)}" loading="lazy" alt="Vorschau ${esc(p.thema||'')}" onerror="this.parentNode.classList.add('broken');this.remove()">
+        <span class="sm-cover-fmt">${smIco(SM_FICO[p.format]||'image',13)}${esc(p.format||'Post')}${assets.length>1?` · ${assets.length}`:''}</span>
+        ${smBadge(p)}
+      </div>` : (smBadge(p) ? `<div class="sm-badges">${smBadge(p)}</div>` : '');
+    const thumbs = assets.length > 1 ? assets.map((a,i) => {
+      const u = a.type==='video' && a.path ? SM.urls[a.path] : smStill(a); if(!u) return '';
+      const media = a.type==='video' && a.path ? `<video src="${esc(u)}#t=0.5" muted preload="metadata"></video><span>${smIco('play',10)} ${esc(fmtSize(a.size))}</span>` : `<img src="${esc(u)}" loading="lazy" alt="${esc(a.filename||'')}"><span>${a.type==='video'?smIco('play',10):i+1}</span>`;
+      return `<div class="sm-thumb" title="${esc(a.filename||'')}" onclick="smPreview('${esc(p.id)}',${i})">${media}</div>`;
+    }).join('') : '';
     const statusOpts = (p.status && !STATUS.includes(p.status) ? [p.status, ...STATUS] : STATUS);
     const statusSel = `<select onchange="smSetStatus('${esc(p.id)}',this.value)" style="font-size:11px;padding:2px 4px">${statusOpts.map(s=>`<option value="${esc(s)}" ${s===p.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
     return `<div class="sm-card">
+      ${coverHtml}
       <div class="sm-head"><span class="sm-date">${esc(fmtD(p.datum))}${p.uhrzeit?' · '+esc(p.uhrzeit):''}</span>
-        <span class="sm-pill fmt" title="${esc(p.format_detail||'')}">${esc(p.format||'–')}</span>
+        ${cover?'':`<span class="sm-pill fmt" title="${esc(p.format_detail||'')}">${esc(p.format||'–')}</span>`}
         ${p.saeule?`<span class="sm-pill pil">${esc(p.saeule)}</span>`:''}
         <span style="margin-left:auto">${statusSel}</span></div>
       <div class="sm-title">${esc(p.thema||p.external_id)}</div>
@@ -11086,8 +11132,9 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
       ${p.reel_skript?`<details><summary>Reel-Skript</summary><pre>${esc(p.reel_skript)}</pre></details>`:''}
       ${(p.cta||p.quelle||p.freigabe||p.format_detail)?`<details><summary>Details</summary><pre>${[p.format_detail&&'Format: '+p.format_detail, p.cta&&'CTA: '+p.cta, p.quelle&&'Quelle: '+p.quelle, p.freigabe&&'Freigabe: '+p.freigabe, p.content_ordner&&'Ordner: '+p.content_ordner].filter(Boolean).map(esc).join('\n')}</pre></details>`:''}
       <div class="sm-actions">
-        ${p.caption?`<button class="pri" onclick="smCopy('${esc(p.id)}',this)">📋 Caption kopieren</button>`:''}
-        ${assets.length?`<button onclick="smZip('${esc(p.id)}',this)">⬇ Alle als ZIP (${assets.length})</button>`:''}
+        ${p.caption?`<button class="pri" onclick="smCopy('${esc(p.id)}',this)">${smIco('file',13)} Caption kopieren</button>`:''}
+        ${assets.length?`<button onclick="smZip('${esc(p.id)}',this)">${smIco('download',13)} Alle als ZIP (${assets.length})</button>`:''}
+        ${p.quelle && /^https:\/\/(www\.)?instagram\.com\//.test(p.quelle)?`<a class="sm-ig" href="${esc(p.quelle)}" target="_blank" rel="noopener">${smIco('globe',13)} Auf Instagram</a>`:''}
       </div>
     </div>`;
   }
@@ -11098,10 +11145,11 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     if(SM.view === 'month'){ body.innerHTML = smMonth(list); return; }
     if(!list.length){ body.innerHTML = '<p style="color:#888;font-size:13px">Keine Posts für diese Auswahl.</p>'; return; }
     if(SM.view === 'list'){
-      body.innerHTML = `<div style="overflow-x:auto"><table class="sm-list"><thead><tr><th>Datum</th><th>Format</th><th>Säule</th><th>Thema</th><th>Status</th><th>Dateien</th><th></th></tr></thead><tbody>${list.map(p=>`<tr>
+      body.innerHTML = `<div style="overflow-x:auto"><table class="sm-list"><thead><tr><th></th><th>Datum</th><th>Format</th><th>Säule</th><th>Thema</th><th>Status</th><th>Dateien</th><th></th></tr></thead><tbody>${list.map(p=>{ const cv = smCover(p); return `<tr>
+        <td class="sm-lthumb">${cv?`<img src="${esc(cv)}" loading="lazy" alt="" onclick="smPreview('${esc(p.id)}',0)">`:''}</td>
         <td style="white-space:nowrap">${esc(fmtD(p.datum))}${p.uhrzeit?'<br><span style="color:#888">'+esc(p.uhrzeit)+'</span>':''}</td><td>${esc(p.format||'')}</td><td>${esc(p.saeule||'')}</td>
-        <td><b>${esc(p.thema||'')}</b>${p.hook?'<br><span style="color:#666">'+esc(p.hook)+'</span>':''}</td><td>${esc(p.status)}</td><td>${(p.assets||[]).length||'–'}</td>
-        <td style="white-space:nowrap">${p.caption?`<button class="sm-btn" onclick="smCopy('${esc(p.id)}',this)">📋</button>`:''} ${(p.assets||[]).length?`<button class="sm-btn" onclick="smZip('${esc(p.id)}',this)">ZIP</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+        <td><b>${esc(p.thema||'')}</b>${p.hook?'<br><span style="color:#666">'+esc(p.hook)+'</span>':''}</td><td>${esc(p.status)}${smBadge(p)?'<br>'+smBadge(p):''}</td><td>${smMedia(p).length||'–'}</td>
+        <td style="white-space:nowrap">${p.caption?`<button class="sm-btn" onclick="smCopy('${esc(p.id)}',this)">📋</button>`:''} ${smMedia(p).length?`<button class="sm-btn" onclick="smZip('${esc(p.id)}',this)">ZIP</button>`:''}</td></tr>`; }).join('')}</tbody></table></div>`;
       return;
     }
     const groups = {};
@@ -11124,7 +11172,7 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
   const ymd = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
   function chip(p){
     const t = (p.thema||p.external_id||'').trim();
-    return `<div class="sm-chip" style="border-left-color:${pcol(p.saeule)}" title="${esc((p.format||'')+' · '+(p.saeule||'')+' · '+t+(p.uhrzeit?' · '+p.uhrzeit:''))}" onclick="event.stopPropagation();smOpenDetail('${esc(p.id)}')"><b>${esc(FICON[p.format]||p.format||'–')}</b><span class="t">${esc(t.length>40?t.slice(0,38)+'…':t)}</span></div>`;
+    return `<div class="sm-chip" style="border-left-color:${pcol(p.saeule)}" title="${esc((p.format||'')+' · '+(p.saeule||'')+' · '+t+(p.uhrzeit?' · '+p.uhrzeit:''))}" onclick="event.stopPropagation();smOpenDetail('${esc(p.id)}')">${(c => c ? `<img class="sm-chip-img" src="${esc(c)}" loading="lazy" alt="">` : '')(smCover(p))}${(p.meta&&['error','removed'].includes(p.meta.buffer_status))?`<i class="sm-chip-warn" title="${p.meta.buffer_status==='error'?'Buffer-Fehler':'Nicht mehr in Buffer'}"></i>`:''}<b>${esc(FICON[p.format]||p.format||'–')}</b><span class="t">${esc(t.length>40?t.slice(0,38)+'…':t)}</span></div>`;
   }
   function smMonth(list){
     if(!SM.month){ const n = new Date(); SM.month = new Date(n.getFullYear(), n.getMonth(), 1); }
@@ -11174,11 +11222,15 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
   };
   let _pv = null;
   window.smPreview = async (id, i) => {
-    const p = byId(id); const a = (p.assets||[]).slice().sort((x,y)=>(x.order||0)-(y.order||0))[i]; if(!a) return;
-    const u = SM.urls[a.path]; const m = document.getElementById('sm-preview-media');
-    m.innerHTML = a.type==='video' ? `<video src="${esc(u)}" controls autoplay playsinline></video>` : `<img src="${esc(u)}" alt="${esc(a.filename)}">`;
-    const dl = document.getElementById('sm-preview-dl'); dl.textContent = '⬇ ' + a.filename; dl.href = '#';
-    dl.onclick = async ev => { ev.preventDefault(); smDownload(a); };
+    const p = byId(id); if(!p) return;
+    const m = document.getElementById('sm-preview-media'); const dl = document.getElementById('sm-preview-dl');
+    const a = smMedia(p)[i];
+    if(!a){ const c = smCover(p); if(!c) return; m.innerHTML = `<img src="${esc(c)}" alt="Vorschau">`; dl.style.display = 'none'; document.getElementById('sm-preview').style.display = 'flex'; return; }
+    const u = smSrc(a), poster = smStill(a) || smCover(p);
+    m.innerHTML = a.type==='video' ? `<video src="${esc(u)}" ${poster?`poster="${esc(poster)}"`:''} controls autoplay playsinline></video>` : `<img src="${esc(u||poster)}" alt="${esc(a.filename||'')}">`;
+    dl.style.display = ''; dl.textContent = (a.path ? 'Download: ' : 'Öffnen: ') + (a.filename || 'Datei'); dl.href = a.path ? '#' : (u || '#');
+    if(a.path){ dl.removeAttribute('target'); dl.onclick = async ev => { ev.preventDefault(); smDownload(a); }; }
+    else { dl.target = '_blank'; dl.rel = 'noopener'; dl.onclick = null; }
     document.getElementById('sm-preview').style.display = 'flex';
   };
   window.smClosePreview = () => { document.getElementById('sm-preview').style.display = 'none'; document.getElementById('sm-preview-media').innerHTML = ''; };
@@ -11195,8 +11247,13 @@ tr.vo-new-row td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
     try {
       btn.disabled = true; btn.textContent = 'Packe …';
       const JSZip = await loadJSZip(); const zip = new JSZip();
-      const assets = (p.assets||[]).slice().sort((x,y)=>(x.order||0)-(y.order||0));
-      for(const a of assets){ const r = await fetch(SM.urls[a.path]); if(!r.ok) throw new Error(a.filename + ': HTTP ' + r.status); zip.file(a.filename, await r.blob()); }
+      const skipped = [];
+      for(const a of smMedia(p)){
+        const u = smSrc(a); if(!u){ skipped.push(a.filename); continue; }
+        try { const r = await fetch(u); if(!r.ok) throw new Error('HTTP ' + r.status); zip.file(a.filename || ('datei_' + (a.order||0)), await r.blob()); }
+        catch(err){ if(a.path) throw new Error((a.filename||'Datei') + ': ' + (err.message||err)); skipped.push(a.filename); }
+      }
+      if(skipped.length) zip.file('nicht-enthalten.txt', 'Externe Medien (z. B. Instagram-Links) konnten nicht geladen werden:\n' + skipped.join('\n'));
       if(p.caption) zip.file('caption.txt', p.caption + ((p.hashtags||[]).length && !p.caption.includes(p.hashtags[0]) ? '\n.\n' + p.hashtags.join(' ') : ''));
       const blob = await zip.generateAsync({ type: 'blob' });
       const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = (p.external_id || 'post') + '.zip'; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 5000);

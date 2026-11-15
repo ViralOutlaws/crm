@@ -104,8 +104,31 @@ export function bufferAssets(p: BufferPost, existing: unknown) {
   });
 }
 
+/** Vom Sync gespeichertes Vorschaubild (Storage), zählt nicht als CRM-Datei. */
+export const isThumbAsset = (a: unknown) => !!a && typeof a === "object" && (a as Record<string, unknown>).role === "thumbnail";
+
+/** true, wenn Kim eigene Dateien (Storage-Pfad) hochgeladen hat; das Sync-Vorschaubild zählt nicht. */
 export function hasStorageAssets(assets: unknown) {
-  return Array.isArray(assets) && assets.some((a) => a && typeof a === "object" && (a as Record<string, unknown>).path);
+  return Array.isArray(assets) &&
+    assets.some((a) => a && typeof a === "object" && (a as Record<string, unknown>).path && !isThumbAsset(a));
+}
+
+/** Quelle für das Vorschaubild: Buffer-Thumbnail des ersten Mediums, sonst das Bild selbst. */
+export function thumbSource(p: BufferPost): string | null {
+  const a = (p.assets || []).find((x) => x.thumbnail || (x.type === "image" && x.source));
+  return a ? (a.thumbnail || a.source || null) : null;
+}
+
+export const thumbPath = (workspaceId: string, bufferId: string) => `${workspaceId}/buffer/${bufferId}/thumb.jpg`;
+
+export function currentThumb(assets: unknown): Record<string, unknown> | null {
+  return Array.isArray(assets) ? (assets.find(isThumbAsset) as Record<string, unknown>) || null : null;
+}
+
+/** Ersetzt/ergänzt genau einen Vorschaubild-Eintrag, alle anderen Assets bleiben unverändert. */
+export function withThumb(assets: unknown, thumb: Record<string, unknown>) {
+  const rest = Array.isArray(assets) ? assets.filter((a) => !isThumbAsset(a)) : [];
+  return [thumb, ...rest];
 }
 
 export function stableEqual(a: unknown, b: unknown): boolean {
@@ -156,7 +179,8 @@ export function buildPatch(p: BufferPost, existing: Row | null, channelId: strin
   // Assets: CRM-Dateien (Storage-Pfad) bleiben unangetastet, sonst Buffer-Medien spiegeln.
   if (!hasStorageAssets(existing?.assets)) {
     const assets = bufferAssets(p, existing?.assets);
-    patch.assets = assets;
+    const thumb = currentThumb(existing?.assets);
+    patch.assets = thumb ? withThumb(assets, thumb) : assets;
     meta.media_urls = assets.map((a) => a.url);
     if ("thumbnail" in oldMeta && assets[0]?.thumbnail) meta.thumbnail = assets[0].thumbnail;
   }
