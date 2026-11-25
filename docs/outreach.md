@@ -84,3 +84,5 @@ In der Freigabe-Liste und im Editor eines freigegebenen Entwurfs gibt es „Jetz
 Mails gehen jetzt mit `Date`-Header, RFC-2047-kodiertem Betreff und nur CRLF raus; damit klappt auch die Kopie in „Gesendet“.
 
 Der Filter „Offen“ in der Freigabe ist entfallen. Er war kein eigener Status, nur die Sicht „Entwurf + Freigegeben“; in der Datenbank gab es nie den Status „offen“.
+
+Pages-Deploy für PR #31 (vo-crm-v18) neu angestoßen.
