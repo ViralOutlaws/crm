@@ -9,7 +9,7 @@ type View = Record<string, unknown>;
 const AREAS = new Set([
   "contacts", "pipeline", "angebote", "rechnungen", "retainer", "pakete",
   "aufgaben", "wiedervorlagen", "kalender", "social", "ausgaben", "roi", "ziele",
-  "wissensbasis", "posteingang",
+  "wissensbasis", "posteingang", "outreach",
 ]);
 
 export async function openArea(sb: SupabaseClient, userId: string, input: Record<string, unknown>, ctx: Ctx) {
@@ -179,7 +179,7 @@ async function buildArea(sb: SupabaseClient, userId: string, area: string, filte
   if (area === "ausgaben") return filterRows(await ausgabenView(sb), filter);
   if (area === "roi") return filterRows(await roiView(sb), filter);
   if (area === "wissensbasis") return wissenView(sb);
-  if (area === "posteingang") return postView(sb);
+  if (area === "posteingang" || area === "outreach") return postView(sb);
   return zieleView(sb);
 }
 
@@ -194,15 +194,17 @@ async function wissenView(sb: SupabaseClient): Promise<View> {
 }
 
 async function postView(sb: SupabaseClient): Promise<View> {
-  const { data, error } = await sb.from("conversations").select("id, subject, status, klassifikation, draft_status").order("updated_at", { ascending: false }).limit(25);
-  if (error) throw new Error(dbErr(error.message));
-  const waiting = (data || []).filter((r) => r.draft_status === "pending").length;
+  const { data, error } = await sb.from("outreach_drafts").select("id, subject, status, email, unread").order("updated_at", { ascending: false }).limit(25);
+  if (error) {
+    return { title: "Outreach", crm: "outreach", note: "Outreach ist noch nicht migriert.", spoken: "Outreach ist noch nicht eingerichtet.", rows: [], columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: "0" }] };
+  }
+  const waiting = (data || []).filter((r) => r.status === "entwurf").length;
   return {
-    title: "Posteingang",
-    crm: "posteingang",
-    spoken: waiting ? `${waiting} Entwürfe warten auf dich.` : "Posteingang ist offen. Nichts geht ohne Senden raus.",
-    rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "", art: r.klassifikation || "" } })),
-    columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }, { key: "art", label: "Art" }],
+    title: "Outreach",
+    crm: "outreach",
+    spoken: waiting ? `${waiting} Entwürfe warten auf Freigabe.` : "Outreach ist offen. Nichts geht ohne Freigabe raus.",
+    rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "", an: r.email || "" } })),
+    columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }, { key: "an", label: "An" }],
     kpis: [{ label: "Entwürfe", value: String(waiting) }],
   };
 }

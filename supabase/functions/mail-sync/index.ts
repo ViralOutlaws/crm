@@ -15,6 +15,7 @@ import {
   parentPath,
   threadKey,
 } from "../_shared/mail.ts";
+import { referencedIds, replyPlan, type OutreachThread } from "../_shared/outreach.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -71,6 +72,15 @@ Deno.serve(async (req) => {
     // Fehlende Tabelle darf den Sync nicht stoppen. Ohne sie kann eine gelöschte Mail wiederkommen.
     const suppressedRows = await sb.from("mail_suppressions").select("fingerprint").eq("workspace_id", workspaceId).limit(2000);
     const suppressed = new Set<string>((suppressedRows.error ? [] : (suppressedRows.data || [])).map((row: { fingerprint?: string }) => row.fingerprint || "").filter(Boolean));
+    const outreachRows = await sb.from("outreach_drafts").select("id, email, subject, message_id, status, contact_id").eq("workspace_id", workspaceId).in("status", ["gesendet", "antwort", "abgemeldet"]).limit(500);
+    const outreachThreads: OutreachThread[] = outreachRows.error ? [] : (outreachRows.data || []).map((row: { id: string; email?: string; subject?: string; message_id?: string; status?: string; contact_id?: string | null }) => ({
+      id: row.id,
+      email: String(row.email || ""),
+      subject: String(row.subject || ""),
+      messageId: String(row.message_id || ""),
+      status: String(row.status || ""),
+      contactId: row.contact_id || null,
+    }));
     let imported = 0;
     let partial = false;
     for (const path of order) {
@@ -105,7 +115,7 @@ Deno.serve(async (req) => {
           continue;
         }
         try {
-          const got = await storeMail(sb, workspaceId, path, mail, external, suppressed);
+          const got = await storeMail(sb, workspaceId, path, mail, external, suppressed, outreachThreads);
           if (got) { seen.add(external); imported++; }
           maxUid = Math.max(maxUid, mail.uid);
         } catch { /* eine Mail darf den Sync nicht abbrechen */ }
@@ -124,20 +134,21 @@ Deno.serve(async (req) => {
   }
 });
 
-async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string, suppressed: Set<string>) {
+async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string, suppressed: Set<string>, outreachThreads: OutreachThread[] = []) {
   const from = headerValue(mail.header, "from");
   const to = headerValue(mail.header, "to");
   const cc = headerValue(mail.header, "cc");
   const subject = headerValue(mail.header, "subject") || "(ohne Betreff)";
   if (suppressed.has(mailFingerprint(from, subject, mail.text))) return false;
   const email = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
+  const plan = replyPlan({ fromEmail: email, subject, text: mail.text, header: mail.header, drafts: outreachThreads });
   const match = await matchContact(sb, workspaceId, [email, to, cc].join(" "), mail.text);
-  const klass = classifyHeuristic(`${subject}\n${mail.text}`, match.certain);
+  const klass = classifyHeuristic(`${subject}\n${mail.text}`, match.certain || !!plan?.contactId);
   const { data: conv } = await sb.from("conversations").insert({
     workspace_id: workspaceId,
     channel: "email",
     subject,
-    contact_id: match.certain ? match.id : null,
+    contact_id: plan?.contactId || (match.certain ? match.id : null),
     suggested_contact_id: match.certain ? null : match.id,
     status: "neu",
     klassifikation: klass,
@@ -162,7 +173,37 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
     imap_uid: mail.uid,
     imap_folder: folder,
   });
-  if (klass === "anfrage" && !match.id) {
+  if (plan) {
+    try {
+      await sb.from("outreach_messages").insert({
+        workspace_id: workspaceId,
+        draft_id: plan.draftId,
+        direction: "in",
+        from_addr: from,
+        to_addrs: to,
+        subject,
+        body_text: mail.text.slice(0, 8000),
+        in_reply_to: referencedIds(mail.header)[0] || null,
+      });
+      await sb.from("outreach_drafts").update({
+        status: plan.nextStatus,
+        unread: true,
+        conversation_id: conv.id,
+        updated_at: new Date().toISOString(),
+      }).eq("id", plan.draftId).eq("workspace_id", workspaceId);
+      if (plan.blockEmail) {
+        await sb.from("outreach_blocklist").upsert({
+          workspace_id: workspaceId,
+          kind: "email",
+          value: plan.blockEmail,
+          reason: "abgemeldet",
+        }, { onConflict: "workspace_id,kind,value" });
+      }
+      const linked = outreachThreads.find((t) => t.id === plan.draftId);
+      if (linked) linked.status = plan.nextStatus;
+    } catch { /* Zuordnung darf den Sync nicht stoppen */ }
+  }
+  if (!plan && klass === "anfrage" && !match.id) {
     const created = await sb.from("contacts").insert({
       workspace_id: workspaceId,
       firma: email || subject.slice(0, 80),

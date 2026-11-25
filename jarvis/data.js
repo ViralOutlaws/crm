@@ -19,7 +19,7 @@ export const AREAS = [
   { id: "roi", label: "ROI" },
   { id: "ziele", label: "Ziele" },
   { id: "wissensbasis", label: "Wissensbasis" },
-  { id: "posteingang", label: "Posteingang" },
+  { id: "posteingang", label: "Outreach" },
 ];
 
 const CRM = {
@@ -37,7 +37,8 @@ const CRM = {
   roi: "roi",
   ziele: "ziele",
   wissensbasis: "wissensbasis",
-  posteingang: "posteingang",
+  posteingang: "outreach",
+  outreach: "outreach",
   customer: "contacts",
   agenda: "kalender",
 };
@@ -301,10 +302,10 @@ async function wissenLive(sb) {
 }
 
 async function postLive(sb) {
-  const { data, error } = await sb.from("conversations").select("id, subject, status, draft_status").order("updated_at", { ascending: false }).limit(25);
-  throwDb(error);
-  const waiting = (data || []).filter((r) => r.draft_status === "pending").length;
-  return { title: "Posteingang", crm: "posteingang", spoken: waiting ? `${waiting} Entwürfe warten.` : "Nichts wartet.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "" } })), columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: String(waiting) }] };
+  const { data, error } = await sb.from("outreach_drafts").select("id, subject, status, email").order("updated_at", { ascending: false }).limit(25);
+  if (error) return { title: "Outreach", crm: "outreach", note: "Outreach ist noch nicht migriert.", spoken: "Outreach ist noch nicht eingerichtet.", rows: [], columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: "0" }] };
+  const waiting = (data || []).filter((r) => r.status === "entwurf").length;
+  return { title: "Outreach", crm: "outreach", spoken: waiting ? `${waiting} Entwürfe warten auf Freigabe.` : "Nichts wartet.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "", status: r.status || "" } })), columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: String(waiting) }] };
 }
 
 async function contactsView(sb, filter, today) {
@@ -934,7 +935,7 @@ function post(datum, uhrzeit, format, hook, caption, tags, status, gradient) {
 
 const VIEWS = demoViews();
 VIEWS.wissensbasis = { title: "Wissensbasis", crm: "wissensbasis", spoken: "Die Wissensbasis ist offen.", rows: [{ id: "ton", cells: { abschnitt: "So klingst du", text: "Klar und auf Deutsch." } }], columns: [{ key: "abschnitt", label: "Abschnitt" }, { key: "text", label: "Inhalt" }], kpis: [{ label: "LIVE", value: "an" }] };
-VIEWS.posteingang = { title: "Posteingang", crm: "posteingang", spoken: "Ein Entwurf wartet. Nichts geht ohne Senden raus.", rows: [{ id: "m1", cells: { betreff: "Website-Relaunch", status: "neu" } }], columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: "1" }] };
+VIEWS.posteingang = { title: "Outreach", crm: "outreach", spoken: "Ein Entwurf wartet auf Freigabe. Nichts geht ohne Freigabe raus.", rows: [{ id: "m1", cells: { betreff: "Website von Musterwerk", status: "entwurf" } }], columns: [{ key: "betreff", label: "Betreff" }, { key: "status", label: "Status" }], kpis: [{ label: "Entwürfe", value: "1" }] };
 
 export function demoView(id, filter) {
   const view = VIEWS[id];

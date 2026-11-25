@@ -1,0 +1,609 @@
+/* Outreach: Ziele, Freigabe, Postfach. Nichts geht ohne Freigabe raus. */
+(function () {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ico = (name, size) => (typeof voSvg === 'function' ? voSvg(name, size || 16) : '');
+  const STATUS = { entwurf: 'Entwurf', freigegeben: 'Freigegeben', gesendet: 'Gesendet', antwort: 'Antwort', abgemeldet: 'Abgemeldet', abgelehnt: 'Abgelehnt' };
+  const ART = { veroeffentlicht: 'Persönlich', generisch: 'Allgemeine Adresse', vermutet: 'Vermutet' };
+  const params = new URLSearchParams(location.search);
+  const demo = params.get('demo') === 'outreach';
+
+  const state = {
+    demo,
+    tab: 'ziele',
+    targets: [],
+    people: [],
+    drafts: [],
+    messages: [],
+    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false },
+    queue: 'offen',
+    mailFilter: 'alle',
+    q: '',
+    picked: {},
+    editorId: null,
+    threadId: null,
+    replyText: '',
+    note: '',
+    urls: '',
+    branche: '',
+    region: '',
+    armed: false,
+    loaded: false,
+  };
+
+  function signedIn() { return typeof _currentUser !== 'undefined' && !!_currentUser; }
+  function workspaceId() {
+    if (typeof _currentWorkspace !== 'undefined' && _currentWorkspace && _currentWorkspace.id) return _currentWorkspace.id;
+    if (typeof _FALLBACK_WORKSPACE_ID !== 'undefined') return _FALLBACK_WORKSPACE_ID;
+    return '';
+  }
+  function toast(msg, bad) { if (typeof haptikToast === 'function') haptikToast(msg, bad ? 'bad' : undefined); }
+  function personOf(id) { return state.people.find((p) => p.id === id) || null; }
+  function targetOf(id) { return state.targets.find((t) => t.id === id) || null; }
+  function draftOf(id) { return state.drafts.find((d) => d.id === id) || null; }
+
+  function seedDemo() {
+    state.urls = 'https://musterwerk.example.test\nhttps://beispielhof.example.test';
+    state.branche = 'Handwerk';
+    state.region = 'Allgäu';
+    state.settings.guess_emails = true;
+    state.targets = [
+      { id: 't1', firma: 'Musterwerk GmbH', web: 'https://musterwerk.example.test', domain: 'musterwerk.example.test', str: 'Hafenstraße 4', plz: '87435', ort: 'Kempten', impressum_url: 'https://musterwerk.example.test/impressum', status: 'recherchiert', skip_reason: '' },
+      { id: 't2', firma: 'Beispielhof', web: 'https://beispielhof.example.test', domain: 'beispielhof.example.test', str: 'Dorfweg 2', plz: '87435', ort: 'Kempten', status: 'recherchiert', skip_reason: '' },
+      { id: 't3', firma: 'Holzform e.K.', web: 'https://holzform.example.test', domain: 'holzform.example.test', str: 'Werkstatt 1', plz: '87509', ort: 'Immenstadt', status: 'recherchiert', skip_reason: '' },
+      { id: 't4', firma: 'Bestandskunde Demo AG', web: 'https://demo-ag.example.test', domain: 'demo-ag.example.test', status: 'uebersprungen', skip_reason: 'Bestandskunde' },
+    ];
+    state.people = [
+      { id: 'p1', target_id: 't1', person: 'Lena Muster', rolle: 'Geschäftsführerin', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website', adresse: 'Hafenstraße 4, 87435 Kempten' },
+      { id: 'p2', target_id: 't2', person: 'Jonas Beispiel', rolle: 'Inhaber', email: 'info@beispielhof.example.test', email_art: 'generisch', hinweis: 'Nur eine allgemeine Adresse veröffentlicht', adresse: 'Dorfweg 2, 87435 Kempten' },
+      { id: 'p3', target_id: 't2', person: 'Jonas Beispiel', rolle: 'Inhaber', email: 'jonas.beispiel@beispielhof.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Dorfweg 2, 87435 Kempten' },
+      { id: 'p4', target_id: 't3', person: 'Mara Holm', rolle: 'Inhaberin', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Werkstatt 1, 87509 Immenstadt' },
+    ];
+    const body = (name, _firma, site) => `Guten Tag ${name},\n\nich bin Kim von Viral Outlaws. Wir bauen Websites und setzen KI für kleine Betriebe um.\n\nAuf ${site} wirkt der Einstieg etwas versteckt. Eine klarere Seite nimmt den Betrieb aus dem Postfach.\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    state.drafts = [
+      { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Musterwerk GmbH: eine Frage zur Website', body: body('Lena', 'Musterwerk GmbH', 'musterwerk.example.test'), status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Beispielhof: eine Frage zur Website', body: body('Jonas', 'Beispielhof', 'beispielhof.example.test'), status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
+      { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Holzform: eine Frage zur Website', body: body('Mara', 'Holzform e.K.', 'holzform.example.test'), status: 'entwurf', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', guess_ok: false, unread: false },
+      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Seenadel Studio: eine Frage zur Website', body: body('Kim', 'Seenadel Studio', 'seenadel.example.test'), status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
+      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Klarwerk OHG: eine Frage zur Website', body: body('Noel', 'Klarwerk OHG', 'klarwerk.example.test'), status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
+      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Nordlicht Demo: eine Frage zur Website', body: body('Ruth', 'Nordlicht Demo', 'nordlicht.example.test'), status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+    ];
+    state.targets.push(
+      { id: 't5', firma: 'Seenadel Studio', web: 'https://seenadel.example.test', domain: 'seenadel.example.test', status: 'recherchiert' },
+      { id: 't6', firma: 'Klarwerk OHG', web: 'https://klarwerk.example.test', domain: 'klarwerk.example.test', status: 'recherchiert' },
+      { id: 't7', firma: 'Nordlicht Demo', web: 'https://nordlicht.example.test', domain: 'nordlicht.example.test', status: 'recherchiert' },
+    );
+    state.people.push(
+      { id: 'p5', target_id: 't5', person: 'Ada Seenadel', rolle: 'Geschäftsführerin', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website' },
+      { id: 'p6', target_id: 't6', person: 'Noel Klar', rolle: 'Geschäftsführer', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website' },
+      { id: 'p7', target_id: 't7', person: 'Ruth Nord', rolle: 'Inhaberin', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website' },
+    );
+    state.messages = [
+      { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Seenadel Studio: eine Frage zur Website', body_text: body('Ada', 'Seenadel Studio', 'seenadel.example.test'), created_at: '2026-11-20T09:00:00.000Z' },
+      { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Klarwerk OHG: eine Frage zur Website', body_text: body('Noel', 'Klarwerk OHG', 'klarwerk.example.test'), created_at: '2026-11-18T09:00:00.000Z' },
+      { id: 'm3', draft_id: 'd5', direction: 'in', from_addr: 'noel.klar@klarwerk.example.test', subject: 'AW: Klarwerk OHG: eine Frage zur Website', body_text: 'Guten Tag Kim,\n\ndanke für die Zeilen. Die Website ist von 2019 und die Anfragen landen bei mir im Postfach. Können Sie kurz sagen, wie so ein Ablauf bei einem kleinen Betrieb aussieht?\n\nViele Grüße\nNoel Klar', created_at: '2026-11-19T14:12:00.000Z' },
+      { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Nordlicht Demo: eine Frage zur Website', body_text: body('Ruth', 'Nordlicht Demo', 'nordlicht.example.test'), created_at: '2026-11-12T09:00:00.000Z' },
+      { id: 'm5', draft_id: 'd6', direction: 'in', from_addr: 'ruth.nord@nordlicht.example.test', subject: 'AW: Nordlicht Demo', body_text: 'Bitte abmelden. Kein Interesse an weiteren Nachrichten.', created_at: '2026-11-12T11:40:00.000Z' },
+    ];
+    state.note = 'Demo mit erfundenen Firmen. Es wird nichts gelesen und nichts verschickt.';
+    const shot = params.get('shot') || '';
+    if (shot === 'freigabe' || shot === 'editor') state.tab = 'freigabe';
+    if (shot === 'editor') state.editorId = 'd1';
+    if (shot === 'postfach') { state.tab = 'postfach'; state.threadId = null; }
+    if (shot === 'thread') { state.tab = 'postfach'; state.threadId = 'd5'; state.replyText = ''; }
+    state.loaded = true;
+  }
+
+  const css = document.createElement('style');
+  css.textContent = `
+  .outreach-lead{font-size:13px;color:var(--ink2);margin:0 0 12px;max-width:720px}
+  .outreach-note{margin-bottom:12px}
+  .outreach-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:12px;align-items:start}
+  .outreach-card{padding:16px}
+  .outreach-card h3{margin:0 0 8px;font-size:14px}
+  .outreach-help{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.45}
+  .outreach-field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+  .outreach-field label{font-size:11px;font-weight:650;color:var(--muted)}
+  .outreach-field input,.outreach-field textarea,.outreach-search{width:100%;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:10px 12px;font:inherit}
+  .outreach-field textarea{min-height:96px;resize:vertical}
+  .outreach-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .outreach-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:8px 0}
+  .outreach-results{display:flex;flex-direction:column;gap:8px}
+  .outreach-co{padding:14px 16px}
+  .outreach-co-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .outreach-co b{font-size:14px}
+  .outreach-meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .outreach-person{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:650;background:rgba(245,196,0,.18)}
+  .pill.ok{background:#eef8f2;color:#1f7a45}
+  .pill.warn{background:#fbf6ea;color:#8a5a00}
+  .pill.guess{background:transparent;border:1px dashed var(--yellow2,#e6b800);color:#8a5a00}
+  .pill.mute{background:rgba(120,120,120,.12);color:var(--muted)}
+  .pill.stop{background:#fbeeee;color:#a32828}
+  body.dark-mode .pill.ok{background:#163024;color:#8fd7ad}
+  body.dark-mode .pill.warn,body.dark-mode .pill.guess{background:#2a230f;color:#e4c56a}
+  body.dark-mode .pill.stop{background:#3a1717;color:#f0a0a0}
+  .outreach-list{display:flex;flex-direction:column;gap:8px}
+  .outreach-draft{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 14px;cursor:pointer}
+  .outreach-draft:hover{border-color:rgba(245,196,0,.7)}
+  .outreach-draft.on{box-shadow:inset 3px 0 0 #f5c400}
+  .outreach-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .mail-split{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:12px;min-height:520px}
+  .mail-thread{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .bubble{padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:13px;line-height:1.5;white-space:pre-wrap}
+  .bubble.out{border-left:3px solid #f5c400;background:rgba(245,196,0,.06)}
+  .bubble.in{background:var(--glass-bg,rgba(255,255,255,.4))}
+  .dot-unread{width:8px;height:8px;border-radius:99px;background:#d63030;display:inline-block}
+  #outreach-editor.overlay{z-index:600}
+  #outreach-editor textarea{min-height:210px}
+  @media(max-width:900px){
+    .outreach-grid,.mail-split{grid-template-columns:1fr}
+    .outreach-draft{grid-template-columns:28px minmax(0,1fr)}
+    .outreach-actions{grid-column:1 / -1;justify-content:flex-start}
+  }`;
+  document.head.appendChild(css);
+
+  function artPill(art) {
+    const cls = art === 'veroeffentlicht' ? 'ok' : art === 'generisch' ? 'warn' : art === 'vermutet' ? 'guess' : 'mute';
+    return `<span class="pill ${cls}">${esc(ART[art] || art || '')}</span>`;
+  }
+  function statusPill(status) {
+    const cls = status === 'abgemeldet' || status === 'abgelehnt' ? 'stop' : status === 'antwort' ? 'ok' : status === 'gesendet' || status === 'freigegeben' ? 'warn' : 'mute';
+    return `<span class="pill ${cls}">${esc(STATUS[status] || status)}</span>`;
+  }
+
+  function boot() {
+    if (typeof PAGE_TITLES === 'object') PAGE_TITLES.outreach = 'Outreach';
+    const nav = document.querySelector('#sidebar-nav');
+    if (nav && !document.querySelector('[data-page="outreach"]')) {
+      const anchor = nav.querySelector('[data-page="wissensbasis"]') || nav.querySelector('[data-page="pipeline"]');
+      const item = document.createElement('div');
+      item.className = 'nav-item';
+      item.setAttribute('data-page', 'outreach');
+      item.onclick = () => window.showPage('outreach');
+      item.innerHTML = `<span class="nav-item-icon">${ico('mail', 18)}</span><span class="nav-item-label">Outreach</span><span class="nav-item-badge" id="badge-outreach" style="display:none">0</span>`;
+      if (anchor) anchor.after(item); else nav.appendChild(item);
+    }
+    if (!document.getElementById('page-outreach')) {
+      const main = document.getElementById('page-pipeline') || document.getElementById('main-content');
+      const page = document.createElement('div');
+      page.className = 'page';
+      page.id = 'page-outreach';
+      page.innerHTML = '<div id="outreach-root"></div>';
+      if (main && main.parentNode) main.parentNode.insertBefore(page, main);
+      else document.getElementById('main-content')?.appendChild(page);
+    }
+    const prev = window.showPage;
+    window.showPage = function (id) {
+      if (id === 'posteingang') { state.tab = 'postfach'; id = 'outreach'; }
+      if (typeof prev === 'function') prev(id);
+      if (id === 'outreach') openOutreach();
+    };
+    window.outreachOpen = function (tab) {
+      state.tab = tab || 'ziele';
+      window.showPage('outreach');
+    };
+    window.outreachWaiting = function () {
+      return state.drafts.filter((d) => d.status === 'entwurf').length;
+    };
+    if (demo) seedDemo();
+    const shot = params.get('shot');
+    const page = params.get('page');
+    if (demo || page === 'outreach') setTimeout(() => window.showPage('outreach'), 40);
+    if (demo) {
+      const keep = setInterval(unlockDemo, 250);
+      setTimeout(() => clearInterval(keep), 15000);
+    }
+    if (shot === 'ergebnis') setTimeout(() => document.getElementById('outreach-results')?.scrollIntoView({ block: 'start' }), 200);
+  }
+
+  function unlockDemo() {
+    const ls = document.getElementById('login-screen');
+    if (ls) { ls.style.display = 'none'; ls.classList.add('hidden'); }
+    document.body.classList.remove('sidebar-open');
+  }
+
+  function openOutreach() {
+    paintBadge();
+    if (!state.loaded && !state.demo && signedIn()) {
+      state.loaded = true;
+      loadLive().then(render).catch((e) => { state.note = e.message || 'Outreach nicht geladen'; render(); });
+      render();
+      return;
+    }
+    render();
+  }
+
+  async function loadLive() {
+    const sb = await getSupabase();
+    const [settings, targets, people, drafts, messages] = await Promise.all([
+      sb.from('outreach_settings').select('*').eq('workspace_id', workspaceId()).maybeSingle(),
+      sb.from('outreach_targets').select('*').order('created_at', { ascending: false }).limit(80),
+      sb.from('outreach_people').select('*').limit(240),
+      sb.from('outreach_drafts').select('*').order('updated_at', { ascending: false }).limit(160),
+      sb.from('outreach_messages').select('*').order('created_at', { ascending: true }).limit(400),
+    ]);
+    const err = targets.error || drafts.error;
+    if (err && /outreach_|schema cache|does not exist|PGRST205/i.test(err.message || '')) {
+      state.note = 'Die Outreach-Tabellen sind noch nicht migriert. Live-Daten gibt es erst nach der Migration.';
+      return;
+    }
+    if (err) throw new Error(err.message);
+    if (settings.data) state.settings = Object.assign(state.settings, settings.data);
+    state.targets = targets.data || [];
+    state.people = people.data || [];
+    state.drafts = drafts.data || [];
+    state.messages = messages.data || [];
+  }
+
+  function paintBadge() {
+    const n = state.drafts.filter((d) => d.status === 'entwurf').length + state.drafts.filter((d) => d.unread).length;
+    const b = document.getElementById('badge-outreach');
+    if (!b) return;
+    b.style.display = n ? '' : 'none';
+    b.textContent = String(n);
+  }
+
+  function render() {
+    const root = document.getElementById('outreach-root');
+    if (!root) return;
+    const tabs = [['ziele', 'Ziele'], ['freigabe', 'Freigabe'], ['postfach', 'Postfach']];
+    root.innerHTML = `
+      <p class="outreach-lead">Finde Entscheider, lass Entwürfe schreiben und gib jede Mail einzeln frei. Versand läuft nur über dein Postfach und nur nach Freigabe.</p>
+      ${state.note ? `<div class="reel-banner outreach-note"><span>${esc(state.note)}</span></div>` : ''}
+      <div class="seg" id="outreach-tabs">${tabs.map(([id, label]) => `<button type="button" class="${state.tab === id ? 'on' : ''}" onclick="outreachTab('${id}')">${label}</button>`).join('')}</div>
+      <div id="outreach-panel">${state.tab === 'freigabe' ? queueHtml() : state.tab === 'postfach' ? mailHtml() : goalsHtml()}</div>
+      ${editorHtml()}`;
+    paintBadge();
+  }
+
+  function goalsHtml() {
+    const shown = state.demo ? state.targets.filter((t) => ['t1', 't2', 't3', 't4'].includes(t.id)) : state.targets.filter((t) => !state.drafts.some((d) => d.target_id === t.id && ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)));
+    return `<div class="outreach-grid">
+      <div class="dash-card outreach-card haptik-in" id="outreach-input">
+        <h3>Firmen</h3>
+        <p class="outreach-help">Eine URL pro Zeile, oder Branche und Region. Es werden nur die öffentliche Website und das Impressum gelesen. Kein LinkedIn, keine bezahlte Suche.</p>
+        <div class="outreach-field"><label>Websites</label><textarea id="outreach-urls" oninput="outreachField('urls', this.value)">${esc(state.urls)}</textarea></div>
+        <div class="outreach-row">
+          <div class="outreach-field" style="flex:1"><label>Branche</label><input id="outreach-branche" value="${esc(state.branche)}" oninput="outreachField('branche', this.value)"></div>
+          <div class="outreach-field" style="flex:1"><label>Region</label><input id="outreach-region" value="${esc(state.region)}" oninput="outreachField('region', this.value)"></div>
+        </div>
+        <label class="outreach-check"><input type="checkbox" ${state.settings.guess_emails ? 'checked' : ''} onchange="outreachGuess(this.checked)"> E-Mail aus dem Muster Vorname.Nachname vermuten und als „vermutet“ markieren</label>
+        <div class="outreach-row">
+          <button type="button" class="btn-yellow" onclick="outreachResearch()">${ico('search', 14)} Websites lesen</button>
+          <button type="button" class="btn-ghost" onclick="outreachDraftNew()">${ico('pencil', 14)} Entwürfe schreiben</button>
+        </div>
+        <p class="outreach-help" style="margin-top:12px">Tageslimit ${esc(state.settings.daily_limit)} Mails, Abstand ${esc(state.settings.gap_minutes)} Minuten. Gilt auch für Antworten.</p>
+        <div class="outreach-row">
+          <div class="outreach-field" style="width:90px"><label>Limit</label><input type="number" min="1" max="100" value="${esc(state.settings.daily_limit)}" oninput="outreachSetting('daily_limit', this.value)"></div>
+          <div class="outreach-field" style="width:110px"><label>Minuten</label><input type="number" min="1" max="120" value="${esc(state.settings.gap_minutes)}" oninput="outreachSetting('gap_minutes', this.value)"></div>
+          <button type="button" class="btn-ghost" onclick="outreachSaveSettings()">${ico('save', 14)} Sichern</button>
+        </div>
+      </div>
+      <div id="outreach-results" class="outreach-results">${shown.map(companyCard).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Noch keine Firmen. URLs einfügen oder Branche und Region suchen.</p></div>'}</div>
+    </div>`;
+  }
+
+  function companyCard(t) {
+    const people = state.people.filter((p) => p.target_id === t.id);
+    const skipped = t.status === 'uebersprungen' || t.status === 'fehler';
+    return `<article class="dash-card outreach-co haptik-in">
+      <div class="outreach-co-top"><div><b>${esc(t.firma || t.web || 'Unbekannt')}</b><div class="outreach-meta">${esc(t.web || '')}${t.ort ? ' · ' + esc([t.plz, t.ort].filter(Boolean).join(' ')) : ''}</div></div>${skipped ? `<span class="pill stop">${esc(t.skip_reason || t.last_error || 'Übersprungen')}</span>` : '<span class="pill ok">Gelesen</span>'}</div>
+      ${people.map((p) => `<div class="outreach-person"><div><div>${esc(p.person || 'Kein Name')} <span class="outreach-meta">${esc(p.rolle || '')}</span></div><div class="outreach-meta">${esc(p.email || 'keine Adresse')}</div><div class="outreach-meta">${esc(p.hinweis || '')}</div></div><div>${artPill(p.email_art)}${p.email_art === 'vermutet' && !skipped ? `<div style="margin-top:8px"><button type="button" class="btn-ghost btn-sm" onclick="outreachDraftOne('${esc(p.id)}')">Entwurf für Vermutung</button></div>` : ''}</div></div>`).join('')}
+      ${!people.length ? `<p class="outreach-help">${esc(t.skip_reason || t.last_error || 'Kein Ansprechpartner gefunden.')}</p>` : ''}
+    </article>`;
+  }
+
+  function queueHtml() {
+    const rows = state.drafts.filter((d) => {
+      if (state.queue === 'offen') return d.status === 'entwurf' || d.status === 'freigegeben';
+      if (state.queue === 'alle') return true;
+      return d.status === state.queue;
+    });
+    const chips = [['offen', 'Offen'], ['entwurf', 'Entwurf'], ['freigegeben', 'Freigegeben'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet'], ['alle', 'Alle']];
+    const waiting = state.drafts.filter((d) => d.status === 'freigegeben').length;
+    return `<div class="outreach-row" style="margin-bottom:8px">
+      <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.queue === id ? 'on' : ''}" onclick="outreachQueue('${id}')">${label}</button>`).join('')}</div>
+      <button type="button" class="btn-ghost" onclick="outreachApproveMany()">${ico('check', 14)} Ausgewählte freigeben</button>
+      <button type="button" class="btn-yellow" onclick="outreachSendQueue()">${ico('mail', 14)} Freigegebene senden${waiting ? ' (' + waiting + ')' : ''}</button>
+      ${state.armed ? `<button type="button" class="btn-ghost" onclick="outreachArm(false)">Versand anhalten</button>` : ''}
+    </div>
+    <p class="outreach-help">${state.armed ? 'Die Warteschlange läuft, solange diese Seite offen ist. Abstand und Tageslimit bleiben.' : 'Nach dem Klick geht höchstens eine freigegebene Mail raus. Weitere folgen mit Abstand, solange die Seite offen bleibt.'} Vermutete Adressen brauchen das Häkchen im Entwurf.</p>
+    <div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`;
+  }
+
+  function draftRow(d) {
+    const t = targetOf(d.target_id);
+    const p = personOf(d.person_id);
+    return `<article class="dash-card outreach-draft ${state.editorId === d.id ? 'on' : ''}" onclick="outreachEdit('${esc(d.id)}')">
+      <input type="checkbox" ${state.picked[d.id] ? 'checked' : ''} onclick="event.stopPropagation();outreachPick('${esc(d.id)}', this.checked)" aria-label="Auswählen">
+      <div><b>${esc(d.subject || 'Ohne Betreff')}</b><div class="outreach-meta">${esc(t?.firma || '')}${p?.person ? ' · ' + esc(p.person) : ''} · ${esc(d.email || '')}</div></div>
+      <div class="outreach-actions">${artPill(d.email_art)}${statusPill(d.status)}</div>
+    </article>`;
+  }
+
+  function editorHtml() {
+    const d = draftOf(state.editorId);
+    if (!d || state.tab !== 'freigabe') return '';
+    const t = targetOf(d.target_id);
+    const guess = d.email_art === 'vermutet';
+    return `<div class="overlay open" id="outreach-editor" onclick="if(event.target===this)outreachCloseEdit()">
+      <div class="modal" role="dialog" aria-labelledby="outreach-editor-title">
+        <div class="modal-header"><h2 id="outreach-editor-title">Entwurf</h2><button type="button" class="icon-btn" onclick="outreachCloseEdit()" aria-label="Schließen">${ico('x', 16)}</button></div>
+        <div style="padding:16px 20px 20px">
+          <p class="outreach-help">${esc(t?.firma || '')} · ${esc(d.email || '')} ${artPill(d.email_art)}</p>
+          ${d.email_art === 'generisch' ? '<p class="outreach-help">Nur eine allgemeine Adresse. Kein Name an dieser Mail.</p>' : ''}
+          ${guess ? `<label class="outreach-check"><input type="checkbox" ${d.guess_ok ? 'checked' : ''} onchange="outreachGuessOk('${esc(d.id)}', this.checked)"> Vermutete Adresse bewusst freigeben. Ohne dieses Häkchen geht die Mail nicht raus.</label>` : ''}
+          <div class="outreach-field"><label>Betreff</label><input value="${esc(d.subject || '')}" oninput="outreachEditField('${esc(d.id)}','subject', this.value)"></div>
+          <div class="outreach-field"><label>Text</label><textarea oninput="outreachEditField('${esc(d.id)}','body', this.value)">${esc(d.body || '')}</textarea></div>
+          <div class="outreach-row">
+            <button type="button" class="btn-ghost" onclick="outreachSaveDraft('${esc(d.id)}')">${ico('save', 14)} Speichern</button>
+            <button type="button" class="btn-yellow" onclick="outreachApprove('${esc(d.id)}')">${ico('check', 14)} Freigeben</button>
+            <button type="button" class="btn-ghost" onclick="outreachReject('${esc(d.id)}')">Ablehnen</button>
+            <button type="button" class="btn-ghost" onclick="outreachMakeContact('${esc(d.id)}')">${ico('user', 14)} Kontakt anlegen</button>
+            <button type="button" class="btn-ghost" onclick="outreachDelete('${esc(d.id)}')">${ico('trash', 14)} Löschen</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function mailHtml() {
+    const q = state.q.trim().toLowerCase();
+    const rows = state.drafts.filter((d) => ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)).filter((d) => {
+      if (state.mailFilter !== 'alle' && d.status !== state.mailFilter) return false;
+      if (!q) return true;
+      const t = targetOf(d.target_id);
+      const blob = `${d.subject} ${d.email} ${t?.firma || ''}`.toLowerCase();
+      return blob.includes(q);
+    });
+    const chips = [['alle', 'Alle'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet']];
+    const open = draftOf(state.threadId);
+    return `<div class="outreach-row" style="margin-bottom:8px">
+      <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.mailFilter === id ? 'on' : ''}" onclick="outreachMailFilter('${id}')">${label}</button>`).join('')}</div>
+      <input class="outreach-search" style="max-width:240px" placeholder="Suchen" value="${esc(state.q)}" oninput="outreachSearch(this.value)">
+    </div>
+    <div class="mail-split">
+      <div class="outreach-list" id="outreach-mail-list">${rows.map(threadRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Noch keine Outreach-Mails. Andere Post bleibt im Postfach der Mailbox und erscheint hier nicht.</p></div>'}</div>
+      <div class="dash-card outreach-card mail-thread" id="outreach-thread">${open ? threadHtml(open) : '<p class="outreach-help">Wähle eine Mail. Hier liegen nur Gespräche aus Outreach, mit der Antwort darüber.</p>'}</div>
+    </div>`;
+  }
+
+  function threadRow(d) {
+    const t = targetOf(d.target_id);
+    const p = personOf(d.person_id);
+    return `<button type="button" class="dash-card outreach-draft ${state.threadId === d.id ? 'on' : ''}" onclick="outreachThread('${esc(d.id)}')">
+      <span>${d.unread ? '<i class="dot-unread" aria-label="Ungelesen"></i>' : ''}</span>
+      <span style="text-align:left"><b>${esc(t?.firma || d.email || '')}</b><span class="outreach-meta" style="display:block">${esc(p?.person || '')} · ${esc(d.subject || '')}</span></span>
+      ${statusPill(d.status)}
+    </button>`;
+  }
+
+  function threadHtml(d) {
+    const t = targetOf(d.target_id);
+    const msgs = state.messages.filter((m) => m.draft_id === d.id);
+    const locked = d.status === 'abgemeldet';
+    return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div></div>${statusPill(d.status)}</div>
+      ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : 'Antwort'} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
+      ${locked ? '<p class="outreach-help">Abgemeldet. Diese Adresse bleibt auf der Sperrliste und wird nicht mehr angeschrieben.</p>' : `
+      <div class="outreach-field"><label>Antwort, geht erst mit Senden raus</label><textarea id="outreach-reply" oninput="outreachReplyInput(this.value)">${esc(state.replyText)}</textarea></div>
+      <div class="outreach-row">
+        <button type="button" class="btn-ghost" onclick="outreachAiReply('${esc(d.id)}')">${ico('light', 14)} KI-Entwurf</button>
+        <button type="button" class="btn-yellow" onclick="outreachSendReply('${esc(d.id)}')">${ico('mail', 14)} Senden</button>
+      </div>`}`;
+  }
+
+  window.outreachTab = function (id) { state.tab = id; render(); };
+  window.outreachQueue = function (id) { state.queue = id; render(); };
+  window.outreachMailFilter = function (id) { state.mailFilter = id; render(); };
+  window.outreachField = function (key, value) { state[key] = value; };
+  window.outreachSearch = function (value) { state.q = value; const list = document.getElementById('outreach-mail-list'); if (!list) { render(); return; } render(); };
+  window.outreachGuess = function (on) { state.settings.guess_emails = !!on; };
+  window.outreachSetting = function (key, value) { state.settings[key] = Number(value) || state.settings[key]; };
+  window.outreachPick = function (id, on) { state.picked[id] = !!on; };
+  window.outreachEdit = function (id) { state.editorId = id; state.tab = 'freigabe'; render(); };
+  window.outreachCloseEdit = function () { state.editorId = null; render(); };
+  window.outreachEditField = function (id, key, value) { const d = draftOf(id); if (d) { d[key] = value; d._dirty = true; } };
+  window.outreachGuessOk = function (id, on) { const d = draftOf(id); if (d) d.guess_ok = !!on; };
+  window.outreachReplyInput = function (value) { state.replyText = value; };
+  window.outreachThread = async function (id) {
+    state.threadId = id;
+    state.tab = 'postfach';
+    const d = draftOf(id);
+    state.replyText = d?.reply_body || '';
+    if (d && d.unread) {
+      d.unread = false;
+      if (!state.demo && signedIn()) {
+        const sb = await getSupabase();
+        await sb.from('outreach_drafts').update({ unread: false }).eq('id', id);
+      }
+    }
+    render();
+  };
+
+  window.outreachResearch = async function () {
+    if (state.demo) { toast('Demo: es wird keine Website gelesen.'); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const urls = state.urls.split(/\s+/).filter((s) => /^https?:\/\//i.test(s));
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-research', { body: { urls, branche: state.branche, region: state.region, guess: state.settings.guess_emails === true } });
+    if (error || (data && data.error && !data.targets)) { toast((data && data.error) || error.message || 'Suche fehlgeschlagen', true); return; }
+    if (data && data.error) toast(data.error, true);
+    state.loaded = false;
+    await loadLive();
+    state.tab = 'ziele';
+    render();
+  };
+
+  window.outreachDraftNew = async function () {
+    const ids = state.people.filter((p) => p.email_art !== 'vermutet' && targetOf(p.target_id)?.status === 'recherchiert').map((p) => p.id);
+    await makeDrafts(ids, false);
+  };
+  window.outreachDraftOne = async function (id) { await makeDrafts([id], true); };
+  async function makeDrafts(personIds, allowGuess) {
+    if (!personIds.length) { toast('Keine veröffentlichte Adresse zum Entwerfen.'); return; }
+    if (state.demo) { toast(allowGuess ? 'Demo: Vermutung bleibt ein Entwurf.' : 'Demo: Entwürfe stehen schon in der Freigabe.'); state.tab = 'freigabe'; render(); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-draft', { body: { personIds, allowGuess: allowGuess === true } });
+    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
+    const n = (data && data.created && data.created.length) || 0;
+    toast(n ? n + ' Entwurf bereit.' : 'Kein neuer Entwurf.');
+    state.loaded = false;
+    await loadLive();
+    state.tab = 'freigabe';
+    render();
+  }
+
+  window.outreachSaveDraft = async function (id) {
+    const d = draftOf(id);
+    if (!d) return;
+    if (d.status === 'freigegeben') d.status = 'entwurf';
+    if (state.demo) { toast('Demo: Entwurf gemerkt.'); render(); return; }
+    const sb = await getSupabase();
+    const { error } = await sb.from('outreach_drafts').update({ subject: d.subject, body: d.body, status: d.status, guess_ok: !!d.guess_ok, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) toast(error.message, true); else toast('Gespeichert.');
+    render();
+  };
+  window.outreachApprove = async function (id) {
+    const d = draftOf(id);
+    if (!d) return;
+    if (d.email_art === 'vermutet' && !d.guess_ok) { toast('Vermutete Adresse zuerst im Entwurf ankreuzen.', true); return; }
+    d.status = 'freigegeben';
+    d.approved_at = new Date().toISOString();
+    if (!state.demo && signedIn()) {
+      const sb = await getSupabase();
+      const { error } = await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: d.approved_at, subject: d.subject, body: d.body, guess_ok: !!d.guess_ok, updated_at: d.approved_at }).eq('id', id);
+      if (error) { toast(error.message, true); return; }
+    }
+    toast('Freigegeben. Noch nicht gesendet.');
+    state.editorId = null;
+    render();
+  };
+  window.outreachApproveMany = async function () {
+    const ids = Object.keys(state.picked).filter((id) => state.picked[id]);
+    let n = 0;
+    for (const id of ids) {
+      const d = draftOf(id);
+      if (!d || d.status !== 'entwurf') continue;
+      if (d.email_art === 'vermutet' && !d.guess_ok) continue;
+      d.status = 'freigegeben';
+      d.approved_at = new Date().toISOString();
+      n += 1;
+      if (!state.demo && signedIn()) {
+        const sb = await getSupabase();
+        await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: d.approved_at, guess_ok: !!d.guess_ok }).eq('id', id);
+      }
+    }
+    toast(n ? n + ' freigegeben.' : 'Nichts freigegeben. Vermutungen brauchen ein eigenes Häkchen.');
+    render();
+  };
+  window.outreachReject = async function (id) {
+    const d = draftOf(id);
+    if (!d) return;
+    d.status = 'abgelehnt';
+    if (!state.demo && signedIn()) {
+      const sb = await getSupabase();
+      await sb.from('outreach_drafts').update({ status: 'abgelehnt', updated_at: new Date().toISOString() }).eq('id', id);
+    }
+    state.editorId = null;
+    toast('Abgelehnt.');
+    render();
+  };
+  window.outreachDelete = async function (id) {
+    state.drafts = state.drafts.filter((d) => d.id !== id);
+    state.editorId = null;
+    if (!state.demo && signedIn()) {
+      const sb = await getSupabase();
+      await sb.from('outreach_drafts').delete().eq('id', id);
+    }
+    toast('Entwurf gelöscht.');
+    render();
+  };
+  window.outreachMakeContact = async function (id) {
+    if (state.demo) { toast('Demo: kein Kontakt und keine Kundennummer.'); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'contact', draftId: id } });
+    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
+    toast(data && data.kundennummer ? 'Kontakt ' + data.kundennummer : 'Kontakt verknüpft.');
+    const d = draftOf(id);
+    if (d && data) { d.contact_id = data.contactId; d.kundennummer = data.kundennummer; }
+    render();
+  };
+
+  let timer = 0;
+  window.outreachArm = function (on) { state.armed = !!on; if (!state.armed && timer) { clearInterval(timer); timer = 0; } render(); };
+  window.outreachSendQueue = async function () {
+    if (state.demo) { toast('Demo: es wird nichts verschickt.'); return; }
+    state.armed = true;
+    await sendOne();
+    if (!timer) timer = setInterval(sendOne, 30000);
+    render();
+  };
+  async function sendOne() {
+    if (!state.armed || state.demo || !signedIn()) return;
+    if (!state.drafts.some((d) => d.status === 'freigegeben')) return;
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'send' } });
+    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
+    if (data && data.sent) {
+      toast(data.kundennummer ? 'Gesendet. Kontakt ' + data.kundennummer : 'Gesendet.');
+      state.loaded = false;
+      await loadLive();
+      render();
+    } else if (data && data.reason) toast(data.reason);
+  }
+
+  window.outreachAiReply = async function (id) {
+    if (state.demo) {
+      state.replyText = 'Guten Tag Noel,\n\ndanke für die Rückmeldung. Bei einem kleinen Betrieb fangen wir mit der Seite an und schauen danach, welche Anfragen sich automatisch sortieren lassen. Wenn Sie mögen, skizziere ich das an einem Beispiel aus Ihrem Auftritt.\n\nViele Grüße\nKim\nViral Outlaws';
+      render();
+      toast('Demo: Entwurf liegt im Feld. Nichts ist raus.');
+      return;
+    }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-reply', { body: { op: 'draft', draftId: id } });
+    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
+    state.replyText = (data && data.text) || '';
+    const d = draftOf(id);
+    if (d) d.reply_body = state.replyText;
+    render();
+    toast('Entwurf liegt im Feld. Nichts ist raus.');
+  };
+  window.outreachSendReply = async function (id) {
+    const text = (document.getElementById('outreach-reply') || {}).value || state.replyText;
+    if (!String(text || '').trim()) { toast('Text fehlt.', true); return; }
+    if (state.demo) { toast('Demo: die Antwort wird nicht verschickt.'); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-reply', { body: { op: 'send', confirm: true, draftId: id, text } });
+    if (error || (data && data.error)) { toast((data && (data.error || data.reason)) || error.message, true); return; }
+    if (data && data.sent === false) { toast(data.reason || 'Nicht gesendet.', true); return; }
+    toast('Antwort ist raus.');
+    state.replyText = '';
+    state.loaded = false;
+    await loadLive();
+    render();
+  };
+  window.outreachSaveSettings = async function () {
+    const daily = Math.min(100, Math.max(1, Number(state.settings.daily_limit) || 20));
+    const gap = Math.min(120, Math.max(1, Number(state.settings.gap_minutes) || 5));
+    state.settings.daily_limit = daily;
+    state.settings.gap_minutes = gap;
+    if (state.demo) { toast('Demo: Limit gemerkt, nichts gespeichert.'); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { error } = await sb.from('outreach_settings').upsert({
+      workspace_id: workspaceId(),
+      daily_limit: daily,
+      gap_minutes: gap,
+      guess_emails: state.settings.guess_emails === true,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) toast(error.message, true); else toast('Limit gesichert.');
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();

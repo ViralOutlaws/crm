@@ -150,32 +150,31 @@
   function boot() {
     if (typeof PAGE_TITLES === 'object') {
       PAGE_TITLES.wissensbasis = 'Wissensbasis';
-      PAGE_TITLES.posteingang = 'Posteingang';
     }
     const nav = document.querySelector('#sidebar-nav');
-    if (nav && !document.querySelector('[data-page="posteingang"]')) {
+    if (nav && !document.querySelector('[data-page="wissensbasis"]')) {
       const pipe = nav.querySelector('[data-page="pipeline"]');
-      const block = document.createElement('div');
-      block.innerHTML = `
-        <div class="nav-item" onclick="showPage('wissensbasis')" data-page="wissensbasis"><span class="nav-item-icon">${ico('book', 18)}</span><span class="nav-item-label">Wissensbasis</span></div>
-        <div class="nav-item" onclick="showPage('posteingang')" data-page="posteingang"><span class="nav-item-icon">${ico('mail', 18)}</span><span class="nav-item-label">Posteingang</span><span class="nav-item-badge" id="badge-inbox" style="display:none">0</span></div>`;
-      if (pipe) pipe.after(...block.children); else nav.prepend(...block.children);
+      const item = document.createElement('div');
+      item.className = 'nav-item';
+      item.setAttribute('data-page', 'wissensbasis');
+      item.setAttribute('onclick', "showPage('wissensbasis')");
+      item.innerHTML = `<span class="nav-item-icon">${ico('book', 18)}</span><span class="nav-item-label">Wissensbasis</span>`;
+      if (pipe) pipe.after(item); else nav.prepend(item);
     }
+    document.querySelectorAll('[data-page="posteingang"]').forEach((el) => el.remove());
     if (!document.getElementById('page-wissensbasis')) {
       const main = document.getElementById('page-pipeline');
-      const hold = document.createElement('div');
-      hold.innerHTML = `
-        <div class="page" id="page-wissensbasis"><div class="sec-header"><div class="sec-title">Wissensbasis</div><span class="reel-live">LIVE</span></div><p style="font-size:12px;color:var(--muted);margin:0 0 12px">Alle KI-Entwürfe halten sich an diese Regeln. Nichts wird von allein gesendet.</p><div id="wissen-body"></div></div>
-        <div class="page" id="page-posteingang"><div class="sec-header"><div class="sec-title">Posteingang</div><div class="inbox-actions"><button class="btn-ghost btn-sm" onclick="reelSync(true)">${ico('refresh', 14)} Aktualisieren</button><button class="btn-ghost btn-sm" onclick="reelCompose()">${ico('pencil', 14)} Neue Mail</button><button class="btn-ghost btn-sm" onclick="reelRules()">${ico('settings', 14)} Regeln</button></div></div><div id="inbox-note"></div><div id="inbox-filters"></div><div class="inbox" id="inbox-grid"></div></div>`;
-      main.parentNode.insertBefore(hold, main);
-      while (hold.firstChild) main.parentNode.insertBefore(hold.firstChild, main);
-      hold.remove();
+      const page = document.createElement('div');
+      page.className = 'page';
+      page.id = 'page-wissensbasis';
+      page.innerHTML = '<div class="sec-header"><div class="sec-title">Wissensbasis</div><span class="reel-live">LIVE</span></div><p style="font-size:12px;color:var(--muted);margin:0 0 12px">Alle KI-Entwürfe halten sich an diese Regeln. Nichts wird von allein gesendet.</p><div id="wissen-body"></div>';
+      main.parentNode.insertBefore(page, main);
     }
     const orig = window.showPage;
     window.showPage = function (id) {
+      if (id === 'posteingang') id = 'outreach';
       orig(id);
       if (id === 'wissensbasis') renderWissen();
-      if (id === 'posteingang') openInbox();
       if (id === 'dashboard') renderDashExtra();
       if (id === 'pipeline') renderBoard();
       paintBadge();
@@ -303,7 +302,7 @@
     const quote = quoted ? Math.round(won / quoted * 100) : 0;
     const pairs = (DB.conversations || []).filter((c) => c.first_inbound_at && c.first_reply_at && new Date(c.first_reply_at) > new Date(c.first_inbound_at));
     const med = median(pairs.map((c) => new Date(c.first_reply_at) - new Date(c.first_inbound_at)));
-    const waiting = (DB.conversations || []).filter((c) => c.draft_status === 'pending').length;
+    const waiting = typeof window.outreachWaiting === 'function' ? window.outreachWaiting() : 0;
     const mrr = (DB.retainer || []).filter((r) => r.status === 'aktiv').reduce((s, r) => s + (Number(r.betrag) || 0), 0);
     if (grid) {
       grid.classList.add('reel-top-kpis');
@@ -313,7 +312,7 @@
         ['Offen / Überfällig', eur(offen), offeneRg.length + ' Rechnungen', "dashKpi('offen')"],
         ['Neue Leads', String(leads), (pct >= 0 ? '+' : '') + pct + ' % zum Vormonat', "dashGo('contacts')"],
         ['Abschlussquote', quote + ' %', 'gewonnen von den Angeboten', "showPage('pipeline')"],
-        ['Antwortzeit', med == null ? '–' : Math.round(med / 3600000) + ' Std.', med == null ? 'noch keine Daten' : 'Median bis zur ersten Antwort', "showPage('posteingang')"],
+        ['Antwortzeit', med == null ? '–' : Math.round(med / 3600000) + ' Std.', med == null ? 'noch keine Daten' : 'Median bis zur ersten Antwort', "outreachOpen('postfach')"],
       ];
       if (mrr > 0) cards.push(['MRR', eur(mrr), 'aktive Retainer', "dashKpi('mrr')"]);
       grid.innerHTML = cards.map(([label, val, sub, go]) => `<div class="kpi dash-hit" role="button" tabindex="0" onclick="${go}"><div class="kpi-label">${label}</div><div class="kpi-val">${val}</div><div class="kpi-sub">${sub}</div></div>`).join('');
@@ -333,10 +332,10 @@
         <div class="dash-card"><h3>Umsatz pro Monat <span class="reel-seg"><button type="button" class="${span === 6 ? 'on' : ''}" onclick="reelSpan(6)">6</button><button type="button" class="${span === 12 ? 'on' : ''}" onclick="reelSpan(12)">12</button></span></h3><div class="reel-chart">${months.map((m) => `<div class="reel-bar-col"><div class="reel-bar ${m.now ? 'on' : ''}" style="height:${Math.max(m.h, 8)}%" title="${esc(m.label)} ${eur(m.sum)}"></div><div class="reel-bar-label">${esc(m.label)}</div></div>`).join('')}</div></div>
         <div class="dash-card dash-hit" onclick="dashGo('contacts')"><h3>Woher kommen Leads</h3>${sourceBars(contacts)}</div>
       </div>
-      <div class="dash-card reel-ki"><span class="reel-spark">${spark()}</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">KI wartet auf dich</div><div><b style="font-size:28px;line-height:1.1">${waiting}</b> <span style="color:var(--muted)">Entwürfe warten auf Senden</span></div></div><button type="button" class="btn-yellow" onclick="reelDrafts()">Prüfen</button></div>`;
+      <div class="dash-card reel-ki"><span class="reel-spark">${spark()}</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">Outreach wartet auf dich</div><div><b style="font-size:28px;line-height:1.1">${waiting}</b> <span style="color:var(--muted)">Entwürfe warten auf Freigabe</span></div></div><button type="button" class="btn-yellow" onclick="reelDrafts()">Prüfen</button></div>`;
   }
   window.reelSpan = function (n) { const host = document.getElementById('reel-dash'); if (host) host.dataset.span = String(n); renderDashExtra(); };
-  window.reelDrafts = function () { inboxFilter = 'entwurf'; showPage('posteingang'); };
+  window.reelDrafts = function () { if (typeof window.outreachOpen === 'function') window.outreachOpen('freigabe'); else showPage('outreach'); };
   function median(ns) {
     const a = ns.filter((n) => n >= 0).sort((x, y) => x - y);
     if (!a.length) return null;
@@ -924,7 +923,7 @@
     if (!rows.length) return;
     const card = document.createElement('div');
     card.className = 'dash-card reel-timeline';
-    card.innerHTML = '<h3>E-Mails</h3>' + rows.map((c) => `<div style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showPage('posteingang');reelOpen('${esc(c.id)}')">${esc(c.subject || '')}</div>`).join('');
+    card.innerHTML = '<h3>E-Mails</h3><p style="font-size:12px;color:var(--muted);margin:0 0 8px">Der Posteingang ist zu. Outreach-Gespräche liegen im Outreach-Postfach.</p>' + (rows.length ? rows.map((c) => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${esc(c.subject || '')}</div>`).join('') : '') + `<button type="button" class="btn-ghost btn-sm" onclick="outreachOpen('postfach')">Outreach-Postfach</button>`;
     host.appendChild(card);
   }
 
