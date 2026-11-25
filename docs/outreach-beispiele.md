@@ -1,18 +1,18 @@
 # Drei Beispielmails
 
-Erfundene Firmen auf `.example.test`. Keine Schreinerei, keine erfundene Referenz. Die Anrede ist Frau oder Herr mit Nachname. Die Sätze sind die Auswirkung für den Betrieb, nicht die Technik der Seite.
+Erfundene Firmen auf `.example.test`. Die Mail nennt das Problem und was es kostet. Sie sagt nicht, was der Betrieb selbst ändern soll. Keine Schreinerei, keine erfundene Referenz. Anrede mit Frau oder Herr und Nachname.
 
 ## Musterwerk GmbH
 
-Auf dem Handy ist die Seite winzig, abends gibt es nur eine Telefonnummer.
+Auf dem Handy ist die Seite winzig, abends gibt es nur eine Telefonnummer. Die Anfragen gehen verloren.
 
 > Guten Tag Frau Muster,
 >
-> auf dem Handy wird die Seite von Musterwerk GmbH winzig dargestellt. Viele Besucher springen da ab.
+> auf dem Handy wird die Seite von Musterwerk GmbH winzig dargestellt. Wer sie dort nicht lesen kann, geht wieder, ohne anzurufen. Abends findet man nur eine Telefonnummer. Anfragen, die dann kommen, gehen verloren, weil niemand rangeht.
 >
-> Stellen Sie die Seite auf die Breite des Handys, damit der erste Blick lesbar ist. Wer abends anfragen will, findet nur eine Telefonnummer. Ein kurzes Formular mit Name und Anliegen fängt die Anfrage auf, auch wenn niemand rangeht.
+> Genau solche Punkte löse ich für Betriebe wie Ihren. Das kann mehr Anfragen bringen, ohne dass jemand dauernd am Telefon sitzt.
 >
-> Soll ich Ihnen das kurz aufschreiben?
+> Darf ich Ihnen in zehn Minuten zeigen, was das für Ihre Seite heißt?
 >
 > Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
 >
@@ -22,15 +22,15 @@ Auf dem Handy ist die Seite winzig, abends gibt es nur eine Telefonnummer.
 
 ## Beispielhof
 
-Die Anfrage liegt erst auf der Kontaktseite. In der Suche fehlt ein Satz, was der Hof macht.
+Die Anfrage liegt erst auf der Kontaktseite. In der Suche fehlt, was der Hof macht. Wer das nicht weiß, klickt woanders.
 
 > Guten Tag Herr Beispiel,
 >
-> wer bei Beispielhof anfragen will, muss die Kontaktseite erst suchen. In der Google-Suche fehlt außerdem ein Satz, was der Hof macht und wo er sitzt.
+> wer bei Beispielhof anfragen will, muss die Kontaktseite erst suchen. Manche geben auf, bevor sie dort sind. In der Suche fehlt außerdem ein Satz, was der Hof macht und wo er sitzt. Wer das nicht schon weiß, klickt woanders.
 >
-> Legen Sie Telefon und den Weg zur Anfrage in den ersten Blick auf dem Handy. Hinterlegen Sie diesen einen Satz, damit die Suche nicht nur den Seitentitel zeigt.
+> Ich schaue mir genau solche Stellen an. Der Unterschied ist oft, dass die Anfrage ankommt, statt unterwegs verloren zu gehen.
 >
-> Soll ich den Ablauf in ein paar Sätzen skizzieren?
+> Soll ich Ihnen eine kurze Einschätzung schicken, was das bei Ihnen ausmacht?
 >
 > Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
 >
@@ -40,15 +40,15 @@ Die Anfrage liegt erst auf der Kontaktseite. In der Suche fehlt ein Satz, was de
 
 ## Praxis Vitalis
 
-Physiotherapie. Einen Termin kann man auf der Seite nicht hinterlegen, und der Text kommt spät. Keine Referenz.
+Physiotherapie. Einen Termin sieht man auf der Seite nicht, also bucht man woanders. Der Text kommt spät. Keine Referenz.
 
 > Guten Tag Frau Holm,
 >
-> einen Termin kann man auf der Seite der Praxis Vitalis nicht hinterlegen. Besucher warten außerdem, bevor der Text da ist.
+> einen Termin kann man auf der Seite der Praxis Vitalis nicht hinterlegen. Wer einen Termin sucht und ihn hier nicht sieht, bucht woanders. Dazu kommt: Besucher warten, bevor der Text da ist, und viele bleiben das nicht.
 >
-> Setzen Sie einen sichtbaren Weg „Termin anfragen“ auf die Startseite. Schieben Sie die schweren Dateien nach hinten, damit der Text sofort lesbar ist.
+> Genau damit kenne ich mich aus, bei Betrieben in Ihrer Größe. Termine können bei Ihnen landen, statt beim Nächsten.
 >
-> Darf ich Ihnen dazu eine knappe Skizze schicken?
+> Haben Sie zehn Minuten, damit ich Ihnen zeige, was das auf Ihrer Seite bedeutet?
 >
 > Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
 >

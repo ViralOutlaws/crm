@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
         const issues = reviewMail(first.body, { observations, references });
         const second = parseMailJson(await anthropicText(
           "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
-          `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu, mit zwei oder drei umsetzbaren Punkten aus den Tipps.`,
+          `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu. Nenne das Problem und was es kostet. Keine Anleitung, kein Stellen Sie, Setzen Sie oder Legen Sie.`,
           900,
         ));
         if (second) {

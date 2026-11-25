@@ -528,7 +528,7 @@ export function outreachMessageId(draftId: string, now = Date.now()): string {
 
 export const MIN_OBSERVATIONS = 2;
 export const SUBSTANCE_LABEL = "zu wenig Substanz";
-export const MAIL_WORD_MAX = 140;
+export const MAIL_WORD_MAX = 130;
 
 export type Observation = {
   kind: "aktualitaet" | "mobil" | "tempo" | "kontakt" | "buchung" | "seo" | "social" | "auftritt";
@@ -808,20 +808,31 @@ function greetingOk(text: string): boolean {
   return false;
 }
 
+/** Sie-Befehle und konkrete Handgriffe. Die Diagnose darf rein, die Anleitung nicht. */
+export function hasInstruction(text: string): boolean {
+  const s = String(text || "");
+  if (/\b(?:stellen|setzt|setzen|lege|legen|hinterlegen|schieben|entfernen|ersetzen|einbauen|verlinken|einfügen|einfuegen|ändern|aendern|einstellen)\s+sie\b/i.test(s)) return true;
+  if (/\bsie\s+(?:stellen|setzen|legen|hinterlegen|schieben|entfernen|ersetzen|ändern|aendern|einstellen)\b/i.test(s)) return true;
+  if (/\bbitte\b[^.?\n]{0,50}\b(?:stellen|setzen|legen|hinterlegen|einstellen|einbauen|ändern|aendern)\b/i.test(s)) return true;
+  return false;
+}
+
 export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[] }): string[] {
   const issues: string[] = [];
   const text = String(body || "");
   const used = rankObservations(input.observations || []);
   const covered = used.filter((o) => KIND_MARK[o.kind]?.test(text));
-  const value = /formular|anfrage|telefon|handy|termin|suche|bewertung|warten|lesbar|zurückrufen|zurueckrufen/i.test(text);
+  const value = /anfrage|telefon|handy|termin|suche|bewertung|warten|abspring|verloren|woanders|zeit/i.test(text);
   if (used.length < MIN_OBSERVATIONS || covered.length < 1 || !value) issues.push(SUBSTANCE_LABEL);
   if (/!/.test(text)) issues.push("Ausrufezeichen");
   if (BANNED.test(text)) issues.push("Werbesprache");
   if (JARGON.test(text) || TEMPLATE_LINE.test(text)) issues.push("Fachsprache");
+  if (hasInstruction(text)) issues.push("Anleitung");
   if (!greetingOk(text)) issues.push("Anrede");
-  if (wordCount(text) > MAIL_WORD_MAX) issues.push("Länge");
+  if (wordCount(text) > MAIL_WORD_MAX || wordCount(text) < 70) issues.push("Länge");
   if (/\b(du|dein(?:e|en|em|er)?|dir|dich|euch|euer|eure)\b/i.test(text)) issues.push("Sie");
-  if (!/\?/.test(text)) issues.push("Frage fehlt");
+  if (!/\?/.test(text) || !/zehn minuten|10 minuten|kurze einschätzung|kurzen einschätzung/i.test(text)) issues.push("Frage fehlt");
+  if (!/löse ich|kenne ich mich|schaue mir/i.test(text)) issues.push("Haltung");
   if (!/viral outlaws/i.test(text) || !/\bKim\b/.test(text)) issues.push("Absender fehlt");
   if (!/abmelden/i.test(text)) issues.push("Abmeldung fehlt");
   const mentioned = /(?:^|\n)Bei ([A-ZÄÖÜ][\p{L}0-9&.'’\- ]{2,40}?)(?:\s+in|\s+\(|\s+war|,)/u.exec(text);
@@ -835,6 +846,28 @@ export function reviewMail(body: string, input: { observations: Observation[]; r
   }
   return issues;
 }
+
+const COST_FOR: Record<Observation["kind"], string> = {
+  kontakt: "Anfragen, die dann kommen, gehen verloren, weil niemand rangeht.",
+  buchung: "Wer einen Termin sucht und ihn hier nicht sieht, bucht woanders.",
+  mobil: "Wer die Seite auf dem Handy nicht lesen kann, geht wieder, ohne anzurufen.",
+  tempo: "Wer warten muss, bis der Text da ist, bleibt oft nicht.",
+  seo: "Wenn in der Suche unklar bleibt, was Sie machen, klickt niemand, der Sie nicht schon kennt.",
+  social: "Vor dem Anruf fehlt eine Stimme von anderen Kunden, und das Vertrauen auch.",
+  auftritt: "Der erste Eindruck entscheidet, ob jemand bleibt oder weitergeht.",
+  aktualitaet: "Wirkt die Seite alt, bleibt der Zweifel, ob der Betrieb noch erreichbar ist.",
+};
+
+const OUTCOME_FOR: Record<Observation["kind"], string> = {
+  kontakt: "Das kann mehr Anfragen bringen, ohne dass jemand dauernd am Telefon sitzt.",
+  buchung: "Termine können bei Ihnen landen, statt beim Nächsten.",
+  mobil: "Dann bleiben die Leute, die sonst nach dem ersten Blick gehen.",
+  tempo: "Dann bleibt die Zeit, in der Besucher sonst schon weg sind.",
+  seo: "Dann finden Sie die Leute, die heute woanders klicken.",
+  social: "Dann ist vor dem Anruf schon ein Stück Vertrauen da.",
+  auftritt: "Dann bleibt, wer sonst nach dem ersten Blick weitergeht.",
+  aktualitaet: "Dann wirkt der Betrieb erreichbar, nicht abwesend.",
+};
 
 const SUBJECT_FOR: Record<Observation["kind"], string> = {
   kontakt: "Anfragen am Abend",
@@ -869,20 +902,24 @@ export function composePeerMail(input: {
   const firma = input.firma || "Ihrem Betrieb";
   const shape = shapeOf(firma);
   const question = [
-    "Soll ich Ihnen das kurz aufschreiben?",
-    "Soll ich den Ablauf in ein paar Sätzen skizzieren?",
-    "Darf ich Ihnen dazu eine knappe Skizze schicken?",
+    "Darf ich Ihnen in zehn Minuten zeigen, was das für Ihre Seite heißt?",
+    "Soll ich Ihnen eine kurze Einschätzung schicken, was das bei Ihnen ausmacht?",
+    "Haben Sie zehn Minuten, damit ich Ihnen zeige, was das auf Ihrer Seite bedeutet?",
   ][shape];
-  const ai = (lead.kind === "kontakt" || lead.kind === "buchung") && shape !== 1
-    ? "Was Zeit kostet, sind die Rückrufe. Wenn das Formular Anliegen und Wunschzeit schon abfragt, rufen Sie nur die passenden Leute an."
-    : "";
+  const role = [
+    "Genau solche Punkte löse ich für Betriebe wie Ihren.",
+    "Ich schaue mir genau solche Stellen an.",
+    "Genau damit kenne ich mich aus, bei Betrieben in Ihrer Größe.",
+  ][shape];
+  const cost = COST_FOR[lead.kind];
+  const outcome = OUTCOME_FOR[lead.kind];
   const ref = matchingReference(input.references || [], input.branche);
-  const refLine = ref ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} war es ähnlich: ${String(ref.note).trim()}` : "";
+  const refLine = ref ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} war die Lage ähnlich.` : "";
   const middle = shape === 0
-    ? [lead.impact, "", [lead.wert, second?.wert, ai].filter(Boolean).join(" ")]
+    ? [lead.impact, cost, "", role, outcome]
     : shape === 1
-    ? [lead.wert, "", `Der Anlass: ${lead.impact.charAt(0).toLowerCase()}${lead.impact.slice(1)} ${second?.impact || ""}`.trim()]
-    : [`ich habe mir ${firma} angesehen. ${lead.impact}`, "", [lead.wert, ai].filter(Boolean).join(" ")];
+    ? [`ich habe mir ${firma} angesehen. ${lead.impact}`, cost, "", role]
+    : [lead.impact, second.impact, "", role, outcome];
   let body = [
     anrede,
     "",
@@ -973,11 +1010,14 @@ export function draftInstructions(): string {
   return [
     "Schreibe eine kurze Mail auf Deutsch, als Fachkollege, nicht als Verkäufer. Sie soll sich lesen, als wäre sie einzeln geschrieben.",
     "Anrede: Guten Tag Frau Nachname oder Guten Tag Herr Nachname. Ist das Geschlecht unklar, den vollen Namen: Guten Tag Vorname Nachname. Nie nur den Vornamen, wenn du siezt.",
-    "Höchstens 120 Wörter. Keine Aufzählung und kein fester Satz wie 'Das lässt sich ändern, ohne die Seite neu zu bauen'.",
-    "Der Einstieg ist der Punkt mit dem größten Hebel für den Betrieb: verlorene Anfragen, fehlende Terminbuchung, schlechte Handy-Ansicht, fehlende Bewertungen. Nicht das Jahr im Impressum.",
-    "Sprich in der Sprache der Inhaberin. Kein viewport, kein defer, kein h1, keine meta description. Diese Technik bleibt draußen.",
-    "Gib einen konkreten Hinweis, den der Betrieb auch ohne Antwort nutzen kann. Optional ein Satz, was ein kleines Formular an Rückrufen spart.",
+    "Etwa 90 bis 120 Wörter. Keine Aufzählung und kein fester Satz wie 'Das lässt sich ändern, ohne die Seite neu zu bauen'.",
+    "Der Einstieg benennt das Problem und was es kostet: verlorene Anfragen, Besucher, die gehen, Termine, die woanders landen, verlorene Zeit. Nicht das Jahr im Impressum.",
+    "Sprich in der Sprache der Inhaberin. Kein viewport, kein defer, kein h1, keine meta description.",
+    "Keine Anleitung und kein Handgriff. Verboten sind Sätze wie 'Stellen Sie', 'Setzen Sie', 'Legen Sie', 'Hinterlegen Sie', 'Schieben Sie'. Der Wert ist die Diagnose, nicht die Lösung.",
+    "Ein kurzer Satz, warum Kim der Richtige ist, ohne Verkauf: 'Genau solche Punkte löse ich für Betriebe wie Ihren', 'Ich schaue mir genau solche Stellen an' oder 'Genau damit kenne ich mich aus'.",
+    "Optional ein Satz zum möglichen Ergebnis, ohne den Weg dahin, zum Beispiel mehr Anfragen, ohne dass jemand am Telefon sitzt.",
     "Eine Referenz nur, wenn sie unten wörtlich genannt ist. Nichts erfinden. Schreinerei oder Möbel nur, wenn die Referenz genau Schreinerei Wagner heißt.",
+    "Die letzte Frage ist niedrigschwellig: zehn Minuten zeigen, was das für die Seite heißt, oder eine kurze Einschätzung schicken.",
     "Betreff kurz und neugierig, kein Technikbefund.",
     "Keine Wörter wie innovativ, maßgeschneidert, revolutionär. Kein 'Ich hoffe, diese Mail erreicht Sie gut'. Keine Ausrufezeichen.",
     "Abschluss: Viele Grüße, Kim, Viral Outlaws, und der Satz mit „Bitte abmelden“.",
@@ -1001,7 +1041,7 @@ export function draftUserPrompt(input: {
     ? `Nur diese Referenz darf vorkommen, und nur wenn sie in den Satz passt: ${fit.firma}, ${fit.branche || ""}, ${fit.ort || ""}. Punkt: ${fit.note}`
     : "Keine passende Referenz. Keinen Kundennamen nennen.";
   const ranked = rankObservations(input.observations);
-  const notes = ranked.map((o, i) => `${i + 1}. So in der Mail: ${o.impact} Nutzen: ${o.wert}. Intern, nicht in die Mail schreiben: ${o.text}`).join("\n");
+  const notes = ranked.map((o, i) => `${i + 1}. Diagnose, die in die Mail darf: ${o.impact} Intern, nicht in die Mail, das wäre die Anleitung: ${o.wert} ${o.text}`).join("\n");
   return [
     draftInstructions(),
     "Wissensbasis:",

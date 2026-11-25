@@ -6,6 +6,7 @@ import {
   emailMatchesPerson,
   finalizeMail,
   guessEmail,
+  hasInstruction,
   isGenericEmail,
   isOptOut,
   MAIL_WORD_MAX,
@@ -213,7 +214,7 @@ Deno.test("Die Seite liefert konkrete Beobachtungen mit Quelle, eine dünne Seit
   assertEquals(thin.length < 2, true);
 });
 
-Deno.test("Die Mail gibt umsetzbare Tipps, eine Referenz nur wenn sie passt", () => {
+Deno.test("Die Mail benennt das Problem, ohne die Lösung zu verraten", () => {
   const notes = observeSite({
     pageHtml: OLD,
     pageUrl: "https://musterwerk.example.test/",
@@ -231,7 +232,9 @@ Deno.test("Die Mail gibt umsetzbare Tipps, eine Referenz nur wenn sie passt", ()
   if (!plain) throw new Error("keine Mail");
   assertEquals(reviewMail(plain.body, { observations: notes, references: refs }).join(","), "");
   assertEquals(plain.body.includes("Werkstatt Berg"), false);
-  assertEquals(/\?/.test(plain.body), true);
+  assertEquals(hasInstruction(plain.body), false);
+  assertEquals(hasInstruction("Stellen Sie die Seite auf die Breite des Handys."), true);
+  assertEquals(reviewMail(`${plain.body}\n\nLegen Sie ein Formular auf die Startseite.`, { observations: notes, references: refs }).includes("Anleitung"), true);
   assertEquals(/Bitte abmelden/.test(plain.body), true);
   assertEquals(/!/.test(plain.body), false);
   assertEquals(wordCount(plain.body) <= MAIL_WORD_MAX, true);
