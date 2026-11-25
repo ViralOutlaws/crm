@@ -41,6 +41,27 @@
     return '';
   }
   function toast(msg, bad) { if (typeof haptikToast === 'function') haptikToast(msg, bad ? 'bad' : undefined); }
+
+  // Geschäftssignatur: gespeicherte Fassung aus den Outreach-Einstellungen, sonst aus den Firmendaten im CRM.
+  // Der Versand hängt sie unter jede Mail. Sie zählt nicht zur Wortzahl.
+  const IMPRESSUM_URL = 'https://www.viraloutlaws.de/impressum';
+  function companySignature() {
+    const c = (typeof DB !== 'undefined' && DB && DB.settings) ? DB.settings : {};
+    const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+    const kontakt = [clean(c.tel) ? 'Tel. ' + clean(c.tel) : '', clean(c.email)].filter(Boolean).join(' · ');
+    return [
+      clean(c.inhaber) || 'Kim Lukas Tobler',
+      clean(c.name) || 'Viral Outlaws',
+      [clean(c.str), clean(c.plz)].filter(Boolean).join(', '),
+      kontakt,
+      clean(c.web).replace(/^https?:\/\//, ''),
+      'Impressum: ' + IMPRESSUM_URL,
+    ].filter(Boolean).join('\n');
+  }
+  function signatureText() {
+    const own = String(state.settings.signature || '').trim();
+    return own || companySignature();
+  }
   function personOf(id) { return state.people.find((p) => p.id === id) || null; }
   function targetOf(id) { return state.targets.find((t) => t.id === id) || null; }
   function draftOf(id) { return state.drafts.find((d) => d.id === id) || null; }
@@ -174,6 +195,12 @@
   .bubble.in{background:var(--glass-bg,rgba(255,255,255,.4))}
   .dot-unread{width:8px;height:8px;border-radius:99px;background:#d63030;display:inline-block}
   #outreach-editor.overlay{z-index:600}
+  .outreach-sig{white-space:pre-wrap;font-size:12px;line-height:1.5;opacity:.85;border-top:1px dashed rgba(212,175,55,.35);padding-top:8px;margin:6px 0 0}
+  .outreach-sig-box textarea{min-height:130px;font-size:13px}
+  .outreach-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:outreach-spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes outreach-spin{to{transform:rotate(360deg)}}
+  .outreach-run-result{margin:8px 0 0;font-size:13px}
+  .outreach-run-result.bad{color:#ff8a80}
   #outreach-editor .modal{max-width:960px}
   #outreach-editor textarea{min-height:220px}
   .outreach-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
@@ -379,6 +406,9 @@
         <input value="${esc((p.tags || []).join(', '))}" aria-label="Merkmale" oninput="outreachProfileTags('${esc(p.id)}', this.value)">
         <button type="button" class="btn-ghost btn-sm" onclick="outreachProfileRemove('${esc(p.id)}')">Weg</button>
       </div>`).join('') || '<p class="outreach-help">Noch keine Branchen. Standards laden legt Ärzte, Industrie, Handwerk, Gastronomie, Kanzleien und Salons an, Ort Deutschland.</p>'}
+      <h3>Signatur</h3>
+      <p class="outreach-help">Steht unter jeder Outreach-Mail und jeder Antwort, mit Adresse und Impressum. Vorbelegt aus deinen Firmendaten. Zählt nicht zur Wortzahl.</p>
+      <div class="outreach-field outreach-sig-box"><label>Signatur</label><textarea id="outreach-signature" oninput="outreachSignature(this.value)">${esc(signatureText())}</textarea></div>
       <h3>Versandtempo</h3>
       <div class="outreach-row">
         <div class="outreach-field" style="width:140px"><label>Abstand</label><select id="outreach-gap" onchange="outreachSetting('gap_minutes', this.value)">${[1, 2, 3, 5].map((n) => `<option value="${n}" ${gap === n ? 'selected' : ''}>${n} ${n === 1 ? 'Minute' : 'Minuten'}</option>`).join('')}</select></div>
@@ -389,8 +419,9 @@
         <button type="button" class="btn-ghost" onclick="outreachProfileAdd()">Branche</button>
         <button type="button" class="btn-ghost" onclick="outreachProfileRestore()">Standards laden</button>
         <button type="button" class="btn-ghost" onclick="outreachSaveSettings()">${ico('save', 14)} Sichern</button>
-        <button type="button" class="btn-yellow" onclick="outreachNightRun()">Einen Suchlauf jetzt</button>
+        <button type="button" class="btn-yellow" id="outreach-run-now" onclick="outreachNightRun()" ${state.nightBusy ? 'disabled aria-busy="true"' : ''}>${state.nightBusy ? '<span class="outreach-spin" aria-hidden="true"></span>Suche läuft …' : 'Einen Suchlauf jetzt'}</button>
       </div>
+      ${state.nightBusy ? '<p class="outreach-help outreach-run-result" role="status">Der Suchlauf liest gerade Websites und schreibt Entwürfe. Das dauert meist ein bis zwei Minuten. Es wird nichts verschickt.</p>' : (state.nightResult ? `<p class="outreach-help outreach-run-result ${state.nightResult.bad ? 'bad' : ''}" role="status">${esc(state.nightResult.text)}</p>` : '')}
     </div>`;
   }
 
@@ -480,6 +511,8 @@
               ${guess ? `<label class="outreach-check"><input type="checkbox" ${d.guess_ok ? 'checked' : ''} onchange="outreachGuessOk('${esc(d.id)}', this.checked)"> Vermutete Adresse bewusst freigeben. Ohne dieses Häkchen geht die Mail nicht raus.</label>` : ''}
               <div class="outreach-field"><label>Betreff</label><input value="${esc(d.subject || '')}" oninput="outreachEditField('${esc(d.id)}','subject', this.value)"></div>
               <div class="outreach-field"><label>Text</label><textarea oninput="outreachEditField('${esc(d.id)}','body', this.value)">${esc(d.body || '')}</textarea></div>
+              <p class="outreach-help" style="margin:0">Wird beim Versand angehängt (änderbar unter Nachtlauf → Signatur):</p>
+              <div class="outreach-sig" id="outreach-signature-preview">-- \n${esc(signatureText())}</div>
             </div>
             <aside id="outreach-observations">
               <h3 style="margin:0 0 8px;font-size:14px">Beobachtungen</h3>
@@ -550,6 +583,7 @@
   window.outreachField = function (key, value) { state[key] = value; };
   window.outreachSearch = function (value) { state.q = value; const list = document.getElementById('outreach-mail-list'); if (!list) { render(); return; } render(); };
   window.outreachGuess = function (on) { state.settings.guess_emails = !!on; };
+  window.outreachSignature = function (value) { state.settings.signature = String(value || '').slice(0, 800); };
   window.outreachSetting = function (key, value) {
     const n = Number(value);
     if (Number.isFinite(n)) state.settings[key] = n;
@@ -597,16 +631,55 @@
     render();
     toast('Fehlende Standards stehen in der Liste. Sichern schreibt sie.');
   };
+  async function functionError(error, data) {
+    if (data && data.error) return String(data.error);
+    try {
+      const ctx = error && error.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.clone().json();
+        if (body && (body.error || body.message)) return String(body.error || body.message);
+      }
+    } catch (_) { /* Antwort ohne JSON */ }
+    const msg = String((error && error.message) || '');
+    if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Keine Verbindung zum Server. Bitte Internet prüfen und noch einmal versuchen.';
+    if (/non-2xx/i.test(msg)) return 'Der Suchlauf ist mit einem Fehler abgebrochen. Bitte in ein paar Minuten noch einmal versuchen.';
+    return msg || 'Der Suchlauf ist fehlgeschlagen.';
+  }
+  function runSummary(data) {
+    if (data && data.skipped) return String(data.skipped);
+    const found = Number(data && (data.queried ? data.fresh : data.read)) || 0;
+    const drafted = Number(data && data.drafted) || 0;
+    const where = data && data.profile ? ` (${data.profile}${data.area ? ' · ' + data.area : ''})` : '';
+    let text = `${found} ${found === 1 ? 'Betrieb' : 'Betriebe'} gefunden, ${drafted} ${drafted === 1 ? 'Entwurf' : 'Entwürfe'} angelegt${where}.`;
+    if (data && data.queried && Number(data.found) > found) text += ` ${Number(data.found) - found} waren schon bekannt.`;
+    if (data && data.read && Number(data.read) < found) text += ` ${data.read} davon gerade gelesen, der Rest wartet auf den nächsten Lauf.`;
+    if (!drafted && data && Array.isArray(data.errors) && data.errors.length) text += ' Hinweis: ' + data.errors[0];
+    else if (!drafted && data && data.read) text += ' Bei den gelesenen Seiten war nicht genug Konkretes für eine gute Mail.';
+    return text + ' Nichts wurde verschickt.';
+  }
   window.outreachNightRun = async function () {
+    if (state.nightBusy) return;
     if (state.demo) { toast('Demo: es wird nichts gesucht und nichts geschrieben.'); return; }
     if (!signedIn()) { toast('Bitte anmelden.', true); return; }
-    const sb = await getSupabase();
-    const { data, error } = await sb.functions.invoke('outreach-night', { body: { op: 'run' } });
-    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
-    if (data && data.skipped) toast(data.skipped);
-    else toast((data && data.drafted ? data.drafted + ' Entwürfe. ' : '') + ((data && data.profile) ? data.profile + ' · ' + (data.area || '') : 'Suchlauf fertig.'));
-    state.loaded = false;
-    await loadLive();
+    state.nightBusy = true;
+    state.nightResult = null;
+    render();
+    let result;
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.functions.invoke('outreach-night', { body: { op: 'run' } });
+      if (error || (data && data.error)) result = { bad: true, text: await functionError(error, data) };
+      else result = { bad: false, text: runSummary(data || {}) };
+    } catch (e) {
+      result = { bad: true, text: await functionError(e, null) };
+    }
+    state.nightBusy = false;
+    state.nightResult = result;
+    toast(result.text, result.bad);
+    try {
+      state.loaded = false;
+      await loadLive();
+    } catch (_) { /* Liste lädt beim nächsten Öffnen */ }
     render();
   };
   window.outreachPick = function (id, on) { state.picked[id] = !!on; };
@@ -864,6 +937,7 @@
       prep_target: prepTarget,
       prep_batch: prepBatch,
       prep_on: state.settings.prep_on !== false,
+      signature: signatureText().slice(0, 800),
       updated_at: new Date().toISOString(),
     });
     if (error) { toast(error.message, true); return; }

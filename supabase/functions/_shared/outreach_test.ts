@@ -25,6 +25,9 @@ import {
   withinSendWindow,
   SUBSTANCE_LABEL,
   wordCount,
+  buildSignature,
+  withSignature,
+  stripSignature,
 } from "./outreach.ts";
 
 const PAGE = `<!doctype html><html><head><title>Impressum | Musterwerk GmbH</title></head><body>
@@ -282,4 +285,17 @@ Deno.test("Die Mail: Anlass, Szene, Vorstellung, Terminfrage, Opt-out, P.S. und 
   const seed = contactSeed({ firma: "Musterwerk GmbH", person: "Lena Muster", email: "lena.muster@musterwerk.example.test", str: "Hafenstraße 4", plz: "87435", ort: "Kempten", web: "https://musterwerk.example.test" });
   assertEquals(seed.status, "lead");
   assertEquals("kundennummer" in seed, false);
+});
+
+Deno.test("Signatur: Adresse und Impressum, zählt nicht zur Wortzahl", () => {
+  const sig = buildSignature({ name: "Viral Outlaws", inhaber: "Kim Lukas Tobler", str: "Kirchstraße 33 ", plz: "87789 Woringen", tel: "0163 9047958", email: "info@viraloutlaws.de", web: "www.viraloutlaws.de" });
+  assertEquals(sig, "Kim Lukas Tobler\nViral Outlaws\nKirchstraße 33, 87789 Woringen\nTel. 0163 9047958 · info@viraloutlaws.de\nwww.viraloutlaws.de\nImpressum: https://www.viraloutlaws.de/impressum");
+  assertEquals(/mwst|ust|€|preis/i.test(sig), false);
+  const body = "Guten Tag Herr Muster,\n\neins zwei drei vier fünf.\n\nViele Grüße\nKim\n\nP.S. Kleine Beobachtung.";
+  const out = withSignature(body, sig);
+  assertEquals(out.endsWith("Impressum: https://www.viraloutlaws.de/impressum"), true);
+  assertEquals(out.indexOf("P.S.") < out.indexOf("\n-- \n"), true);
+  assertEquals(mailWords(out), mailWords(body));
+  assertEquals(withSignature(out, sig), out);
+  assertEquals(stripSignature(out), body);
 });
