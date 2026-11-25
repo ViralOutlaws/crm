@@ -3091,7 +3091,7 @@ async function initSupabaseAuth() {
       // Load all data from Supabase
       await loadAllFromSupabase();
       // Nur wenn Jarvis mit ?page=… verlinkt. Sonst unverändert das Dashboard.
-      showPage((function(){ try { const p=new URLSearchParams(location.search).get('page'); const ok=['dashboard','kalender','contacts','pipeline','angebote','rechnungen','kanban','ziele','roi','reporting','konfigurator','ausgaben','social']; return ok.indexOf(p)>=0?p:'dashboard'; } catch(e){ return 'dashboard'; } })());
+      showPage((function(){ try { const p=new URLSearchParams(location.search).get('page'); const ok=['dashboard','kalender','contacts','pipeline','angebote','rechnungen','kanban','ziele','roi','reporting','konfigurator','ausgaben','social','outreach','wissensbasis']; return ok.indexOf(p)>=0?p:'dashboard'; } catch(e){ return 'dashboard'; } })());
       // Init realtime
       await initRealtime();
       return true;
@@ -11685,5 +11685,6 @@ tr.dash-mark td{background:rgba(245,196,0,.16)}
 <script src="/anruf-rules.js"></script>
 <script src="/anruf-cockpit.js"></script>
 <script src="/crm-reel.js"></script>
+<script src="/outreach.js"></script>
 </body>
 </html>

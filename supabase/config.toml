@@ -34,6 +34,23 @@ verify_jwt = false
 [functions.inbox-draft]
 verify_jwt = false
 
+# Outreach prüft das Nutzer-JWT selbst. Mail-Secrets und ANTHROPIC_API_KEY bleiben nur hier.
+[functions.outreach-research]
+verify_jwt = false
+
+[functions.outreach-draft]
+verify_jwt = false
+
+[functions.outreach-send]
+verify_jwt = false
+
+[functions.outreach-reply]
+verify_jwt = false
+
+# Nachtlauf für Suche und Entwürfe. Prüft das Nutzer-JWT selbst, der Cron den Header x-outreach-cron.
+[functions.outreach-night]
+verify_jwt = false
+
 [functions.deal-estimate]
 verify_jwt = false
 

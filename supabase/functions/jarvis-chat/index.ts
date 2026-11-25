@@ -1488,12 +1488,12 @@ function runRead(
 }
 
 async function inboxWaiting(sb: SupabaseClient) {
-  const { data, error } = await sb.from("conversations").select("id, subject").eq("draft_status", "pending").limit(50);
-  if (error) return { ui: { panel: "posteingang", data: { title: "Posteingang", crm: "posteingang", rows: [], kpis: [] } }, forModel: { hinweis: "Posteingang ist noch nicht migriert.", anzahl: 0 } };
+  const { data, error } = await sb.from("outreach_drafts").select("id, subject").eq("status", "entwurf").limit(50);
+  if (error) return { ui: { panel: "outreach", data: { title: "Outreach", crm: "outreach", rows: [], kpis: [] } }, forModel: { hinweis: "Outreach ist noch nicht migriert.", anzahl: 0 } };
   const n = data?.length || 0;
   return {
-    ui: { panel: "posteingang", data: { title: "Posteingang", crm: "posteingang", spoken: n ? `${n} Entwürfe warten auf dich.` : "Keine Entwürfe warten.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "" } })), columns: [{ key: "betreff", label: "Betreff" }], kpis: [{ label: "Wartet", value: String(n) }] } },
-    forModel: { anzahl: n, hinweis: n ? `${n} Entwürfe warten. Nichts wird von allein gesendet.` : "Keine Entwürfe warten." },
+    ui: { panel: "outreach", data: { title: "Outreach", crm: "outreach", spoken: n ? `${n} Entwürfe warten auf Freigabe.` : "Keine Entwürfe warten.", rows: (data || []).map((r) => ({ id: r.id, cells: { betreff: r.subject || "" } })), columns: [{ key: "betreff", label: "Betreff" }], kpis: [{ label: "Wartet", value: String(n) }] } },
+    forModel: { anzahl: n, hinweis: n ? `${n} Outreach-Entwürfe warten auf Freigabe. Nichts wird von allein gesendet.` : "Keine Entwürfe warten." },
   };
 }
 

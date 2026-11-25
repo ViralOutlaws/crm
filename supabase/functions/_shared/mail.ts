@@ -293,7 +293,7 @@ export async function imapFetchNew(folder: string, spec: number | { afterUid?: n
     const out: FetchedMail[] = [];
     for (const uid of uids) {
       if (opts.deadline && Date.now() > opts.deadline) break;
-      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE)] BODY.PEEK[TEXT]<0.8000>)`);
+      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)] BODY.PEEK[TEXT]<0.8000>)`);
       const blob = lines.join("\n");
       const header = /BODY\[HEADER[^\]]*\]\s*([\s\S]*?)(?=BODY\[TEXT\]|b\d+ OK|\* \d+ FETCH|$)/i.exec(blob)?.[1] || blob;
       const text = /BODY\[TEXT\](?:<\d+>)?\s*([\s\S]*?)(?=b\d+ OK|\)$)/i.exec(blob)?.[1] || "";
@@ -357,7 +357,22 @@ export async function imapAppend(folder: string, raw: string) {
   });
 }
 
-export async function smtpSend(to: string[], subject: string, text: string, from: string): Promise<void> {
+export type OutboundMail = { messageId?: string; inReplyTo?: string; references?: string };
+
+export function buildRfc822(from: string, to: string[], subject: string, text: string, fromName: string, extra?: OutboundMail): string {
+  const lines = [
+    `From: ${fromName} <${from}>`,
+    `To: ${to.join(", ")}`,
+    `Subject: ${subject}`,
+  ];
+  if (extra?.messageId) lines.push(`Message-ID: ${extra.messageId}`);
+  if (extra?.inReplyTo) lines.push(`In-Reply-To: ${extra.inReplyTo}`);
+  if (extra?.references) lines.push(`References: ${extra.references}`);
+  lines.push("MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", text);
+  return lines.join("\r\n");
+}
+
+export async function smtpSend(to: string[], subject: string, text: string, from: string, extra?: OutboundMail): Promise<void> {
   const cfg = mailConfig();
   if (!cfg) throw new Error("E-Mail noch nicht verbunden");
   const conn = await Deno.connectTls({ hostname: cfg.smtpHost, port: cfg.smtpPort });
@@ -401,17 +416,8 @@ export async function smtpSend(to: string[], subject: string, text: string, from
     }
     await write("DATA");
     await expect("354");
-    const raw = [
-      `From: ${cfg.fromName} <${from}>`,
-      `To: ${to.join(", ")}`,
-      `Subject: ${subject}`,
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=UTF-8",
-      "",
-      text.replace(/^\./gm, ".."),
-      ".",
-    ].join("\r\n");
-    await conn.write(enc.encode(raw + "\r\n"));
+    const raw = buildRfc822(from, to, subject, text.replace(/^\./gm, ".."), cfg.fromName, extra);
+    await conn.write(enc.encode(raw + "\r\n.\r\n"));
     await expect("250");
     await write("QUIT");
   } finally {
@@ -419,14 +425,23 @@ export async function smtpSend(to: string[], subject: string, text: string, from
   }
 }
 
-export function rfc822(from: string, to: string[], subject: string, text: string, fromName: string): string {
-  return [
-    `From: ${fromName} <${from}>`,
-    `To: ${to.join(", ")}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "",
-    text,
-  ].join("\r\n");
+export function rfc822(from: string, to: string[], subject: string, text: string, fromName: string, extra?: OutboundMail): string {
+  return buildRfc822(from, to, subject, text, fromName, extra);
+}
+
+/** SMTP und Kopie nach Gesendet. Wirft, wenn die Mailbox nicht verbunden ist. */
+export async function sendAndFile(to: string[], subject: string, text: string, from: string, extra?: OutboundMail): Promise<string> {
+  const cfg = mailConfig();
+  if (!cfg) throw new Error("E-Mail noch nicht verbunden");
+  if (!from.includes("@")) throw new Error("Absender fehlt. MAIL_USER als volle Adresse setzen.");
+  await smtpSend(to, subject, text, from, extra);
+  try {
+    const folders = await imapList();
+    const sent = pickSentFolder(folders, cfg.sentFolder);
+    if (!sent) return "Gesendet-Ordner nicht erkannt. MAIL_SENT_FOLDER optional setzen.";
+    await imapAppend(sent, rfc822(from, to, subject, text, cfg.fromName, extra));
+    return "";
+  } catch {
+    return "Die Mail ist raus, die Kopie in Gesendet hat nicht geklappt.";
+  }
 }

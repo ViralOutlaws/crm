@@ -1,6 +1,6 @@
 // SMTP-Versand und IMAP APPEND in Gesendet. Prüft das Nutzer-JWT selbst. Nur wenn Kim sendet.
 import { cors, json, userClient } from "../_shared/edge_auth.ts";
-import { imapAppend, imapList, mailConfig, pickSentFolder, rfc822, smtpSend } from "../_shared/mail.ts";
+import { mailConfig, sendAndFile } from "../_shared/mail.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -16,16 +16,7 @@ Deno.serve(async (req) => {
     if (!to.length || !subject || !text) return json({ error: "Empfänger, Betreff und Text fehlen" }, 400);
     const from = cfg.user.includes("@") ? cfg.user : String(body.from || "");
     if (!from.includes("@")) return json({ error: "Absender fehlt. MAIL_USER als volle Adresse setzen." }, 400);
-    await smtpSend(to, subject, text, from);
-    let sentWarning = "";
-    try {
-      const folders = await imapList();
-      const sent = pickSentFolder(folders, cfg.sentFolder);
-      if (sent) await imapAppend(sent, rfc822(from, to, subject, text, cfg.fromName));
-      else sentWarning = "Gesendet-Ordner nicht erkannt. MAIL_SENT_FOLDER optional setzen.";
-    } catch {
-      sentWarning = "Die Mail ist raus, die Kopie in Gesendet hat nicht geklappt.";
-    }
+    const sentWarning = await sendAndFile(to, subject, text, from);
     const conversationId = String(body.conversationId || "");
     if (conversationId) {
       const now = new Date().toISOString();
