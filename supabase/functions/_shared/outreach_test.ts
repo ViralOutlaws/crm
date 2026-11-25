@@ -1,7 +1,9 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   assertPublicHttpUrl,
+  anlassSatz,
   composePeerMail,
+  mailWords,
   contactSeed,
   emailMatchesPerson,
   finalizeMail,
@@ -214,7 +216,7 @@ Deno.test("Die Seite liefert konkrete Beobachtungen mit Quelle, eine dünne Seit
   assertEquals(thin.length < 2, true);
 });
 
-Deno.test("Die Mail benennt das Problem, ohne die Lösung zu verraten", () => {
+Deno.test("Die Mail: Anlass, Szene, Vorstellung, Terminfrage, Opt-out, P.S. und keine Anleitung", () => {
   const notes = observeSite({
     pageHtml: OLD,
     pageUrl: "https://musterwerk.example.test/",
@@ -228,16 +230,31 @@ Deno.test("Die Mail benennt das Problem, ohne die Lösung zu verraten", () => {
     ort: "Immenstadt",
     note: "Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.",
   }];
-  const plain = composePeerMail({ person: "Lena Muster", firma: "Musterwerk GmbH", observations: notes, references: refs, branche: "Bäckerei" });
+  const ctx = { person: "Lena Muster", rolle: "Geschäftsführerin", firma: "Musterwerk GmbH", web: "https://musterwerk.example.test/", observations: notes, references: refs, branche: "Maschinenbau und Industrie", query: "Maschinenbau und Industrie · Ulm" };
+  const plain = composePeerMail(ctx);
   if (!plain) throw new Error("keine Mail");
-  assertEquals(reviewMail(plain.body, { observations: notes, references: refs }).join(","), "");
+  const anlass = anlassSatz(ctx);
+  assertEquals(anlass, "bei einer Recherche nach Maschinenbau-Unternehmen in Ulm bin ich auf Ihre Website gestoßen.");
+  assertEquals(reviewMail(plain.body, { observations: notes, references: refs, anlass }).join(","), "");
+  assertEquals(plain.body.startsWith("Guten Tag Frau Muster,"), true);
   assertEquals(plain.body.includes("Werkstatt Berg"), false);
+  assertEquals(plain.body.includes("Kim Lukas Tobler von Viral Outlaws"), true);
+  assertEquals(plain.body.includes("15 Minuten online oder bei Ihnen vor Ort"), true);
+  assertEquals(plain.body.includes("dann melde ich mich nicht mehr"), true);
+  assertEquals(/\nP\.S\. /.test(plain.body), true);
+  assertEquals(/entwurf/i.test(plain.body), false);
   assertEquals(hasInstruction(plain.body), false);
   assertEquals(hasInstruction("Stellen Sie die Seite auf die Breite des Handys."), true);
   assertEquals(reviewMail(`${plain.body}\n\nLegen Sie ein Formular auf die Startseite.`, { observations: notes, references: refs }).includes("Anleitung"), true);
-  assertEquals(/Bitte abmelden/.test(plain.body), true);
   assertEquals(/!/.test(plain.body), false);
-  assertEquals(wordCount(plain.body) <= MAIL_WORD_MAX, true);
+  const words = mailWords(plain.body);
+  assertEquals(words >= 95 && words <= 140, true);
+  assertEquals(reviewMail(plain.body.replace("bei einer Recherche", "zufällig bei einer Recherche"), { observations: notes, references: refs, anlass }).includes("Anlass"), true);
+  assertEquals(reviewMail(plain.body.replace("Passt Ihnen", "Ich habe bereits einen Entwurf erstellt. Passt Ihnen"), { observations: notes, references: refs, anlass }).includes("Ausweichoption oder Entwurf"), true);
+  assertEquals(reviewMail(plain.body.replace("gestoßen.", "gestoßen. Ihre Arbeit ist beeindruckend."), { observations: notes, references: refs, anlass }).includes("Kompliment nicht belegt"), true);
+  const praised = plain.body.replace("gestoßen.", "gestoßen. Schön, dass Sie Sondermaschinen für die Verpackungsindustrie bauen.");
+  assertEquals(reviewMail(praised, { observations: notes, references: refs, anlass, beleg: "Sondermaschinen für die Verpackungsindustrie", pageText: "Wir bauen Sondermaschinen für die Verpackungsindustrie." }).includes("Kompliment nicht belegt"), false);
+  assertEquals(reviewMail(praised, { observations: notes, references: refs, anlass, beleg: "Weltmarktführer", pageText: "Wir bauen Sondermaschinen." }).includes("Kompliment nicht belegt"), true);
   const wagner = [{
     firma: "Schreinerei Wagner",
     branche: "Schreinerei",
@@ -247,24 +264,21 @@ Deno.test("Die Mail benennt das Problem, ohne die Lösung zu verraten", () => {
   assertEquals(matchingReference(refs, "Schreinerei"), null);
   assertEquals(matchingReference(wagner, "Schreinerei")?.firma, "Schreinerei Wagner");
   assertEquals(matchingReference(wagner, "Physiotherapie"), null);
-  const wood = composePeerMail({ person: "Mara Holm", firma: "Beispielbetrieb", observations: notes, references: wagner, branche: "Schreinerei" });
+  const wood = composePeerMail({ ...ctx, person: "Mara Holm", rolle: "Inhaberin", references: wagner, branche: "Schreinerei", query: "" });
   if (!wood) throw new Error("keine Referenzmail");
   assertEquals(wood.body.includes("Schreinerei Wagner"), true);
-  assertEquals(reviewMail(wood.body, { observations: notes, references: wagner }).join(","), "");
+  assertEquals(reviewMail(wood.body, { observations: notes, references: wagner }).filter((i) => i !== "Länge").join(","), "");
   assertEquals(matchingReference(refs, "Bäckerei"), null);
-  const fluffy = "Guten Tag Lena,\n\nich hoffe, diese Mail erreicht Sie gut! Unsere innovative Lösung ist maßgeschneidert.\n\nSoll ich Ihnen das kurz zeigen?\n\nViele Grüße\nKim\nViral Outlaws\n\nBitte abmelden.";
+  const fluffy = "Guten Tag Lena,\n\nich hoffe, diese Mail erreicht Sie gut! Unsere innovative Lösung ist maßgeschneidert.\n\nSoll ich Ihnen das kurz zeigen?\n\nViele Grüße\nKim\nViral Outlaws";
   assertEquals(reviewMail(fluffy, { observations: notes, references: refs }).includes(SUBSTANCE_LABEL), true);
   const invented = `Bei Fantasie GmbH war das schon so.\n\n${plain.body}`;
   assertEquals(reviewMail(invented, { observations: notes, references: refs }).includes("Referenz nicht belegt"), true);
-  const kept = finalizeMail({
-    person: "Lena Muster",
-    firma: "Musterwerk GmbH",
-    observations: notes,
-    attempts: [{ subject: "Kurz", body: fluffy }],
-  });
+  const kept = finalizeMail({ ...ctx, attempts: [{ subject: "Kurz", body: fluffy }] });
   assertEquals(kept.ok && kept.source === "vorlage", true);
   const thin = finalizeMail({ person: "Ada", firma: "Dünn", observations: observeSite({ pageHtml: THIN, pageUrl: "https://duenn.example.test/", year: 2026 }) });
   assertEquals(thin.ok, false);
+  assertEquals(isOptOut("Danke, ist kein Thema für uns."), true);
+  assertEquals(isOptOut("Gern, rufen Sie mich an.\n\nAm 25.11.2026 schrieb Kim:\n> Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr."), false);
   const seed = contactSeed({ firma: "Musterwerk GmbH", person: "Lena Muster", email: "lena.muster@musterwerk.example.test", str: "Hafenstraße 4", plz: "87435", ort: "Kempten", web: "https://musterwerk.example.test" });
   assertEquals(seed.status, "lead");
   assertEquals("kundennummer" in seed, false);

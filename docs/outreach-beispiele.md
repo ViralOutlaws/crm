@@ -1,57 +1,90 @@
 # Drei Beispielmails
 
-Erfundene Firmen auf `.example.test`. Die Mail nennt das Problem und was es kostet. Sie sagt nicht, was der Betrieb selbst ändern soll. Keine Schreinerei, keine erfundene Referenz. Anrede mit Frau oder Herr und Nachname.
+Erfundene Betriebe auf `.example.test`, Stand 25.11.2026. Aufbau nach `docs/outreach.md`: Betreff mit der konkreten Beobachtung, ehrlicher Anlass aus der Recherche, ein belegtes Kompliment, das Problem aus Sicht der Kunden, Brücke und Vorstellung, direkte Terminfrage, Opt-out und ein P.S. als Haken. Keine Anleitung, keine Preise, kein Entwurf, keine Schreinerei.
 
-## Musterwerk GmbH
+Jede Mail besteht die Prüfung `reviewMail` mit dem Anlass-Satz und dem Beleg aus dem Seitentext.
 
-Auf dem Handy ist die Seite winzig, abends gibt es nur eine Telefonnummer. Die Anfragen gehen verloren.
+## Arztpraxis (Demo: Hausarztpraxis Albrecht, Ulm)
 
-> Guten Tag Frau Muster,
+Beobachtungen: Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular. / Im Impressum steht als Stand das Jahr 2018.
+
+Beleg fürs Kompliment (Seitentext): „reisemedizinische Beratung“
+
+Fließtext: 128 Wörter
+
+**Betreff:** Terminanfragen nach Feierabend auf praxis-albrecht.example.test
+
+> Guten Tag Frau Albrecht,
 >
-> auf dem Handy wird die Seite von Musterwerk GmbH winzig dargestellt. Wer sie dort nicht lesen kann, geht wieder, ohne anzurufen. Abends findet man nur eine Telefonnummer. Anfragen, die dann kommen, gehen verloren, weil niemand rangeht.
+> bei einer Recherche nach Arztpraxen in Ulm bin ich auf Ihre Website gestoßen. Schön, dass Sie auch reisemedizinische Beratung anbieten.
 >
-> Genau solche Punkte löse ich für Betriebe wie Ihren. Das kann mehr Anfragen bringen, ohne dass jemand dauernd am Telefon sitzt.
+> Wer abends einen Termin anfragen möchte, findet auf Ihrer Seite nur eine Telefonnummer. Viele Patienten warten dann nicht bis morgen, sondern fragen bei der nächsten Praxis an.
 >
-> Darf ich Ihnen in zehn Minuten zeigen, was das für Ihre Seite heißt?
+> Genau solche Stellen sind mein Job. Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen Praxen moderne Websites und KI-Lösungen, damit aus Besuchern Terminanfragen werden. Beispiele finden Sie auf viraloutlaws.de.
 >
-> Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
+> Ich würde Ihnen gern unverbindlich zeigen, wie das für Ihre Praxis aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?
+>
+> Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.
 >
 > Viele Grüße
 > Kim
 > Viral Outlaws
+>
+> P.S. Im Impressum steht noch der Stand 2018.
 
-## Beispielhof
+## Maschinenbau (Demo: Brandt Sondermaschinen GmbH, Heilbronn)
 
-Die Anfrage liegt erst auf der Kontaktseite. In der Suche fehlt, was der Hof macht. Wer das nicht weiß, klickt woanders.
+Beobachtungen: Ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite. / Die Startseite hat keine meta description.
 
-> Guten Tag Herr Beispiel,
+Beleg fürs Kompliment (Seitentext): „Montageanlagen für die Automobilzulieferindustrie“
+
+Fließtext: 129 Wörter
+
+**Betreff:** Der Weg zur Anfrage auf brandt-sondermaschinen.example.test
+
+> Guten Tag Herr Brandt,
 >
-> wer bei Beispielhof anfragen will, muss die Kontaktseite erst suchen. Manche geben auf, bevor sie dort sind. In der Suche fehlt außerdem ein Satz, was der Hof macht und wo er sitzt. Wer das nicht schon weiß, klickt woanders.
+> bei einer Recherche nach Maschinenbau-Unternehmen in Heilbronn bin ich auf Ihre Website gestoßen. Spannend, dass Sie Montageanlagen für die Automobilzulieferindustrie entwickeln.
 >
-> Ich schaue mir genau solche Stellen an. Der Unterschied ist oft, dass die Anfrage ankommt, statt unterwegs verloren zu gehen.
+> Wer bei Ihnen anfragen möchte, muss das Formular erst auf der Kontaktseite suchen. Einkäufer, die Anbieter vergleichen, schreiben dann oft dem, bei dem es schneller geht.
 >
-> Soll ich Ihnen eine kurze Einschätzung schicken, was das bei Ihnen ausmacht?
+> Genau solche Stellen sind mein Job. Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen Industriebetrieben moderne Websites und KI-Lösungen, damit aus Besuchern Projektanfragen werden. Beispiele finden Sie auf viraloutlaws.de.
 >
-> Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
+> Ich würde Ihnen gern unverbindlich zeigen, wie das für Ihr Unternehmen aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?
+>
+> Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.
 >
 > Viele Grüße
 > Kim
 > Viral Outlaws
+>
+> P.S. In der Google-Suche fehlt Ihrer Seite ein eigener Beschreibungssatz.
 
-## Praxis Vitalis
+## Restaurant (Demo: Gasthaus Lindenhof, Regensburg)
 
-Physiotherapie. Einen Termin sieht man auf der Seite nicht, also bucht man woanders. Der Text kommt spät. Keine Referenz.
+Beobachtungen: Auf den gelesenen Seiten steht kein Link mit Termin, Buchen oder Reservierung. / Die Startseite hat kein viewport-Meta.
 
-> Guten Tag Frau Holm,
+Beleg fürs Kompliment (Seitentext): „Zutaten von Höfen aus der Oberpfalz“
+
+Fließtext: 130 Wörter
+
+**Betreff:** Reservierungen über lindenhof-regensburg.example.test
+
+> Guten Tag Herr Lehner,
 >
-> einen Termin kann man auf der Seite der Praxis Vitalis nicht hinterlegen. Wer einen Termin sucht und ihn hier nicht sieht, bucht woanders. Dazu kommt: Besucher warten, bevor der Text da ist, und viele bleiben das nicht.
+> bei einer Recherche nach Restaurants in Regensburg bin ich auf Ihre Website gestoßen. Schön, dass Sie in Ihrer Küche auf Höfe aus der Oberpfalz setzen.
 >
-> Genau damit kenne ich mich aus, bei Betrieben in Ihrer Größe. Termine können bei Ihnen landen, statt beim Nächsten.
+> Wer für Freitagabend einen Tisch reservieren möchte, findet auf Ihrer Seite keinen direkten Weg zur Reservierung. Viele Gäste reservieren dann dort, wo es mit zwei Klicks geht.
 >
-> Haben Sie zehn Minuten, damit ich Ihnen zeige, was das auf Ihrer Seite bedeutet?
+> Genau solche Stellen sind mein Job. Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen Restaurants moderne Websites, damit aus Besuchern Reservierungen werden. Beispiele finden Sie auf viraloutlaws.de.
 >
-> Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.
+> Ich würde Ihnen gern unverbindlich zeigen, wie das für Ihr Restaurant aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?
+>
+> Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.
 >
 > Viele Grüße
 > Kim
 > Viral Outlaws
+>
+> P.S. Auf dem Handy wird Ihre Startseite stark verkleinert angezeigt.
+

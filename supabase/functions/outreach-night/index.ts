@@ -5,6 +5,7 @@ import { anthropicText, cors, json, userClient } from "../_shared/edge_auth.ts";
 import { researchPage } from "../_shared/outreach_fetch.ts";
 import { loadGuard } from "../_shared/outreach_db.ts";
 import {
+  htmlToText,
   MIN_OBSERVATIONS,
   assertPublicHttpUrl,
   draftUserPrompt,
@@ -19,6 +20,8 @@ import {
   type EmailArt,
   type Observation,
   type PortfolioRef,
+  anlassSatz,
+  reviewMail,
 } from "../_shared/outreach.ts";
 import {
   DEFAULT_PROFILES,
@@ -139,6 +142,7 @@ async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branc
     ort: read.ort || null,
     impressum_url: read.impressumUrl || null,
     excerpt: read.excerpt || null,
+    page_excerpt: htmlToText(page.pageHtml || "").slice(0, 2000) || null,
     branche: meta.branche || null,
     observations,
     status,
@@ -184,7 +188,7 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
   for (const person of list) {
     const art = String(person.email_art || "generisch") as EmailArt;
     if (art === "vermutet" || drafted.has(String(person.target_id))) continue;
-    const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche").eq("id", person.target_id).maybeSingle();
+    const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, page_excerpt").eq("id", person.target_id).maybeSingle();
     const row = target.data;
     if (!row || row.status !== "recherchiert" || row.skip_reason) continue;
     const existing = await sb.from("outreach_drafts").select("id").eq("workspace_id", workspaceId).eq("target_id", row.id).limit(1);
@@ -201,35 +205,32 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
     if (skip) continue;
     const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
     if (observations.length < MIN_OBSERVATIONS) continue;
-    let mail = finalizeMail({
+    const ctx = {
       person: String(person.person || ""),
+      rolle: String(person.rolle || ""),
       firma: String(row.firma || ""),
+      web: String(row.web || ""),
+      domain: row.domain,
+      branche: row.branche,
+      query: row.query,
+      ort: row.ort,
+      pageText: row.page_excerpt,
       observations,
       references,
-      branche: row.branche,
-      attempts: [],
-    });
-    if (!mail.ok) {
-      const prompt = draftUserPrompt({
-        wissen: wissen.data || [],
-        references,
-        firma: String(row.firma || ""),
-        person: String(person.person || ""),
-        rolle: String(person.rolle || ""),
-        web: String(row.web || ""),
-        branche: row.branche,
-        observations,
-      });
-      const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 900));
-      if (first) {
-        mail = finalizeMail({
-          person: String(person.person || ""),
-          firma: String(row.firma || ""),
-          observations,
-          references,
-          branche: row.branche,
-          attempts: [first],
-        });
+    };
+    const prompt = draftUserPrompt({ ...ctx, wissen: wissen.data || [] });
+    const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 1000));
+    let mail = finalizeMail({ ...ctx, attempts: first ? [first] : [] });
+    if (mail.ok && mail.source !== "ki" && first) {
+      const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText });
+      const second = parseMailJson(await anthropicText(
+        "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
+        `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu und halte den Aufbau genau ein.`,
+        1000,
+      ));
+      if (second) {
+        const again = finalizeMail({ ...ctx, attempts: [second] });
+        if (again.ok && again.source === "ki") mail = again;
       }
     }
     if (!mail.ok) {

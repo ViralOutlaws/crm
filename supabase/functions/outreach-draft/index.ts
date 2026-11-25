@@ -2,6 +2,7 @@
 import { anthropicText, cors, json, userClient } from "../_shared/edge_auth.ts";
 import { loadGuard } from "../_shared/outreach_db.ts";
 import {
+  anlassSatz,
   draftUserPrompt,
   finalizeMail,
   outreachSkip,
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
         skipped.push({ id: person.id, reason: "Vermutete Adresse wird nicht automatisch entworfen." });
         continue;
       }
-      const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche").eq("id", person.target_id).maybeSingle();
+      const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, page_excerpt").eq("id", person.target_id).maybeSingle();
       const row = target.data;
       if (!row) {
         skipped.push({ id: person.id, reason: "Ziel fehlt" });
@@ -87,43 +88,31 @@ Deno.serve(async (req) => {
         continue;
       }
       const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
-      const prompt = draftUserPrompt({
-        wissen: wissen.data || [],
-        references,
-        firma: String(row.firma || ""),
+      const ctx = {
         person: String(person.person || ""),
         rolle: String(person.rolle || ""),
-        web: String(row.web || ""),
-        branche: row.branche,
-        observations,
-      });
-      const attempts: { subject: string; body: string }[] = [];
-      const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 900));
-      if (first) attempts.push(first);
-      let mail = finalizeMail({
-        person: String(person.person || ""),
         firma: String(row.firma || ""),
+        web: String(row.web || ""),
+        domain: row.domain,
+        branche: row.branche,
+        query: row.query,
+        ort: row.ort,
+        pageText: row.page_excerpt,
         observations,
         references,
-        branche: row.branche,
-        attempts,
-      });
+      };
+      const prompt = draftUserPrompt({ ...ctx, wissen: wissen.data || [] });
+      const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 1000));
+      let mail = finalizeMail({ ...ctx, attempts: first ? [first] : [] });
       if (mail.ok && mail.source !== "ki" && first) {
-        const issues = reviewMail(first.body, { observations, references });
+        const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText });
         const second = parseMailJson(await anthropicText(
           "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
-          `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu. Nenne das Problem und was es kostet. Keine Anleitung, kein Stellen Sie, Setzen Sie oder Legen Sie.`,
-          900,
+          `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu und halte den Aufbau genau ein.`,
+          1000,
         ));
         if (second) {
-          const again = finalizeMail({
-            person: String(person.person || ""),
-            firma: String(row.firma || ""),
-            observations,
-            references,
-            branche: row.branche,
-            attempts: [second],
-          });
+          const again = finalizeMail({ ...ctx, attempts: [second] });
           if (again.ok && again.source === "ki") mail = again;
         }
       }

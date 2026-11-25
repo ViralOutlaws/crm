@@ -477,9 +477,21 @@ export function sendDecision(input: {
   return { ok: true };
 }
 
+/** Nur der neue Teil einer Antwort: ohne zitierte Zeilen und ohne den Verlauf darunter. */
+export function replyOwnText(text: string): string {
+  const lines = String(text || "").split(/\r?\n/);
+  const out: string[] = [];
+  for (const line of lines) {
+    if (/^\s*(?:am .{4,120}schrieb|on .{4,120}wrote|-{2,}\s*(?:original|ursprüngliche)|von:\s|from:\s)/i.test(line)) break;
+    if (/^\s*>/.test(line)) continue;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 export function isOptOut(text: string): boolean {
-  const s = String(text || "").toLowerCase();
-  return /abmelden|austragen|unsubscribe|opt-?out|keine weiteren|nicht mehr (schreiben|kontaktieren|anrufen|melden)|bitte nicht mehr|kein interesse|keine werbung|aus dem verteiler|lösch(?:en|t) (?:meine|uns)|nehmen sie .{0,40}(?:raus|heraus)|widerspreche/.test(s);
+  const s = replyOwnText(text).toLowerCase().replace(/falls das kein thema für sie ist[^.]*\./g, " ");
+  return /abmelden|austragen|unsubscribe|opt-?out|keine weiteren|nicht mehr (schreiben|kontaktieren|anrufen|melden)|bitte nicht mehr|kein interesse|kein thema|keine werbung|aus dem verteiler|lösch(?:en|t) (?:meine|uns)|nehmen sie .{0,40}(?:raus|heraus)|widerspreche/.test(s);
 }
 
 export function normalizeMessageId(raw: string): string {
@@ -563,7 +575,7 @@ const KIND_MARK: Record<Observation["kind"], RegExp> = {
   mobil: /handy|winzig|bildschirm/i,
   tempo: /warten|lädt|langsam/i,
   kontakt: /anfrag|telefon|formular|abends/i,
-  buchung: /termin|buchen/i,
+  buchung: /termin|buchen|reservier/i,
   seo: /suche|google|überschrift/i,
   social: /bewertung|profil|vertrauen/i,
   auftritt: /eindruck|lesen/i,
@@ -817,128 +829,301 @@ export function hasInstruction(text: string): boolean {
   return false;
 }
 
-export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[] }): string[] {
+// ---- Mail-Aufbau (Stand 25.11.2026) ----
+// Betreff = konkrete Beobachtung. Einstieg = ehrlicher Anlass aus der Recherche + optional ein belegtes Kompliment.
+// Problem aus Sicht der Kunden des Betriebs, keine Anleitung. Brücke + Vorstellung. Terminfrage. Opt-out. P.S. als Haken.
+
+export const MAIL_WORDS_MIN = 95;
+export const MAIL_WORDS_MAX_TOTAL = 145;
+export const MAIL_WORDS_TARGET_MAX = 140;
+
+export type BranchVoice = {
+  key: "praxis" | "industrie" | "gastro" | "kanzlei" | "immobilien" | "salon" | "handwerk" | "allgemein";
+  label: string;
+  kunden: string;
+  ziel: string;
+  akt: string;
+  woanders: string;
+  wegZu: string;
+  wir: string;
+  betriebNom: string;
+  betriebAkk: string;
+};
+
+export function branchVoice(branche?: string | null, query?: string | null): BranchVoice {
+  const s = `${branche || ""} ${query || ""}`.toLowerCase();
+  if (/zahn|dentist/.test(s)) return { key: "praxis", label: "Zahnarztpraxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
+  if (/physio/.test(s)) return { key: "praxis", label: "Physiotherapie-Praxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
+  if (/ärzt|aerzt|arzt|praxis|praxen|klinik|doctor|clinic|heilprakt/.test(s)) return { key: "praxis", label: "Arztpraxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
+  if (/maschinen|industrie|metall|engineer|fertigung|anlagenbau|man_made=works/.test(s)) return { key: "industrie", label: "Maschinenbau-Unternehmen", kunden: "Einkäufer", ziel: "Projektanfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Anbieter", wegZu: "zur Projektanfrage", wir: "Industriebetrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Unternehmen", betriebAkk: "Ihr Unternehmen" };
+  if (/gastro|restaurant|café|cafe|gasthof|gasthaus|bistro|wirtshaus/.test(s)) return { key: "gastro", label: "Restaurants", kunden: "Gäste", ziel: "Reservierungen", akt: "einen Tisch reservieren", woanders: "reservieren beim nächsten Restaurant", wegZu: "zur Reservierung", wir: "Restaurants moderne Websites", betriebNom: "Ihr Restaurant", betriebAkk: "Ihr Restaurant" };
+  if (/immobil|makler|estate/.test(s)) return { key: "immobilien", label: "Immobilienbüros", kunden: "Interessenten", ziel: "Anfragen", akt: "eine Anfrage stellen", woanders: "melden sich beim nächsten Makler", wegZu: "zur Anfrage", wir: "Immobilienbüros moderne Websites und KI-Lösungen", betriebNom: "Ihr Büro", betriebAkk: "Ihr Büro" };
+  if (/kanzlei|steuer|anwalt|rechts|beratung|lawyer|tax/.test(s)) return { key: "kanzlei", label: "Kanzleien", kunden: "Mandanten", ziel: "Mandatsanfragen", akt: "ein Erstgespräch anfragen", woanders: "melden sich bei der nächsten Kanzlei", wegZu: "zum Erstgespräch", wir: "Kanzleien moderne Websites und KI-Lösungen", betriebNom: "Ihre Kanzlei", betriebAkk: "Ihre Kanzlei" };
+  if (/salon|friseur|kosmetik|beauty|fitness|studio|hairdresser/.test(s)) return { key: "salon", label: "Salons und Studios", kunden: "Kunden", ziel: "Terminbuchungen", akt: "einen Termin buchen", woanders: "buchen beim nächsten Studio", wegZu: "zur Terminbuchung", wir: "Salons und Studios moderne Websites", betriebNom: "Ihr Studio", betriebAkk: "Ihr Studio" };
+  if (/handwerk|elektr|sanitär|sanitaer|heizung|maler|dach|kfz|werkstatt|fliesen|glas|plumber|electrician|roofer|painter|car_repair|tiler|hvac/.test(s)) return { key: "handwerk", label: "Handwerksbetrieben", kunden: "Kunden", ziel: "Aufträge", akt: "einen Auftrag anfragen", woanders: "fragen beim nächsten Betrieb an", wegZu: "zur Anfrage", wir: "Handwerksbetrieben moderne, mobile Websites", betriebNom: "Ihr Betrieb", betriebAkk: "Ihren Betrieb" };
+  return { key: "allgemein", label: "Betrieben", kunden: "Kunden", ziel: "Anfragen", akt: "etwas anfragen", woanders: "fragen beim nächsten Anbieter an", wegZu: "zur Anfrage", wir: "kleinen und mittleren Betrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Betrieb", betriebAkk: "Ihren Betrieb" };
+}
+
+/** Wo gesucht wurde: Gebiet aus dem Nachtlauf ("Profil · Gebiet"), sonst der Ort aus dem Impressum. */
+export function anlassOrt(query?: string | null, ort?: string | null): string {
+  const q = String(query || "");
+  const area = q.includes("·") ? q.split("·").pop()!.trim() : "";
+  const place = (area && !/^deutschland$/i.test(area) ? area : "") || String(ort || "").trim();
+  return place.replace(/\s+/g, " ").slice(0, 60);
+}
+
+/** Der ehrliche Anlass. Kein "zufällig". */
+export function anlassSatz(input: { branche?: string | null; query?: string | null; ort?: string | null }): string {
+  const voice = branchVoice(input.branche, input.query);
+  const ort = anlassOrt(input.query, input.ort);
+  return `bei einer Recherche nach ${voice.label}${ort ? ` in ${ort}` : ""} bin ich auf Ihre Website gestoßen.`;
+}
+
+function yearOf(o: Observation): string {
+  return /((?:19|20)\d{2})/.exec(o.text)?.[1] || "";
+}
+
+function siteName(web?: string | null, domain?: string | null): string {
+  return websiteDomain(String(domain || web || "")) || "Ihre Website";
+}
+
+/** Szene aus Sicht der Kunden des Betriebs plus was es kostet. Zwei Sätze, keine Anleitung. */
+export function sceneFor(o: Observation, v: BranchVoice): string {
+  switch (o.kind) {
+    case "kontakt":
+      return /formular erst/i.test(o.text)
+        ? `Wer bei Ihnen ${v.akt} möchte, muss das Formular erst auf der Kontaktseite suchen. Gerade auf dem Handy geben viele ${v.kunden} vorher auf.`
+        : `Wer abends ${v.akt} möchte, findet auf Ihrer Seite nur eine Telefonnummer. Viele ${v.kunden} warten dann nicht bis zum nächsten Morgen, sondern ${v.woanders}.`;
+    case "buchung":
+      return `Wer bei Ihnen ${v.akt} möchte, findet auf der Seite keinen direkten Weg ${v.wegZu}. Viele ${v.kunden} gehen dann dorthin, wo das mit zwei Klicks klappt.`;
+    case "mobil":
+      return `Wer Ihre Seite auf dem Handy öffnet, sieht sie stark verkleinert und muss erst zoomen. Genau an dieser Stelle springen viele ${v.kunden} ab, bevor sie sich überhaupt melden.`;
+    case "tempo":
+      return /srcset|bilder/i.test(o.text)
+        ? `Ihre Startseite lädt große Fotos auch auf dem Handy in voller Größe. Wer unterwegs sucht, wartet das oft nicht ab und klickt zurück zur Suche.`
+        : `Ihre Startseite lädt vor dem eigentlichen Text erst mehrere Skripte. Wer unterwegs am Handy sucht, wartet das oft nicht ab und klickt zurück zur Suche.`;
+    case "seo":
+      return /\bh1\b/i.test(o.text)
+        ? `Auf Ihrer Startseite fehlt eine klare Überschrift, was Sie anbieten. Wer in den ersten Sekunden nicht sieht, dass er richtig ist, sucht weiter.`
+        : `In der Google-Suche steht unter Ihrer Seite kein eigener Satz, was ${v.betriebNom} anbietet und wo. Wer Sie noch nicht kennt, klickt dann eher auf den Eintrag darüber.`;
+    case "social":
+      return `Vor dem ersten Kontakt möchten viele ${v.kunden} sehen, was andere über Sie sagen. Auf Ihrer Seite führt kein Weg zu Bewertungen oder einem Profil, und dieses Vertrauen fehlt dann.`;
+    case "auftritt":
+      return `Teile Ihrer Startseite sind noch mit sehr alter Web-Technik gebaut. Der erste Eindruck wirkt dadurch älter, als ${v.betriebNom} ist.`;
+    case "aktualitaet":
+      return `Im Impressum steht als Stand noch ${yearOf(o)}. Für ${v.kunden} wirkt das schnell so, als würde die Seite nicht mehr gepflegt.`;
+  }
+}
+
+/** Zweite Beobachtung im Problem-Absatz, ein Satz mit Folge. */
+export function alsoFor(o: Observation, v: BranchVoice): string {
+  switch (o.kind) {
+    case "kontakt":
+      return /formular erst/i.test(o.text)
+        ? "Dazu kommt: Das Anfrageformular liegt versteckt auf der Kontaktseite, und auf dem Handy findet es kaum jemand."
+        : "Dazu kommt: Außer der Telefonnummer gibt es keinen Weg für eine Anfrage, und was nach Feierabend kommt, geht verloren.";
+    case "buchung":
+      return `Dazu kommt: Einen direkten Weg ${v.wegZu} gibt es nicht, und wer ihn nicht findet, geht woanders hin.`;
+    case "mobil":
+      return "Dazu kommt: Auf dem Handy wird Ihre Startseite stark verkleinert angezeigt, und wer erst zoomen muss, springt oft ab.";
+    case "tempo":
+      return /srcset|bilder/i.test(o.text)
+        ? "Dazu kommt: Große Fotos werden auch aufs Handy in voller Größe geladen, und unterwegs wartet darauf kaum jemand."
+        : "Dazu kommt: Die Startseite lädt vor dem Text erst mehrere Skripte, und unterwegs am Handy wartet darauf kaum jemand.";
+    case "seo":
+      return /\bh1\b/i.test(o.text)
+        ? "Dazu kommt: Auf der Startseite fehlt eine klare Überschrift, was Sie anbieten, und wer das nicht sofort sieht, sucht weiter."
+        : "Dazu kommt: In der Google-Suche fehlt unter Ihrer Seite ein eigener Satz, was Sie anbieten, und so klicken Suchende eher woanders.";
+    case "social":
+      return "Dazu kommt: Ein Weg zu Bewertungen fehlt, und gerade die geben vor dem ersten Kontakt Sicherheit.";
+    case "auftritt":
+      return "Dazu kommt: Teile der Startseite sind mit sehr alter Technik gebaut, und das prägt den ersten Eindruck.";
+    case "aktualitaet":
+      return `Dazu kommt: Im Impressum steht als Stand noch ${yearOf(o)}, und das wirkt schnell ungepflegt.`;
+  }
+}
+
+/** Kleine Beobachtung für das P.S., ohne Folge und ohne Anleitung. */
+export function postscriptFor(o: Observation, v: BranchVoice): string {
+  switch (o.kind) {
+    case "kontakt":
+      return /formular erst/i.test(o.text)
+        ? "P.S. Ihr Anfrageformular liegt erst auf der Kontaktseite, nicht auf der Startseite."
+        : "P.S. Auf den Seiten, die ich mir angesehen habe, gibt es kein Anfrageformular, nur die Telefonnummer.";
+    case "buchung":
+      return `P.S. Einen direkten Weg ${v.wegZu} habe ich auf der Seite nicht gefunden.`;
+    case "mobil":
+      return "P.S. Auf dem Handy wird Ihre Startseite stark verkleinert angezeigt.";
+    case "tempo":
+      return /srcset|bilder/i.test(o.text)
+        ? "P.S. Auf der Startseite werden große Fotos auch aufs Handy in voller Größe geladen."
+        : "P.S. Ihre Startseite lädt vor dem Text erst mehrere Skripte.";
+    case "seo":
+      return /\bh1\b/i.test(o.text)
+        ? "P.S. Auf der Startseite fehlt eine Überschrift, die sagt, was Sie anbieten."
+        : "P.S. In der Google-Suche fehlt unter Ihrer Seite ein eigener Beschreibungssatz.";
+    case "social":
+      return "P.S. Einen Link zu Bewertungen oder einem Profil habe ich auf der Seite nicht gefunden.";
+    case "auftritt":
+      return "P.S. Teile der Startseite nutzen noch sehr alte Web-Technik.";
+    case "aktualitaet":
+      return `P.S. Im Impressum steht als Stand noch das Jahr ${yearOf(o)}.`;
+  }
+}
+
+export function subjectFor(o: Observation, v: BranchVoice, site: string): string {
+  switch (o.kind) {
+    case "kontakt":
+      return /formular erst/i.test(o.text) ? `Der Weg zur Anfrage auf ${site}` : `Anfragen nach Feierabend auf ${site}`;
+    case "buchung":
+      return v.key === "gastro" ? `Reservierungen über ${site}` : v.key === "praxis" || v.key === "salon" ? `Terminanfragen über ${site}` : `Anfragen über ${site}`;
+    case "mobil":
+      return `${site} auf dem Handy`;
+    case "tempo":
+      return `${site} unterwegs am Handy`;
+    case "seo":
+      return /\bh1\b/i.test(o.text) ? `Die Startseite von ${site}` : `${site} in der Google-Suche`;
+    case "social":
+      return `Bewertungen auf ${site}`;
+    case "auftritt":
+      return `Der erste Eindruck von ${site}`;
+    case "aktualitaet":
+      return `${site} mit Stand ${yearOf(o)}`;
+  }
+}
+
+export const MAIL_BRIDGE = "Genau solche Stellen sind mein Job.";
+export const MAIL_OPTOUT = "Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.";
+export const MAIL_SIGNATURE = ["Viele Grüße", "Kim", "Viral Outlaws"];
+
+export function introFor(v: BranchVoice, ref?: PortfolioRef | null): string {
+  const refLine = ref
+    ? `Für ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} haben wir das bereits umgesetzt, weitere Beispiele finden Sie auf viraloutlaws.de.`
+    : "Beispiele finden Sie auf viraloutlaws.de.";
+  return `${MAIL_BRIDGE} Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen ${v.wir}, damit aus Besuchern ${v.ziel} werden. ${refLine}`;
+}
+
+export function ctaFor(v: BranchVoice): string {
+  return `Ich würde Ihnen gern unverbindlich zeigen, wie das für ${v.betriebAkk} aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?`;
+}
+
+/** Text ohne Gruß und Signatur. */
+export function mailCore(body: string): string {
+  return String(body || "").replace(/\n\s*Viele Grüße\s*\n\s*Kim[^\n]*\n\s*Viral Outlaws[^\n]*/i, "\n");
+}
+
+/** Wortzahl des Fließtexts: ohne Anrede, Signatur und P.S. */
+export function mailWords(body: string): number {
+  const core = mailCore(body).replace(/\n\s*P\.\s?S\.[\s\S]*$/i, "");
+  const lines = core.split("\n");
+  const first = lines.findIndex((l) => l.trim());
+  if (first >= 0 && /^Guten Tag\b/.test(lines[first].trim())) lines.splice(first, 1);
+  return wordCount(lines.join("\n"));
+}
+
+function norm(s: string): string {
+  return String(s || "").toLowerCase().replace(/[„“"'’‚‘]/g, "").replace(/\s+/g, " ").trim();
+}
+
+export type MailContext = {
+  person: string;
+  rolle?: string | null;
+  firma: string;
+  web?: string | null;
+  domain?: string | null;
+  branche?: string | null;
+  query?: string | null;
+  ort?: string | null;
+  pageText?: string | null;
+  observations: Observation[];
+  references?: PortfolioRef[];
+};
+
+export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[]; anlass?: string; beleg?: string; pageText?: string | null }): string[] {
   const issues: string[] = [];
   const text = String(body || "");
+  const core = mailCore(text);
   const used = rankObservations(input.observations || []);
   const covered = used.filter((o) => KIND_MARK[o.kind]?.test(text));
-  const value = /anfrage|telefon|handy|termin|suche|bewertung|warten|abspring|verloren|woanders|zeit/i.test(text);
+  const value = /anfrage|telefon|handy|termin|suche|bewertung|warten|abspring|springen|verloren|woanders|reservier|zoomen|klickt/i.test(text);
   if (used.length < MIN_OBSERVATIONS || covered.length < 1 || !value) issues.push(SUBSTANCE_LABEL);
   if (/!/.test(text)) issues.push("Ausrufezeichen");
   if (BANNED.test(text)) issues.push("Werbesprache");
   if (JARGON.test(text) || TEMPLATE_LINE.test(text)) issues.push("Fachsprache");
   if (hasInstruction(text)) issues.push("Anleitung");
   if (!greetingOk(text)) issues.push("Anrede");
-  if (wordCount(text) > MAIL_WORD_MAX || wordCount(text) < 70) issues.push("Länge");
+  const words = mailWords(text);
+  if (words > MAIL_WORDS_MAX_TOTAL || words < MAIL_WORDS_MIN) issues.push("Länge");
   if (/\b(du|dein(?:e|en|em|er)?|dir|dich|euch|euer|eure)\b/i.test(text)) issues.push("Sie");
-  if (!/\?/.test(text) || !/zehn minuten|10 minuten|kurze einschätzung|kurzen einschätzung/i.test(text)) issues.push("Frage fehlt");
-  if (!/löse ich|kenne ich mich|schaue mir/i.test(text)) issues.push("Haltung");
-  if (!/viral outlaws/i.test(text) || !/\bKim\b/.test(text)) issues.push("Absender fehlt");
-  if (!/abmelden/i.test(text)) issues.push("Abmeldung fehlt");
-  const mentioned = /(?:^|\n)Bei ([A-ZÄÖÜ][\p{L}0-9&.'’\- ]{2,40}?)(?:\s+in|\s+\(|\s+war|,)/u.exec(text);
+  if (/zufällig|zufaellig/i.test(text)) issues.push("Anlass");
+  if (input.anlass && !norm(text).includes(norm(input.anlass))) issues.push("Anlass");
+  if (!/recherche/i.test(text)) issues.push("Anlass");
+  if (!/genau solche stellen sind mein job/i.test(text)) issues.push("Brücke");
+  if (!/Kim Lukas Tobler/.test(text) || !/viral outlaws/i.test(text)) issues.push("Vorstellung");
+  if (!/15 minuten/i.test(text) || !/vor ort/i.test(text) || !/termin[^?]*\?/i.test(text)) issues.push("Terminfrage");
+  if (/entwurf|alternativ|schicke ich ihnen|sende ich ihnen/i.test(text)) issues.push("Ausweichoption oder Entwurf");
+  if (!/melde ich mich nicht mehr/i.test(text)) issues.push("Abmeldung fehlt");
+  if (/€|\beuro\b|preis|kostet nur|digitalbonus|förder|foerder|nebenjob|möbelhaus|moebelhaus/i.test(text)) issues.push("No-Go");
+  if (/möbel|moebel|schreiner|tischler/i.test(text.replace(/Schreinerei Wagner/g, ""))) issues.push("No-Go");
+  if (!/\bKim\b/.test(text)) issues.push("Absender fehlt");
+  if (input.beleg) {
+    if (!input.pageText || !norm(input.pageText).includes(norm(input.beleg))) issues.push("Kompliment nicht belegt");
+  } else if (input.anlass) {
+    const para = core.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)[1] || "";
+    const sentences = para.split(/(?<=[.?])\s+/).filter((s) => s.trim().length > 3);
+    if (sentences.length > 1) issues.push("Kompliment nicht belegt");
+  }
+  const mentioned = /(?:^|\s)(?:Bei|Für) ([A-ZÄÖÜ][\p{L}0-9&.'’\- ]{2,40}?)(?:\s+in\s|\s+\(|\s+war|\s+haben|,)/u.exec(text);
   if (mentioned) {
     const name = mentioned[1].trim().toLowerCase();
     const known = (input.references || []).some((r) => {
       const firma = String(r.firma || "").trim().toLowerCase();
       return firma && (name.includes(firma) || firma.includes(name));
     });
-    if (!known) issues.push("Referenz nicht belegt");
+    if (!known && !/^(ihre|ihr|ihren|besucher|kunden|patienten|gäste|einkäufer|mandanten)\b/i.test(name)) issues.push("Referenz nicht belegt");
   }
   return issues;
 }
 
-const COST_FOR: Record<Observation["kind"], string> = {
-  kontakt: "Anfragen, die dann kommen, gehen verloren, weil niemand rangeht.",
-  buchung: "Wer einen Termin sucht und ihn hier nicht sieht, bucht woanders.",
-  mobil: "Wer die Seite auf dem Handy nicht lesen kann, geht wieder, ohne anzurufen.",
-  tempo: "Wer warten muss, bis der Text da ist, bleibt oft nicht.",
-  seo: "Wenn in der Suche unklar bleibt, was Sie machen, klickt niemand, der Sie nicht schon kennt.",
-  social: "Vor dem Anruf fehlt eine Stimme von anderen Kunden, und das Vertrauen auch.",
-  auftritt: "Der erste Eindruck entscheidet, ob jemand bleibt oder weitergeht.",
-  aktualitaet: "Wirkt die Seite alt, bleibt der Zweifel, ob der Betrieb noch erreichbar ist.",
-};
-
-const OUTCOME_FOR: Record<Observation["kind"], string> = {
-  kontakt: "Das kann mehr Anfragen bringen, ohne dass jemand dauernd am Telefon sitzt.",
-  buchung: "Termine können bei Ihnen landen, statt beim Nächsten.",
-  mobil: "Dann bleiben die Leute, die sonst nach dem ersten Blick gehen.",
-  tempo: "Dann bleibt die Zeit, in der Besucher sonst schon weg sind.",
-  seo: "Dann finden Sie die Leute, die heute woanders klicken.",
-  social: "Dann ist vor dem Anruf schon ein Stück Vertrauen da.",
-  auftritt: "Dann bleibt, wer sonst nach dem ersten Blick weitergeht.",
-  aktualitaet: "Dann wirkt der Betrieb erreichbar, nicht abwesend.",
-};
-
-const SUBJECT_FOR: Record<Observation["kind"], string> = {
-  kontakt: "Anfragen am Abend",
-  buchung: "Termine auf Ihrer Seite",
-  mobil: "Ihre Seite auf dem Handy",
-  tempo: "Besucher, die nicht warten",
-  social: "Vor dem ersten Anruf",
-  seo: "Wie Sie in der Suche dastehen",
-  auftritt: "Der erste Eindruck",
-  aktualitaet: "Ein Blick auf Ihre Seite",
-};
-
-function shapeOf(firma: string): number {
-  let n = 0;
-  for (const c of firma) n = (n + c.charCodeAt(0)) % 3;
-  return n;
+function overlaps(a: Observation, b: Observation): boolean {
+  const pair = [a.kind, b.kind].sort().join("+");
+  return pair === "buchung+kontakt";
 }
 
-export function composePeerMail(input: {
-  person: string;
-  firma: string;
-  rolle?: string | null;
-  observations: Observation[];
-  references?: PortfolioRef[];
-  branche?: string | null;
-}): { subject: string; body: string; observations: Observation[] } | null {
-  const used = rankObservations(input.observations || []).slice(0, 2);
-  if (used.length < MIN_OBSERVATIONS) return null;
-  const lead = used[0];
-  const second = used[1];
-  const anrede = mailGreeting(input.person, input.rolle);
-  const firma = input.firma || "Ihrem Betrieb";
-  const shape = shapeOf(firma);
-  const question = [
-    "Darf ich Ihnen in zehn Minuten zeigen, was das für Ihre Seite heißt?",
-    "Soll ich Ihnen eine kurze Einschätzung schicken, was das bei Ihnen ausmacht?",
-    "Haben Sie zehn Minuten, damit ich Ihnen zeige, was das auf Ihrer Seite bedeutet?",
-  ][shape];
-  const role = [
-    "Genau solche Punkte löse ich für Betriebe wie Ihren.",
-    "Ich schaue mir genau solche Stellen an.",
-    "Genau damit kenne ich mich aus, bei Betrieben in Ihrer Größe.",
-  ][shape];
-  const cost = COST_FOR[lead.kind];
-  const outcome = OUTCOME_FOR[lead.kind];
+export function composePeerMail(input: MailContext): { subject: string; body: string; observations: Observation[] } | null {
+  const ranked = rankObservations(input.observations || []);
+  if (ranked.length < MIN_OBSERVATIONS) return null;
+  const v = branchVoice(input.branche, input.query);
+  const site = siteName(input.web, input.domain);
+  const lead = ranked[0];
+  const rest = ranked.slice(1);
+  const fresh = rest.filter((o) => !overlaps(lead, o));
+  const ps = fresh[fresh.length - 1] || rest[rest.length - 1] || null;
+  const extra = fresh.find((o) => o !== ps) || null;
   const ref = matchingReference(input.references || [], input.branche);
-  const refLine = ref ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} war die Lage ähnlich.` : "";
-  const middle = shape === 0
-    ? [lead.impact, cost, "", role, outcome]
-    : shape === 1
-    ? [`ich habe mir ${firma} angesehen. ${lead.impact}`, cost, "", role]
-    : [lead.impact, second.impact, "", role, outcome];
-  let body = [
-    anrede,
+  const build = (withExtra: boolean) => [
+    mailGreeting(input.person, input.rolle),
     "",
-    ...middle,
-    ...(refLine ? ["", refLine] : []),
+    anlassSatz(input),
     "",
-    question,
+    [sceneFor(lead, v), ...(withExtra && extra ? [alsoFor(extra, v)] : [])].join(" "),
     "",
-    "Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.",
+    introFor(v, ref),
     "",
-    "Viele Grüße",
-    "Kim",
-    "Viral Outlaws",
+    ctaFor(v),
+    "",
+    MAIL_OPTOUT,
+    "",
+    ...MAIL_SIGNATURE,
+    ...(ps ? ["", postscriptFor(ps, v)] : []),
   ].join("\n");
-  if (refLine && wordCount(body) > MAIL_WORD_MAX) body = body.replace(`\n\n${refLine}`, "");
-  return { subject: SUBJECT_FOR[lead.kind], body, observations: used };
+  let body = build(true);
+  if (mailWords(body) > MAIL_WORDS_TARGET_MAX) body = build(false);
+  const used = [lead, ...(body.includes("Dazu kommt:") && extra ? [extra] : []), ...(ps ? [ps] : [])];
+  return { subject: subjectFor(lead, v, site), body, observations: used };
 }
 
-export function parseMailJson(raw: string | null): { subject: string; body: string } | null {
+export function parseMailJson(raw: string | null): { subject: string; body: string; beleg: string } | null {
   if (!raw) return null;
   try {
     const start = raw.indexOf("{");
@@ -947,31 +1132,27 @@ export function parseMailJson(raw: string | null): { subject: string; body: stri
     const parsed = JSON.parse(raw.slice(start, end + 1));
     const subject = String(parsed.subject || "").replace(/!+/g, "").trim().slice(0, 180);
     const body = String(parsed.body || "").replace(/!+/g, "").trim().slice(0, 4000);
+    const beleg = String(parsed.beleg || "").trim().slice(0, 300);
     if (!subject || !body) return null;
-    return { subject, body };
+    return { subject, body, beleg };
   } catch {
     return null;
   }
 }
 
-export function finalizeMail(input: {
-  person: string;
-  firma: string;
-  observations: Observation[];
-  references?: PortfolioRef[];
-  branche?: string | null;
-  attempts?: { subject: string; body: string }[];
+export function finalizeMail(input: MailContext & {
+  attempts?: { subject: string; body: string; beleg?: string }[];
 }): { ok: true; subject: string; body: string; observations: Observation[]; source: "ki" | "vorlage" } | { ok: false; reason: typeof SUBSTANCE_LABEL } {
-  const used = (input.observations || []).slice(0, 3);
+  const used = rankObservations(input.observations || []);
   if (used.length < MIN_OBSERVATIONS) return { ok: false, reason: SUBSTANCE_LABEL };
-  const ctx = { observations: used, references: input.references || [] };
+  const anlass = anlassSatz(input);
   for (const attempt of input.attempts || []) {
-    if (attempt?.body && reviewMail(attempt.body, ctx).length === 0) {
-      return { ok: true, subject: attempt.subject, body: attempt.body, observations: used, source: "ki" };
-    }
+    if (!attempt?.body) continue;
+    const issues = reviewMail(attempt.body, { observations: used, references: input.references || [], anlass, beleg: attempt.beleg || "", pageText: input.pageText });
+    if (issues.length === 0) return { ok: true, subject: attempt.subject, body: attempt.body, observations: used, source: "ki" };
   }
   const composed = composePeerMail(input);
-  if (!composed || reviewMail(composed.body, ctx).length) return { ok: false, reason: SUBSTANCE_LABEL };
+  if (!composed || reviewMail(composed.body, { observations: used, references: input.references || [], anlass }).length) return { ok: false, reason: SUBSTANCE_LABEL };
   return { ok: true, subject: composed.subject, body: composed.body, observations: composed.observations, source: "vorlage" };
 }
 
@@ -1008,20 +1189,20 @@ export function fallbackMail(input: { person: string; firma: string; web: string
 
 export function draftInstructions(): string {
   return [
-    "Schreibe eine kurze Mail auf Deutsch, als Fachkollege, nicht als Verkäufer. Sie soll sich lesen, als wäre sie einzeln geschrieben.",
-    "Anrede: Guten Tag Frau Nachname oder Guten Tag Herr Nachname. Ist das Geschlecht unklar, den vollen Namen: Guten Tag Vorname Nachname. Nie nur den Vornamen, wenn du siezt.",
-    "Etwa 90 bis 120 Wörter. Keine Aufzählung und kein fester Satz wie 'Das lässt sich ändern, ohne die Seite neu zu bauen'.",
-    "Der Einstieg benennt das Problem und was es kostet: verlorene Anfragen, Besucher, die gehen, Termine, die woanders landen, verlorene Zeit. Nicht das Jahr im Impressum.",
-    "Sprich in der Sprache der Inhaberin. Kein viewport, kein defer, kein h1, keine meta description.",
-    "Keine Anleitung und kein Handgriff. Verboten sind Sätze wie 'Stellen Sie', 'Setzen Sie', 'Legen Sie', 'Hinterlegen Sie', 'Schieben Sie'. Der Wert ist die Diagnose, nicht die Lösung.",
-    "Ein kurzer Satz, warum Kim der Richtige ist, ohne Verkauf: 'Genau solche Punkte löse ich für Betriebe wie Ihren', 'Ich schaue mir genau solche Stellen an' oder 'Genau damit kenne ich mich aus'.",
-    "Optional ein Satz zum möglichen Ergebnis, ohne den Weg dahin, zum Beispiel mehr Anfragen, ohne dass jemand am Telefon sitzt.",
-    "Eine Referenz nur, wenn sie unten wörtlich genannt ist. Nichts erfinden. Schreinerei oder Möbel nur, wenn die Referenz genau Schreinerei Wagner heißt.",
-    "Die letzte Frage ist niedrigschwellig: zehn Minuten zeigen, was das für die Seite heißt, oder eine kurze Einschätzung schicken.",
-    "Betreff kurz und neugierig, kein Technikbefund.",
-    "Keine Wörter wie innovativ, maßgeschneidert, revolutionär. Kein 'Ich hoffe, diese Mail erreicht Sie gut'. Keine Ausrufezeichen.",
-    "Abschluss: Viele Grüße, Kim, Viral Outlaws, und der Satz mit „Bitte abmelden“.",
-    "Antworte nur als JSON: {\"subject\":\"...\",\"body\":\"...\"}",
+    "Schreibe eine Erstmail auf Deutsch von Kim Lukas Tobler (Viral Outlaws) an einen Betrieb. Sie soll im Gedächtnis bleiben: persönlich, auf Augenhöhe, kein Werbeton. Der Empfänger soll den Bedarf selbst erkennen, Kim steht als die Lösung da, ohne zu verraten, wie man es selbst behebt.",
+    "Siezen. Ich-Form für Kim. 110 bis 140 Wörter Fließtext, ohne Anrede, Signatur und P.S. gezählt. Echte Absätze, keine Aufzählung, kein Markdown.",
+    "Aufbau, genau in dieser Reihenfolge:",
+    "1. Anrede genau wie unten vorgegeben.",
+    "2. Einstieg: der vorgegebene Anlass-Satz wörtlich. Danach höchstens EIN Satz mit einem echten, belegbaren Kompliment zum Betrieb (Leistung, Spezialisierung, Referenz), nur aus dem Seitentext unten. Gibt der Seitentext nichts Konkretes her, lass das Kompliment weg. Nie erfinden, nie übertreiben.",
+    "3. Problem aus Sicht der Kunden des Betriebs als kurze Szene, z. B. 'Wer abends einen Termin anfragen möchte, findet bei Ihnen nur eine Telefonnummer und fragt dann bei der nächsten Praxis an.' Dazu höchstens eine zweite Beobachtung und was sie kostet. Nur Beobachtungen aus der Liste unten. Keine Lösungsschritte, kein 'Stellen Sie', 'Setzen Sie', 'Legen Sie', kein Belehren.",
+    "4. Brücke und Vorstellung, zwei Sätze: 'Genau solche Stellen sind mein Job. Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen [Branche wie unten], damit aus Besuchern [Ziel wie unten] werden.' Danach die erlaubte Referenz, wenn eine vorgegeben ist, sonst 'Beispiele finden Sie auf viraloutlaws.de.'",
+    "5. Terminfrage direkt, ohne Ausweichoption: 'Ich würde Ihnen gern unverbindlich zeigen, wie das für [Betrieb] aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?' Nicht behaupten, es gebe schon einen Entwurf. Das Wort Entwurf kommt nicht vor.",
+    "6. Opt-out wörtlich: 'Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.'",
+    "7. Danach genau diese Signatur in drei Zeilen: Viele Grüße / Kim / Viral Outlaws.",
+    "8. Nach der Signatur ein P.S. mit einer zweiten, kleinen Beobachtung aus der Liste, die im Text noch nicht vorkam, als Wiedererkennungs-Haken. Ohne Folge, ohne Anleitung. Gibt es keine weitere, kein P.S.",
+    "Betreff: greift die konkrete Beobachtung auf, persönlich und neugierig, z. B. 'praxis-muster.de mit Stand 2018' oder 'Anfragen nach Feierabend auf musterwerk.de'. Kein Werbe-Betreff.",
+    "No-Gos: keine Preise, kein 'garantiert', keine erfundenen Zahlen oder Referenzen, kein Digitalbonus, keine Fachwörter wie viewport, defer, h1 oder meta description, keine Ausrufezeichen, kein 'zufällig', nie Möbel oder Schreinerei (außer der vorgegebenen Referenz Schreinerei Wagner), nie Kims Nebenjob.",
+    "Antworte nur als JSON: {\"subject\":\"...\",\"body\":\"...\",\"beleg\":\"...\"}. In beleg steht die wörtliche Stelle aus dem Seitentext, auf die sich das Kompliment stützt (höchstens 120 Zeichen, exakt kopiert). Ohne Kompliment bleibt beleg leer.",
   ].join("\n");
 }
 
@@ -1032,27 +1213,36 @@ export function draftUserPrompt(input: {
   person: string;
   rolle: string;
   web: string;
+  domain?: string | null;
   branche?: string | null;
+  query?: string | null;
+  ort?: string | null;
+  pageText?: string | null;
   observations: Observation[];
 }): string {
-  const rules = input.wissen.map((w) => `${w.section}: ${w.content}`).join("\n").slice(0, 4000);
+  const rules = input.wissen.map((w) => `${w.section}: ${w.content}`).join("\n").slice(0, 3000);
+  const v = branchVoice(input.branche, input.query);
   const fit = matchingReference(input.references, input.branche);
   const refs = fit
-    ? `Nur diese Referenz darf vorkommen, und nur wenn sie in den Satz passt: ${fit.firma}, ${fit.branche || ""}, ${fit.ort || ""}. Punkt: ${fit.note}`
-    : "Keine passende Referenz. Keinen Kundennamen nennen.";
+    ? `Erlaubte Referenz, nur diese: ${fit.firma}${fit.ort ? ` in ${fit.ort}` : ""}. Punkt: ${fit.note}`
+    : "Keine passende Referenz. Keinen Kundennamen nennen, stattdessen 'Beispiele finden Sie auf viraloutlaws.de.'";
   const ranked = rankObservations(input.observations);
-  const notes = ranked.map((o, i) => `${i + 1}. Diagnose, die in die Mail darf: ${o.impact} Intern, nicht in die Mail, das wäre die Anleitung: ${o.wert} ${o.text}`).join("\n");
+  const notes = ranked.map((o, i) => `${i + 1}. ${o.impact} (Befund: ${o.text} Quelle: ${o.source})`).join("\n");
+  const page = String(input.pageText || "").replace(/\s+/g, " ").trim().slice(0, 1500);
   return [
     draftInstructions(),
     "Wissensbasis:",
     rules,
     refs,
     `Anrede genau so: ${mailGreeting(input.person, input.rolle)}`,
+    `Anlass-Satz wörtlich: ${anlassSatz(input)}`,
+    `Branche für die Vorstellung: ${v.wir}. Ziel: ${v.ziel}. Kunden des Betriebs: ${v.kunden}. Betrieb in der Terminfrage: ${v.betriebAkk}.`,
     `Firma: ${input.firma}`,
     `Person: ${input.person} (${input.rolle})`,
-    `Website: ${input.web}`,
-    "Beobachtungen, der erste Punkt ist der Hebel:",
+    `Website: ${siteName(input.web, input.domain)}`,
+    "Geprüfte Beobachtungen, der erste Punkt ist der Hebel:",
     notes,
+    `Seitentext der Startseite (nur hieraus darf das Kompliment stammen):\n${page || "(kein Text gelesen, also kein Kompliment)"}`,
   ].join("\n\n");
 }
 
