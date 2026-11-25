@@ -471,6 +471,326 @@ export function outreachMessageId(draftId: string, now = Date.now()): string {
   return `<outreach.${id}.${now}@viraloutlaws.de>`;
 }
 
+export const MIN_OBSERVATIONS = 2;
+export const SUBSTANCE_LABEL = "zu wenig Substanz";
+export const MAIL_WORD_MAX = 140;
+
+export type Observation = {
+  kind: "aktualitaet" | "mobil" | "tempo" | "kontakt" | "buchung" | "seo" | "social" | "auftritt";
+  text: string;
+  source: string;
+  tip: string;
+};
+
+export type PortfolioRef = {
+  firma: string;
+  branche?: string | null;
+  ort?: string | null;
+  web?: string | null;
+  note?: string | null;
+};
+
+const KIND_MARK: Record<Observation["kind"], RegExp> = {
+  aktualitaet: /jahreszahl|copyright|stand|impressum/i,
+  mobil: /viewport/i,
+  tempo: /defer|skript|srcset|bild/i,
+  kontakt: /formular|telefon/i,
+  buchung: /termin|buchen|abholung|reserv/i,
+  seo: /meta description|h1|überschrift/i,
+  social: /instagram|facebook|linkedin|profil/i,
+  auftritt: /schrift|marquee|font-tag/i,
+};
+
+const BANNED = /innovativ|maßgeschneidert|massgeschneidert|revolutionär|revolutionaer|ich hoffe, diese mail|einmalig|state of the art|nicht zögern|nicht zoeegern|letzte chance|garantiert|unschlagbar|weltklasse/i;
+
+export function findContactUrl(html: string, base: string): string | null {
+  const hits: string[] = [];
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const href = m[1];
+    const text = m[2].replace(/<[^>]+>/g, " ");
+    if (/impressum/i.test(href) || /impressum/i.test(text)) continue;
+    if (/kontakt|contact/i.test(href) || /kontakt|contact/i.test(text)) hits.push(href);
+  }
+  for (const href of hits) {
+    try {
+      const pub = assertPublicHttpUrl(new URL(href, base).toString());
+      if (pub.ok) return pub.url;
+    } catch { /* ungültig */ }
+  }
+  return null;
+}
+
+function pushObs(out: Observation[], item: Observation) {
+  if (out.some((o) => o.kind === item.kind && o.text === item.text)) return;
+  if (out.length >= 3) return;
+  out.push(item);
+}
+
+export function observeSite(input: {
+  pageHtml: string;
+  pageUrl: string;
+  impressumHtml?: string;
+  impressumUrl?: string;
+  contactHtml?: string;
+  contactUrl?: string;
+  year?: number;
+}): Observation[] {
+  const year = input.year || new Date().getFullYear();
+  const startUrl = input.pageUrl;
+  const impUrl = input.impressumUrl || startUrl;
+  const contactUrl = input.contactUrl || "";
+  const startText = htmlToText(input.pageHtml || "");
+  const impText = htmlToText(input.impressumHtml || "");
+  const contactText = htmlToText(input.contactHtml || "");
+  const allText = [startText, impText, contactText].filter(Boolean).join("\n");
+  const out: Observation[] = [];
+
+  const stamp = /(?:©|\(c\)|copyright|stand|aktualisiert|letzte änderung)[^\d]{0,24}((?:19|20)\d{2})/i.exec(impText || startText);
+  if (stamp) {
+    const found = Number(stamp[1]);
+    if (found <= year - 2) {
+      pushObs(out, {
+        kind: "aktualitaet",
+        text: `Im Impressum steht als Stand das Jahr ${found}.`,
+        source: impText ? impUrl : startUrl,
+        tip: `Die Jahreszahl auf ${year} setzen, sobald der Text dazu stimmt.`,
+      });
+    }
+  }
+
+  if (!/<meta[^>]+name=["']viewport["']/i.test(input.pageHtml || "")) {
+    pushObs(out, {
+      kind: "mobil",
+      text: "Die Startseite hat kein viewport-Meta.",
+      source: startUrl,
+      tip: "Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.",
+    });
+  }
+
+  const head = /<head[\s\S]*?<\/head>/i.exec(input.pageHtml || "")?.[0] || "";
+  const blocking = [...head.matchAll(/<script\b([^>]*)>/gi)].filter((s) => !/\b(defer|async|type\s*=\s*["']module["'])/i.test(s[1]));
+  if (blocking.length >= 2) {
+    pushObs(out, {
+      kind: "tempo",
+      text: `Im Kopf der Startseite liegen ${blocking.length} Skripte ohne defer oder async.`,
+      source: startUrl,
+      tip: "Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.",
+    });
+  }
+
+  const photos = [...(input.pageHtml || "").matchAll(/<img\b([^>]*)>/gi)].filter((s) => /\.(jpe?g|png|webp)/i.test(s[1]) && !/srcset\s*=/i.test(s[1]));
+  if (photos.length >= 4 && !out.some((o) => o.kind === "tempo")) {
+    pushObs(out, {
+      kind: "tempo",
+      text: `${photos.length} Bilder auf der Startseite haben kein srcset.`,
+      source: startUrl,
+      tip: "Für die großen Bilder eine kleinere Variante fürs Handy hinterlegen.",
+    });
+  }
+
+  const pages = [input.pageHtml || "", input.impressumHtml || "", input.contactHtml || ""].join("\n");
+  const formOnStart = /<form\b/i.test(input.pageHtml || "");
+  const formElsewhere = /<form\b/i.test(input.contactHtml || "") || /<form\b/i.test(input.impressumHtml || "");
+  const hasTel = /href=["']tel:/i.test(pages) || /\b0\d{2,4}[\s/.-]?\d/.test(allText);
+  if (!formOnStart && formElsewhere && contactUrl) {
+    pushObs(out, {
+      kind: "kontakt",
+      text: "Ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.",
+      source: contactUrl,
+      tip: "Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.",
+    });
+  } else if (!formOnStart && !formElsewhere && hasTel) {
+    pushObs(out, {
+      kind: "kontakt",
+      text: "Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.",
+      source: startUrl,
+      tip: "Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.",
+    });
+  }
+
+  const strong = () => out.some((o) => o.kind !== "buchung" && o.kind !== "social");
+  if (strong() && !/termin|buchen|reservier|calendly|simplybook|treatwell/i.test(allText)) {
+    pushObs(out, {
+      kind: "buchung",
+      text: "Auf den gelesenen Seiten steht kein Link mit Termin, Buchen oder Reservierung.",
+      source: startUrl,
+      tip: "Wenn Termine vorkommen, auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.",
+    });
+  }
+
+  if (!/<meta[^>]+name=["']description["'][^>]*content=["'][^"']{12,}/i.test(input.pageHtml || "")) {
+    pushObs(out, {
+      kind: "seo",
+      text: "Die Startseite hat keine meta description.",
+      source: startUrl,
+      tip: "Eine meta description mit einem Satz schreiben: was der Betrieb macht und wo er sitzt.",
+    });
+  } else if (!/<h1\b/i.test(input.pageHtml || "")) {
+    pushObs(out, {
+      kind: "seo",
+      text: "Die Startseite hat kein h1.",
+      source: startUrl,
+      tip: "Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.",
+    });
+  }
+
+  if (/<(font|marquee)\b/i.test(input.pageHtml || "")) {
+    pushObs(out, {
+      kind: "auftritt",
+      text: "Die Startseite nutzt noch font- oder marquee-Tags.",
+      source: startUrl,
+      tip: "Diese Tags entfernen und die gleiche Aussage als normalen Text lassen.",
+    });
+  }
+
+  if (strong() && !/instagram\.com|facebook\.com|linkedin\.com/i.test(pages) && out.length < 3) {
+    pushObs(out, {
+      kind: "social",
+      text: "Auf den gelesenen Seiten liegt kein Link zu Instagram, Facebook oder LinkedIn.",
+      source: startUrl,
+      tip: "Falls ein Profil existiert, den Link in den Footer setzen. Sonst den Punkt lassen.",
+    });
+  }
+
+  return out.slice(0, 3);
+}
+
+export function wordCount(text: string): number {
+  const parts = String(text || "").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
+  return parts.length;
+}
+
+function tokens(s: string): string[] {
+  return String(s || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 5);
+}
+
+export function matchingReference(refs: PortfolioRef[], branche?: string | null): PortfolioRef | null {
+  const want = tokens(String(branche || ""));
+  if (!want.length) return null;
+  const hit = (refs || []).find((r) => {
+    const note = String(r.note || "").trim();
+    if (note.length < 12 || !r.firma) return false;
+    const bag = tokens(`${r.branche || ""} ${note}`);
+    return want.some((w) => bag.includes(w));
+  });
+  return hit || null;
+}
+
+export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[] }): string[] {
+  const issues: string[] = [];
+  const text = String(body || "");
+  const used = (input.observations || []).slice(0, 3);
+  const bullets = text.split("\n").map((l) => l.trim()).filter((l) => /^[-–]/.test(l));
+  const covered = used.filter((o) => KIND_MARK[o.kind]?.test(bullets.join("\n") || text));
+  const actions = text.match(/setzen|ergänzen|laden|geben|öffnen|schickt|schreiben|entfernen|hinterlegen/gi) || [];
+  const value = (bullets.length >= 2 && covered.length >= 2) || (covered.length >= 2 && actions.length >= 2);
+  if (used.length < MIN_OBSERVATIONS || !value) issues.push(SUBSTANCE_LABEL);
+  if (/!/.test(text)) issues.push("Ausrufezeichen");
+  if (BANNED.test(text)) issues.push("Werbesprache");
+  if (wordCount(text) > MAIL_WORD_MAX) issues.push("Länge");
+  if (/\b(du|dein(?:e|en|em|er)?|dir|dich|euch|euer|eure)\b/i.test(text)) issues.push("Sie");
+  if (!/\?/.test(text)) issues.push("Frage fehlt");
+  if (!/viral outlaws/i.test(text) || !/\bKim\b/.test(text)) issues.push("Absender fehlt");
+  if (!/abmelden/i.test(text)) issues.push("Abmeldung fehlt");
+  const mentioned = /(?:^|\n)Bei ([A-ZÄÖÜ][\p{L}0-9&.'’\- ]{2,40}?)(?:\s+in|\s+\(|\s+war|,)/u.exec(text);
+  if (mentioned) {
+    const name = mentioned[1].trim().toLowerCase();
+    const known = (input.references || []).some((r) => {
+      const firma = String(r.firma || "").trim().toLowerCase();
+      return firma && (name.includes(firma) || firma.includes(name));
+    });
+    if (!known) issues.push("Referenz nicht belegt");
+  }
+  return issues;
+}
+
+export function composePeerMail(input: {
+  person: string;
+  firma: string;
+  observations: Observation[];
+  references?: PortfolioRef[];
+  branche?: string | null;
+}): { subject: string; body: string; observations: Observation[] } | null {
+  const used = (input.observations || []).slice(0, 3);
+  if (used.length < MIN_OBSERVATIONS) return null;
+  const first = String(input.person || "").split(/\s+/).filter(Boolean)[0] || "";
+  const anrede = first ? `Guten Tag ${first},` : "Guten Tag,";
+  const firma = input.firma || "der Website";
+  const opening = used.slice(0, 2).map((o, i) => {
+    const sentence = o.text.replace(/\.$/, "");
+    return i === 0 ? sentence : sentence.charAt(0).toLowerCase() + sentence.slice(1);
+  }).join(", und ");
+  const bullets = used.map((o) => `- ${o.tip.replace(/\.$/, "")}.`);
+  const ref = matchingReference(input.references || [], input.branche);
+  const refLine = ref
+    ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} lag derselbe Punkt: ${String(ref.note).trim()}`
+    : "";
+  let body = [
+    anrede,
+    "",
+    `auf der Seite von ${firma}: ${opening}.`,
+    "",
+    "Das lässt sich ändern, ohne die Seite neu zu bauen:",
+    ...bullets,
+    ...(refLine ? ["", refLine] : []),
+    "",
+    "Soll ich Ihnen das kurz zeigen?",
+    "",
+    "Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.",
+    "",
+    "Viele Grüße",
+    "Kim",
+    "Viral Outlaws",
+  ].join("\n");
+  if (refLine && wordCount(body) > MAIL_WORD_MAX) {
+    body = body.replace(`\n\n${refLine}`, "");
+  }
+  const subject = `${firma}: ${used[0].text.replace(/\.$/, "")}`.slice(0, 140);
+  return { subject, body, observations: used };
+}
+
+export function parseMailJson(raw: string | null): { subject: string; body: string } | null {
+  if (!raw) return null;
+  try {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    const subject = String(parsed.subject || "").replace(/!+/g, "").trim().slice(0, 180);
+    const body = String(parsed.body || "").replace(/!+/g, "").trim().slice(0, 4000);
+    if (!subject || !body) return null;
+    return { subject, body };
+  } catch {
+    return null;
+  }
+}
+
+export function finalizeMail(input: {
+  person: string;
+  firma: string;
+  observations: Observation[];
+  references?: PortfolioRef[];
+  branche?: string | null;
+  attempts?: { subject: string; body: string }[];
+}): { ok: true; subject: string; body: string; observations: Observation[]; source: "ki" | "vorlage" } | { ok: false; reason: typeof SUBSTANCE_LABEL } {
+  const used = (input.observations || []).slice(0, 3);
+  if (used.length < MIN_OBSERVATIONS) return { ok: false, reason: SUBSTANCE_LABEL };
+  const ctx = { observations: used, references: input.references || [] };
+  for (const attempt of input.attempts || []) {
+    if (attempt?.body && reviewMail(attempt.body, ctx).length === 0) {
+      return { ok: true, subject: attempt.subject, body: attempt.body, observations: used, source: "ki" };
+    }
+  }
+  const composed = composePeerMail(input);
+  if (!composed || reviewMail(composed.body, ctx).length) return { ok: false, reason: SUBSTANCE_LABEL };
+  return { ok: true, subject: composed.subject, body: composed.body, observations: composed.observations, source: "vorlage" };
+}
+
 export function fallbackMail(input: { person: string; firma: string; web: string; excerpt: string }): { subject: string; body: string } {
   const first = String(input.person || "").split(/\s+/).filter(Boolean)[0] || "";
   const anrede = first ? `Guten Tag ${first},` : "Guten Tag,";
@@ -504,40 +824,45 @@ export function fallbackMail(input: { person: string; firma: string; web: string
 
 export function draftInstructions(): string {
   return [
-    "Schreibe eine kurze Akquise-Mail auf Deutsch.",
-    "Sieze. Anrede: Guten Tag und der Vorname, wenn er bekannt ist.",
-    "Betreff und Text, kurz und konkret, bezogen auf die Website. Kein Werbeton.",
-    "Keine Preise, keine erfundenen Referenzen, keine Termine, keine Rankings.",
-    "Nenne Kim und Viral Outlaws als Absender.",
-    "Schliesse mit dem Satz, dass eine kurze Antwort mit „Bitte abmelden“ genügt, wenn keine weiteren Nachrichten gewünscht sind.",
+    "Schreibe eine kurze Mail auf Deutsch, als Fachkollege, nicht als Verkäufer.",
+    "Siezen. Anrede: Guten Tag und der Vorname, wenn er bekannt ist.",
+    "Höchstens 120 Wörter.",
+    "Anfang: ein sachlicher Satz zu einer Beobachtung aus der Liste, mit der Seite.",
+    "Dann zwei oder drei konkrete Punkte, die der Betrieb selbst umsetzen kann. Jeder Punkt nennt die Änderung. Die Mail muss auch ohne Antwort nützlich sein.",
+    "Eine Referenz nur, wenn sie in der Liste steht und zum Gewerk passt. Sonst weglassen. Nichts erfinden, keine Zahlen, die nicht in den Beobachtungen stehen.",
+    "Schlussfrage ohne Druck, zum Beispiel: Soll ich Ihnen das kurz zeigen?",
+    "Keine Wörter wie innovativ, maßgeschneidert, revolutionär. Kein 'Ich hoffe, diese Mail erreicht Sie gut'. Keine Ausrufezeichen.",
+    "Abschluss: Viele Grüße, Kim, Viral Outlaws, und der Satz mit „Bitte abmelden“.",
     "Antworte nur als JSON: {\"subject\":\"...\",\"body\":\"...\"}",
   ].join("\n");
 }
 
 export function draftUserPrompt(input: {
   wissen: { section: string; content: string }[];
-  references: { firma: string; branche?: string | null; ort?: string | null; web?: string | null }[];
+  references: PortfolioRef[];
   firma: string;
   person: string;
   rolle: string;
   web: string;
-  excerpt: string;
+  branche?: string | null;
+  observations: Observation[];
 }): string {
   const rules = input.wissen.map((w) => `${w.section}: ${w.content}`).join("\n").slice(0, 4000);
-  const refs = input.references.length
-    ? input.references.map((r) => [r.firma, r.branche, r.ort, r.web].filter(Boolean).join(", ")).join("\n")
-    : "Keine Referenz hinterlegt. Erfinde keine.";
+  const fit = matchingReference(input.references, input.branche);
+  const refs = fit
+    ? `Nur diese Referenz darf vorkommen, und nur wenn sie in den Satz passt: ${fit.firma}, ${fit.branche || ""}, ${fit.ort || ""}. Punkt: ${fit.note}`
+    : "Keine passende Referenz. Keinen Kundennamen nennen.";
+  const notes = input.observations.map((o, i) => `${i + 1}. ${o.text} Quelle: ${o.source}. Tipp: ${o.tip}`).join("\n");
   return [
     draftInstructions(),
     "Wissensbasis:",
     rules,
-    "Referenzen, nur diese nennen:",
     refs,
     `Firma: ${input.firma}`,
     `Person: ${input.person} (${input.rolle})`,
     `Website: ${input.web}`,
-    "Auszug der Website:",
-    input.excerpt.slice(0, 1200),
+    "Beobachtungen, nur diese:",
+    notes,
   ].join("\n\n");
 }
 

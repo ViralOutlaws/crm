@@ -3,11 +3,15 @@ import { anthropicText, cors, json, userClient } from "../_shared/edge_auth.ts";
 import { loadGuard } from "../_shared/outreach_db.ts";
 import {
   draftUserPrompt,
-  fallbackMail,
+  finalizeMail,
   outreachSkip,
-  parseAiMail,
+  parseMailJson,
+  reviewMail,
+  SUBSTANCE_LABEL,
   websiteDomain,
   type EmailArt,
+  type Observation,
+  type PortfolioRef,
 } from "../_shared/outreach.ts";
 
 Deno.serve(async (req) => {
@@ -26,13 +30,14 @@ Deno.serve(async (req) => {
     const known = await loadGuard(sb, workspaceId);
     const [wissen, refs] = await Promise.all([
       sb.from("wissensbasis").select("section, content").eq("workspace_id", workspaceId),
-      sb.from("contacts").select("firma, branche, ort, web, status, archiviert").eq("workspace_id", workspaceId).eq("status", "gewonnen").limit(8),
+      sb.from("contacts").select("firma, branche, ort, web, notes, status, archiviert").eq("workspace_id", workspaceId).eq("status", "gewonnen").limit(8),
     ]);
-    const references = (refs.data || []).filter((c: { archiviert?: boolean }) => !c.archiviert).map((c: { firma?: string; branche?: string; ort?: string; web?: string }) => ({
+    const references: PortfolioRef[] = (refs.data || []).filter((c: { archiviert?: boolean }) => !c.archiviert).map((c: { firma?: string; branche?: string; ort?: string; web?: string; notes?: string }) => ({
       firma: String(c.firma || ""),
       branche: c.branche || "",
       ort: c.ort || "",
       web: c.web || "",
+      note: /@|\d{5,}|iban|€/i.test(String(c.notes || "")) ? "" : String(c.notes || "").replace(/\s+/g, " ").trim().slice(0, 160),
     }));
     const created = [];
     const skipped = [];
@@ -45,10 +50,14 @@ Deno.serve(async (req) => {
         skipped.push({ id: person.id, reason: "Vermutete Adresse wird nicht automatisch entworfen." });
         continue;
       }
-      const target = await sb.from("outreach_targets").select("id, firma, web, domain, excerpt, status, skip_reason").eq("id", person.target_id).maybeSingle();
+      const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche").eq("id", person.target_id).maybeSingle();
       const row = target.data;
       if (!row) {
         skipped.push({ id: person.id, reason: "Ziel fehlt" });
+        continue;
+      }
+      if (row.status === "duenn" || row.skip_reason === SUBSTANCE_LABEL) {
+        skipped.push({ id: person.id, reason: SUBSTANCE_LABEL });
         continue;
       }
       if (row.skip_reason || row.status === "uebersprungen") {
@@ -77,12 +86,7 @@ Deno.serve(async (req) => {
         skipped.push({ id: person.id, reason: skip });
         continue;
       }
-      const fallback = fallbackMail({
-        person: String(person.person || ""),
-        firma: String(row.firma || ""),
-        web: String(row.web || ""),
-        excerpt: String(row.excerpt || ""),
-      });
+      const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
       const prompt = draftUserPrompt({
         wissen: wissen.data || [],
         references,
@@ -90,20 +94,51 @@ Deno.serve(async (req) => {
         person: String(person.person || ""),
         rolle: String(person.rolle || ""),
         web: String(row.web || ""),
-        excerpt: String(row.excerpt || ""),
+        branche: row.branche,
+        observations,
       });
-      const raw = await anthropicText(
-        "Du schreibst nur den JSON-Entwurf. Du versendest nichts.",
-        prompt,
-        900,
-      );
-      const mail = parseAiMail(raw, fallback);
+      const attempts: { subject: string; body: string }[] = [];
+      const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 900));
+      if (first) attempts.push(first);
+      let mail = finalizeMail({
+        person: String(person.person || ""),
+        firma: String(row.firma || ""),
+        observations,
+        references,
+        branche: row.branche,
+        attempts,
+      });
+      if (mail.ok && mail.source !== "ki" && first) {
+        const issues = reviewMail(first.body, { observations, references });
+        const second = parseMailJson(await anthropicText(
+          "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
+          `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu, mit zwei oder drei umsetzbaren Punkten aus den Tipps.`,
+          900,
+        ));
+        if (second) {
+          const again = finalizeMail({
+            person: String(person.person || ""),
+            firma: String(row.firma || ""),
+            observations,
+            references,
+            branche: row.branche,
+            attempts: [second],
+          });
+          if (again.ok && again.source === "ki") mail = again;
+        }
+      }
+      if (!mail.ok) {
+        await sb.from("outreach_targets").update({ status: "duenn", skip_reason: SUBSTANCE_LABEL, updated_at: new Date().toISOString() }).eq("id", row.id);
+        skipped.push({ id: person.id, reason: SUBSTANCE_LABEL });
+        continue;
+      }
       const inserted = await sb.from("outreach_drafts").insert({
         workspace_id: workspaceId,
         target_id: row.id,
         person_id: person.id,
         subject: mail.subject,
         body: mail.body,
+        observations: mail.observations,
         status: "entwurf",
         email: String(person.email || "").toLowerCase(),
         email_art: art,

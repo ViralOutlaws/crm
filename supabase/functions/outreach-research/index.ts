@@ -4,13 +4,17 @@ import { loadGuard } from "../_shared/outreach_db.ts";
 import {
   MAX_URLS,
   assertPublicHttpUrl,
+  findContactUrl,
   findImpressumUrl,
+  MIN_OBSERVATIONS,
+  observeSite,
   outreachSkip,
   parseSearchLinks,
   preferredPerson,
   readCompany,
   searchQuery,
   splitUrls,
+  SUBSTANCE_LABEL,
 } from "../_shared/outreach.ts";
 
 type Fetched = { ok: true; html: string; finalUrl: string } | { ok: false; error: string };
@@ -124,12 +128,34 @@ Deno.serve(async (req) => {
             }
           }
         }
+        let contactHtml = "";
+        let contactUrl = "";
+        const contactLink = findContactUrl(page.html, page.finalUrl);
+        if (contactLink && contactLink !== impressumUrl) {
+          const contact = await fetchPublic(contactLink);
+          if (contact.ok) {
+            contactHtml = contact.html;
+            contactUrl = contact.finalUrl;
+          }
+        }
         const read = readCompany({ pageHtml: page.html, pageUrl: page.finalUrl, impressumHtml, impressumUrl, guess });
+        const observations = observeSite({
+          pageHtml: page.html,
+          pageUrl: page.finalUrl,
+          impressumHtml,
+          impressumUrl,
+          contactHtml,
+          contactUrl,
+        });
         const best = preferredPerson(read.people) || read.people[0];
-        const skip = best
+        let skip = best
           ? outreachSkip({ email: best.email, domain: read.domain, ...known })
           : "Kein Ansprechpartner und keine Adresse gefunden";
-        const status = skip ? (best ? "uebersprungen" : "fehler") : "recherchiert";
+        let status = skip ? (best ? "uebersprungen" : "fehler") : "recherchiert";
+        if (!skip && observations.length < MIN_OBSERVATIONS) {
+          skip = SUBSTANCE_LABEL;
+          status = "duenn";
+        }
         const inserted = await sb.from("outreach_targets").insert({
           workspace_id: workspaceId,
           source: query ? "search" : "url",
@@ -143,6 +169,8 @@ Deno.serve(async (req) => {
           ort: read.ort || null,
           impressum_url: read.impressumUrl || null,
           excerpt: read.excerpt || null,
+          branche: branche || null,
+          observations,
           status,
           skip_reason: skip,
           updated_at: new Date().toISOString(),
@@ -171,6 +199,7 @@ Deno.serve(async (req) => {
           domain: read.domain,
           status,
           skip_reason: skip,
+          observations,
           people: read.people,
         });
       } catch (e) {

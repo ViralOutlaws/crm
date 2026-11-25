@@ -46,11 +46,30 @@
     state.branche = 'Handwerk';
     state.region = 'Allgäu';
     state.settings.guess_emails = true;
+    const obs1 = [
+      { kind: 'aktualitaet', text: 'Im Impressum steht als Stand das Jahr 2019.', source: 'https://musterwerk.example.test/impressum', tip: 'Die Jahreszahl auf 2026 setzen, sobald der Text dazu stimmt.' },
+      { kind: 'mobil', text: 'Die Startseite hat kein viewport-Meta.', source: 'https://musterwerk.example.test/', tip: 'Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.' },
+      { kind: 'kontakt', text: 'Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.', source: 'https://musterwerk.example.test/', tip: 'Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.' },
+    ];
+    const obs2 = [
+      { kind: 'seo', text: 'Die Startseite hat keine meta description.', source: 'https://beispielhof.example.test/', tip: 'Eine meta description mit einem Satz schreiben: was der Hof verkauft und wo die Abholung ist.' },
+      { kind: 'kontakt', text: 'Ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.', source: 'https://beispielhof.example.test/kontakt', tip: 'Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.' },
+      { kind: 'buchung', text: 'Auf den gelesenen Seiten steht kein Link mit Termin, Buchen oder Reservierung.', source: 'https://beispielhof.example.test/', tip: 'Auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.' },
+    ];
+    const obs3 = [
+      { kind: 'tempo', text: 'Im Kopf der Startseite liegen 4 Skripte ohne defer oder async.', source: 'https://holzform.example.test/', tip: 'Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.' },
+      { kind: 'seo', text: 'Die Startseite hat kein h1.', source: 'https://holzform.example.test/', tip: 'Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.' },
+      { kind: 'kontakt', text: 'Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.', source: 'https://holzform.example.test/', tip: 'Unter die Telefonnummer ein Formular mit Holzart, Maß und Terminwunsch setzen, das eine Mail schickt.' },
+    ];
+    const mail1 = `Guten Tag Lena,\n\nauf der Seite von Musterwerk GmbH: Im Impressum steht als Stand das Jahr 2019, und die Startseite hat kein viewport-Meta.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Die Jahreszahl auf 2026 setzen, sobald der Text dazu stimmt.\n- Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.\n- Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    const mail2 = `Guten Tag Jonas,\n\nauf der Seite von Beispielhof: Die Startseite hat keine meta description, und ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Eine meta description mit einem Satz schreiben: was der Hof verkauft und wo die Abholung ist.\n- Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.\n- Auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    const mail3 = `Guten Tag Mara,\n\nauf der Seite von Holzform e.K.: Im Kopf der Startseite liegen 4 Skripte ohne defer oder async, und die Startseite hat kein h1.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.\n- Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.\n- Unter die Telefonnummer ein Formular mit Holzart, Maß und Terminwunsch setzen, das eine Mail schickt.\n\nBei Werkstatt Berg in Immenstadt lag derselbe Punkt: Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
     state.targets = [
-      { id: 't1', firma: 'Musterwerk GmbH', web: 'https://musterwerk.example.test', domain: 'musterwerk.example.test', str: 'Hafenstraße 4', plz: '87435', ort: 'Kempten', impressum_url: 'https://musterwerk.example.test/impressum', status: 'recherchiert', skip_reason: '' },
-      { id: 't2', firma: 'Beispielhof', web: 'https://beispielhof.example.test', domain: 'beispielhof.example.test', str: 'Dorfweg 2', plz: '87435', ort: 'Kempten', status: 'recherchiert', skip_reason: '' },
-      { id: 't3', firma: 'Holzform e.K.', web: 'https://holzform.example.test', domain: 'holzform.example.test', str: 'Werkstatt 1', plz: '87509', ort: 'Immenstadt', status: 'recherchiert', skip_reason: '' },
-      { id: 't4', firma: 'Bestandskunde Demo AG', web: 'https://demo-ag.example.test', domain: 'demo-ag.example.test', status: 'uebersprungen', skip_reason: 'Bestandskunde' },
+      { id: 't1', firma: 'Musterwerk GmbH', web: 'https://musterwerk.example.test', domain: 'musterwerk.example.test', str: 'Hafenstraße 4', plz: '87435', ort: 'Kempten', impressum_url: 'https://musterwerk.example.test/impressum', status: 'recherchiert', skip_reason: '', observations: obs1 },
+      { id: 't2', firma: 'Beispielhof', web: 'https://beispielhof.example.test', domain: 'beispielhof.example.test', str: 'Dorfweg 2', plz: '87435', ort: 'Kempten', status: 'recherchiert', skip_reason: '', observations: obs2 },
+      { id: 't3', firma: 'Holzform e.K.', web: 'https://holzform.example.test', domain: 'holzform.example.test', str: 'Werkstatt 1', plz: '87509', ort: 'Immenstadt', branche: 'Schreinerei', status: 'recherchiert', skip_reason: '', observations: obs3 },
+      { id: 't4', firma: 'Bestandskunde Demo AG', web: 'https://demo-ag.example.test', domain: 'demo-ag.example.test', status: 'uebersprungen', skip_reason: 'Bestandskunde', observations: [] },
+      { id: 't8', firma: 'Stillstand Demo', web: 'https://stillstand.example.test', domain: 'stillstand.example.test', status: 'duenn', skip_reason: 'zu wenig Substanz', observations: [{ kind: 'social', text: 'Auf den gelesenen Seiten liegt kein Link zu Instagram, Facebook oder LinkedIn.', source: 'https://stillstand.example.test/', tip: '' }] },
     ];
     state.people = [
       { id: 'p1', target_id: 't1', person: 'Lena Muster', rolle: 'Geschäftsführerin', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website', adresse: 'Hafenstraße 4, 87435 Kempten' },
@@ -58,14 +77,13 @@
       { id: 'p3', target_id: 't2', person: 'Jonas Beispiel', rolle: 'Inhaber', email: 'jonas.beispiel@beispielhof.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Dorfweg 2, 87435 Kempten' },
       { id: 'p4', target_id: 't3', person: 'Mara Holm', rolle: 'Inhaberin', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Werkstatt 1, 87509 Immenstadt' },
     ];
-    const body = (name, _firma, site) => `Guten Tag ${name},\n\nich bin Kim von Viral Outlaws. Wir bauen Websites und setzen KI für kleine Betriebe um.\n\nAuf ${site} wirkt der Einstieg etwas versteckt. Eine klarere Seite nimmt den Betrieb aus dem Postfach.\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
     state.drafts = [
-      { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Musterwerk GmbH: eine Frage zur Website', body: body('Lena', 'Musterwerk GmbH', 'musterwerk.example.test'), status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
-      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Beispielhof: eine Frage zur Website', body: body('Jonas', 'Beispielhof', 'beispielhof.example.test'), status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
-      { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Holzform: eine Frage zur Website', body: body('Mara', 'Holzform e.K.', 'holzform.example.test'), status: 'entwurf', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', guess_ok: false, unread: false },
-      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Seenadel Studio: eine Frage zur Website', body: body('Kim', 'Seenadel Studio', 'seenadel.example.test'), status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
-      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Klarwerk OHG: eine Frage zur Website', body: body('Noel', 'Klarwerk OHG', 'klarwerk.example.test'), status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
-      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Nordlicht Demo: eine Frage zur Website', body: body('Ruth', 'Nordlicht Demo', 'nordlicht.example.test'), status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Musterwerk GmbH: Im Impressum steht als Stand das Jahr 2019', body: mail1, observations: obs1, status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Beispielhof: Die Startseite hat keine meta description', body: mail2, observations: obs2, status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
+      { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Holzform e.K.: Im Kopf der Startseite liegen 4 Skripte ohne defer oder async', body: mail3, observations: obs3, status: 'entwurf', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', guess_ok: false, unread: false },
+      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Seenadel Studio: eine Frage zur Website', body: mail1.replace('Lena', 'Ada').replace('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
+      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Klarwerk OHG: eine Frage zur Website', body: mail2.replace('Jonas', 'Noel').replace('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
+      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Nordlicht Demo: eine Frage zur Website', body: mail1.replace('Lena', 'Ruth').replace('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
     ];
     state.targets.push(
       { id: 't5', firma: 'Seenadel Studio', web: 'https://seenadel.example.test', domain: 'seenadel.example.test', status: 'recherchiert' },
@@ -78,10 +96,10 @@
       { id: 'p7', target_id: 't7', person: 'Ruth Nord', rolle: 'Inhaberin', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website' },
     );
     state.messages = [
-      { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Seenadel Studio: eine Frage zur Website', body_text: body('Ada', 'Seenadel Studio', 'seenadel.example.test'), created_at: '2026-11-20T09:00:00.000Z' },
-      { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Klarwerk OHG: eine Frage zur Website', body_text: body('Noel', 'Klarwerk OHG', 'klarwerk.example.test'), created_at: '2026-11-18T09:00:00.000Z' },
+      { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Seenadel Studio: eine Frage zur Website', body_text: mail1.replace('Lena', 'Ada').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), created_at: '2026-11-20T09:00:00.000Z' },
+      { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Klarwerk OHG: eine Frage zur Website', body_text: mail2.replace('Jonas', 'Noel').replaceAll('Beispielhof', 'Klarwerk OHG'), created_at: '2026-11-18T09:00:00.000Z' },
       { id: 'm3', draft_id: 'd5', direction: 'in', from_addr: 'noel.klar@klarwerk.example.test', subject: 'AW: Klarwerk OHG: eine Frage zur Website', body_text: 'Guten Tag Kim,\n\ndanke für die Zeilen. Die Website ist von 2019 und die Anfragen landen bei mir im Postfach. Können Sie kurz sagen, wie so ein Ablauf bei einem kleinen Betrieb aussieht?\n\nViele Grüße\nNoel Klar', created_at: '2026-11-19T14:12:00.000Z' },
-      { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Nordlicht Demo: eine Frage zur Website', body_text: body('Ruth', 'Nordlicht Demo', 'nordlicht.example.test'), created_at: '2026-11-12T09:00:00.000Z' },
+      { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Nordlicht Demo: eine Frage zur Website', body_text: mail1.replace('Lena', 'Ruth').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), created_at: '2026-11-12T09:00:00.000Z' },
       { id: 'm5', draft_id: 'd6', direction: 'in', from_addr: 'ruth.nord@nordlicht.example.test', subject: 'AW: Nordlicht Demo', body_text: 'Bitte abmelden. Kein Interesse an weiteren Nachrichten.', created_at: '2026-11-12T11:40:00.000Z' },
     ];
     state.note = 'Demo mit erfundenen Firmen. Es wird nichts gelesen und nichts verschickt.';
@@ -134,7 +152,13 @@
   .bubble.in{background:var(--glass-bg,rgba(255,255,255,.4))}
   .dot-unread{width:8px;height:8px;border-radius:99px;background:#d63030;display:inline-block}
   #outreach-editor.overlay{z-index:600}
-  #outreach-editor textarea{min-height:210px}
+  #outreach-editor .modal{max-width:960px}
+  #outreach-editor textarea{min-height:220px}
+  .outreach-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+  .obs-card{background:rgba(245,196,0,.08);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 8px;font-size:12px;line-height:1.45}
+  .obs-card a{color:inherit;word-break:break-all}
+  .obs-tip{color:var(--ink2);display:block;margin-top:4px}
+  @media(max-width:900px){.outreach-editor-grid{grid-template-columns:1fr}}
   @media(max-width:900px){
     .outreach-grid,.mail-split{grid-template-columns:1fr}
     .outreach-draft{grid-template-columns:28px minmax(0,1fr)}
@@ -257,7 +281,7 @@
   }
 
   function goalsHtml() {
-    const shown = state.demo ? state.targets.filter((t) => ['t1', 't2', 't3', 't4'].includes(t.id)) : state.targets.filter((t) => !state.drafts.some((d) => d.target_id === t.id && ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)));
+    const shown = state.demo ? state.targets.filter((t) => ['t1', 't2', 't3', 't4', 't8'].includes(t.id)) : state.targets.filter((t) => !state.drafts.some((d) => d.target_id === t.id && ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)));
     return `<div class="outreach-grid">
       <div class="dash-card outreach-card haptik-in" id="outreach-input">
         <h3>Firmen</h3>
@@ -285,9 +309,12 @@
 
   function companyCard(t) {
     const people = state.people.filter((p) => p.target_id === t.id);
-    const skipped = t.status === 'uebersprungen' || t.status === 'fehler';
+    const thin = t.status === 'duenn' || t.skip_reason === 'zu wenig Substanz';
+    const skipped = t.status === 'uebersprungen' || t.status === 'fehler' || thin;
+    const notes = Array.isArray(t.observations) ? t.observations : [];
     return `<article class="dash-card outreach-co haptik-in">
       <div class="outreach-co-top"><div><b>${esc(t.firma || t.web || 'Unbekannt')}</b><div class="outreach-meta">${esc(t.web || '')}${t.ort ? ' · ' + esc([t.plz, t.ort].filter(Boolean).join(' ')) : ''}</div></div>${skipped ? `<span class="pill stop">${esc(t.skip_reason || t.last_error || 'Übersprungen')}</span>` : '<span class="pill ok">Gelesen</span>'}</div>
+      ${notes.slice(0, 3).map((o) => `<div class="outreach-meta">${esc(o.text || '')}</div>`).join('')}
       ${people.map((p) => `<div class="outreach-person"><div><div>${esc(p.person || 'Kein Name')} <span class="outreach-meta">${esc(p.rolle || '')}</span></div><div class="outreach-meta">${esc(p.email || 'keine Adresse')}</div><div class="outreach-meta">${esc(p.hinweis || '')}</div></div><div>${artPill(p.email_art)}${p.email_art === 'vermutet' && !skipped ? `<div style="margin-top:8px"><button type="button" class="btn-ghost btn-sm" onclick="outreachDraftOne('${esc(p.id)}')">Entwurf für Vermutung</button></div>` : ''}</div></div>`).join('')}
       ${!people.length ? `<p class="outreach-help">${esc(t.skip_reason || t.last_error || 'Kein Ansprechpartner gefunden.')}</p>` : ''}
     </article>`;
@@ -326,15 +353,25 @@
     if (!d || state.tab !== 'freigabe') return '';
     const t = targetOf(d.target_id);
     const guess = d.email_art === 'vermutet';
+    const notes = Array.isArray(d.observations) && d.observations.length ? d.observations : (Array.isArray(t?.observations) ? t.observations : []);
     return `<div class="overlay open" id="outreach-editor" onclick="if(event.target===this)outreachCloseEdit()">
       <div class="modal" role="dialog" aria-labelledby="outreach-editor-title">
         <div class="modal-header"><h2 id="outreach-editor-title">Entwurf</h2><button type="button" class="icon-btn" onclick="outreachCloseEdit()" aria-label="Schließen">${ico('x', 16)}</button></div>
         <div style="padding:16px 20px 20px">
-          <p class="outreach-help">${esc(t?.firma || '')} · ${esc(d.email || '')} ${artPill(d.email_art)}</p>
-          ${d.email_art === 'generisch' ? '<p class="outreach-help">Nur eine allgemeine Adresse. Kein Name an dieser Mail.</p>' : ''}
-          ${guess ? `<label class="outreach-check"><input type="checkbox" ${d.guess_ok ? 'checked' : ''} onchange="outreachGuessOk('${esc(d.id)}', this.checked)"> Vermutete Adresse bewusst freigeben. Ohne dieses Häkchen geht die Mail nicht raus.</label>` : ''}
-          <div class="outreach-field"><label>Betreff</label><input value="${esc(d.subject || '')}" oninput="outreachEditField('${esc(d.id)}','subject', this.value)"></div>
-          <div class="outreach-field"><label>Text</label><textarea oninput="outreachEditField('${esc(d.id)}','body', this.value)">${esc(d.body || '')}</textarea></div>
+          <div class="outreach-editor-grid">
+            <div>
+              <p class="outreach-help">${esc(t?.firma || '')} · ${esc(d.email || '')} ${artPill(d.email_art)}</p>
+              ${d.email_art === 'generisch' ? '<p class="outreach-help">Nur eine allgemeine Adresse. Kein Name an dieser Mail.</p>' : ''}
+              ${guess ? `<label class="outreach-check"><input type="checkbox" ${d.guess_ok ? 'checked' : ''} onchange="outreachGuessOk('${esc(d.id)}', this.checked)"> Vermutete Adresse bewusst freigeben. Ohne dieses Häkchen geht die Mail nicht raus.</label>` : ''}
+              <div class="outreach-field"><label>Betreff</label><input value="${esc(d.subject || '')}" oninput="outreachEditField('${esc(d.id)}','subject', this.value)"></div>
+              <div class="outreach-field"><label>Text</label><textarea oninput="outreachEditField('${esc(d.id)}','body', this.value)">${esc(d.body || '')}</textarea></div>
+            </div>
+            <aside id="outreach-observations">
+              <h3 style="margin:0 0 8px;font-size:14px">Beobachtungen</h3>
+              <p class="outreach-help">Nur diese Punkte stehen in der Mail. Die Quelle ist die gelesene Seite.</p>
+              ${notes.map((o) => `<div class="obs-card"><b>${esc(o.text || '')}</b><a href="${esc(o.source || '')}">${esc(o.source || '')}</a><span class="obs-tip">${esc(o.tip || '')}</span></div>`).join('') || '<p class="outreach-help">Keine Beobachtungen gespeichert.</p>'}
+            </aside>
+          </div>
           <div class="outreach-row">
             <button type="button" class="btn-ghost" onclick="outreachSaveDraft('${esc(d.id)}')">${ico('save', 14)} Speichern</button>
             <button type="button" class="btn-yellow" onclick="outreachApprove('${esc(d.id)}')">${ico('check', 14)} Freigeben</button>

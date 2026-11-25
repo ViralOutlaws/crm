@@ -1,20 +1,26 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   assertPublicHttpUrl,
+  composePeerMail,
   contactSeed,
   emailMatchesPerson,
-  fallbackMail,
+  finalizeMail,
   guessEmail,
   isGenericEmail,
   isOptOut,
+  MAIL_WORD_MAX,
+  matchingReference,
+  observeSite,
   outreachSkip,
-  parseAiMail,
   parseSearchLinks,
   preferredPerson,
   readCompany,
   replyPlan,
+  reviewMail,
   sendDecision,
   splitUrls,
+  SUBSTANCE_LABEL,
+  wordCount,
 } from "./outreach.ts";
 
 const PAGE = `<!doctype html><html><head><title>Impressum | Musterwerk GmbH</title></head><body>
@@ -159,18 +165,85 @@ Deno.test("Antworten werden dem Outreach zugeordnet, Abmelden sperrt, fremde Mai
   assertEquals(isOptOut("Wir haben Interesse an einer neuen Website."), false);
 });
 
-Deno.test("Vorlage nennt Absender und Abmeldung, die KI darf das nicht weglassen", () => {
-  const mail = fallbackMail({ person: "Lena Muster", firma: "Musterwerk GmbH", web: "https://musterwerk.example.test", excerpt: "" });
-  assertEquals(/Viral Outlaws/.test(mail.body), true);
-  assertEquals(/Kim/.test(mail.body), true);
-  assertEquals(/Bitte abmelden/.test(mail.body), true);
-  assertEquals(mail.subject.includes("Musterwerk"), true);
-  const fixed = parseAiMail('{"subject":"Kurz zu Musterwerk","body":"Guten Tag Lena, nur ein Satz."}', mail);
-  assertEquals(fixed.source, "ki");
-  assertEquals(/Bitte abmelden/.test(fixed.body), true);
-  assertEquals(/Viral Outlaws/.test(fixed.body), true);
+const THIN = `<!doctype html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Schreinerei mit Werkstatt und Abholung vor Ort im Allgäu">
+<title>Beispiel</title>
+<script src="/app.js" defer></script>
+</head><body>
+<h1>Werkstatt</h1>
+<a href="https://instagram.com/beispiel">Instagram</a>
+<p>Termin nach Absprache.</p>
+<form action="/kontakt"><input name="name"></form>
+<p>Copyright 2026</p>
+</body></html>`;
+
+const OLD = `<!doctype html><html><head><title>Musterwerk</title>
+<script src="/a.js"></script><script src="/b.js"></script>
+</head><body>
+<p>Rufen Sie uns an: <a href="tel:+498317700">0831 7700</a></p>
+<img src="/a.jpg"><img src="/b.jpg"><img src="/c.jpg"><img src="/d.jpg">
+</body></html>`;
+
+const IMP = `<html><body><p>Musterwerk GmbH</p><p>Stand: 2019</p><p>Geschäftsführerin: Lena Muster</p></body></html>`;
+
+Deno.test("Die Seite liefert konkrete Beobachtungen mit Quelle, eine dünne Seite nicht", () => {
+  const notes = observeSite({
+    pageHtml: OLD,
+    pageUrl: "https://musterwerk.example.test/",
+    impressumHtml: IMP,
+    impressumUrl: "https://musterwerk.example.test/impressum",
+    year: 2026,
+  });
+  assertEquals(notes.length >= 2 && notes.length <= 3, true);
+  assertEquals(notes.some((n) => n.text.includes("2019") && n.source.includes("impressum")), true);
+  assertEquals(notes.some((n) => n.kind === "mobil" && n.source === "https://musterwerk.example.test/"), true);
+  assertEquals(notes.every((n) => n.tip.length > 10 && n.source.startsWith("https://")), true);
+  const thin = observeSite({ pageHtml: THIN, pageUrl: "https://duenn.example.test/", year: 2026 });
+  assertEquals(thin.length < 2, true);
+});
+
+Deno.test("Die Mail gibt umsetzbare Tipps, eine Referenz nur wenn sie passt", () => {
+  const notes = observeSite({
+    pageHtml: OLD,
+    pageUrl: "https://musterwerk.example.test/",
+    impressumHtml: IMP,
+    impressumUrl: "https://musterwerk.example.test/impressum",
+    year: 2026,
+  });
+  const refs = [{
+    firma: "Werkstatt Berg",
+    branche: "Schreinerei",
+    ort: "Immenstadt",
+    note: "Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.",
+  }];
+  const plain = composePeerMail({ person: "Lena Muster", firma: "Musterwerk GmbH", observations: notes, references: refs, branche: "Bäckerei" });
+  if (!plain) throw new Error("keine Mail");
+  assertEquals(reviewMail(plain.body, { observations: notes, references: refs }).join(","), "");
+  assertEquals(plain.body.includes("Werkstatt Berg"), false);
+  assertEquals(/Soll ich Ihnen das kurz zeigen\?/.test(plain.body), true);
+  assertEquals(/Bitte abmelden/.test(plain.body), true);
+  assertEquals(/!/.test(plain.body), false);
+  assertEquals(wordCount(plain.body) <= MAIL_WORD_MAX, true);
+  const fit = composePeerMail({ person: "Mara Holm", firma: "Holzform e.K.", observations: notes, references: refs, branche: "Schreinerei" });
+  if (!fit) throw new Error("keine Referenzmail");
+  assertEquals(fit.body.includes("Werkstatt Berg"), true);
+  assertEquals(reviewMail(fit.body, { observations: notes, references: refs }).join(","), "");
+  assertEquals(matchingReference(refs, "Bäckerei"), null);
+  const fluffy = "Guten Tag Lena,\n\nich hoffe, diese Mail erreicht Sie gut! Unsere innovative Lösung ist maßgeschneidert.\n\nSoll ich Ihnen das kurz zeigen?\n\nViele Grüße\nKim\nViral Outlaws\n\nBitte abmelden.";
+  assertEquals(reviewMail(fluffy, { observations: notes, references: refs }).includes(SUBSTANCE_LABEL), true);
+  const invented = plain.body.replace("Soll ich", "Bei Fantasie GmbH war das schon so.\n\nSoll ich");
+  assertEquals(reviewMail(invented, { observations: notes, references: refs }).includes("Referenz nicht belegt"), true);
+  const kept = finalizeMail({
+    person: "Lena Muster",
+    firma: "Musterwerk GmbH",
+    observations: notes,
+    attempts: [{ subject: "Kurz", body: fluffy }],
+  });
+  assertEquals(kept.ok && kept.source === "vorlage", true);
+  const thin = finalizeMail({ person: "Ada", firma: "Dünn", observations: observeSite({ pageHtml: THIN, pageUrl: "https://duenn.example.test/", year: 2026 }) });
+  assertEquals(thin.ok, false);
   const seed = contactSeed({ firma: "Musterwerk GmbH", person: "Lena Muster", email: "lena.muster@musterwerk.example.test", str: "Hafenstraße 4", plz: "87435", ort: "Kempten", web: "https://musterwerk.example.test" });
   assertEquals(seed.status, "lead");
-  assertEquals(seed.quelle, "kaltakquise");
   assertEquals("kundennummer" in seed, false);
 });

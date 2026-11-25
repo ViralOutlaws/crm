@@ -34,6 +34,6 @@ Migration `supabase/migrations/20261030210000_wissensbasis_posteingang.sql` nich
 
 Modul in der Oberfläche, Beschreibung in `docs/outreach.md`. Der alte Posteingang ist aus der Navigation. Versand, Sync und die Tabellen bleiben.
 
-Migration `supabase/migrations/20261125160000_outreach.sql` nicht selbst auf die Live-Datenbank anwenden. Funktionen `outreach-research`, `outreach-draft`, `outreach-send`, `outreach-reply` und `mail-sync` nicht ausrollen, bevor Kim die Screenshots gesehen hat. Nichts geht ohne Freigabe der einzelnen Mail raus.
+Migrationen `supabase/migrations/20261125160000_outreach.sql` und `supabase/migrations/20261125170000_outreach_observations.sql` nicht selbst auf die Live-Datenbank anwenden. Funktionen `outreach-research`, `outreach-draft`, `outreach-send`, `outreach-reply` und `mail-sync` nicht ausrollen, bevor Kim die Screenshots gesehen hat. Nichts geht ohne Freigabe der einzelnen Mail raus.
 
 Funktionen neu ausrollen: `mail-sync`, `mail-send`, `inbox-draft`, `deal-estimate`, `website-lead`, `jarvis-chat`. `ANTHROPIC_API_KEY` liegt bereits bei den Supabase-Secrets.
