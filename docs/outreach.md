@@ -66,3 +66,11 @@ Neue Migration ausrollen: Datei unter `supabase/migrations` anwenden, dann die b
 Die Demo unter `/?demo=outreach` zeigt erfundene Firmen auf `.example.test` und verschickt nichts.
 
 Hinweis Pages-Deploy: Die Läufe vom 25.11. sind am bekannten Artefakt-Race gescheitert (actions/deploy-pages#451, Upload und Deploy im selben Job). Abhilfe: in `.github/workflows/deploy.yml` Upload und Deploy in zwei Jobs trennen (`deploy` mit `needs: build`). Das braucht ein Token mit `workflow`-Scope.
+
+## Signatur (seit 25.11.2026)
+
+Jede Outreach-Mail und jede Antwort bekommt beim Versand eine volle Geschäftssignatur: Name, Firma, Adresse, Telefon, E-Mail, Website und Link zum Impressum (https://www.viraloutlaws.de/impressum). Kein Preis- oder MwSt.-Hinweis (Kleinunternehmer). Gespeichert in `outreach_settings.signature`, vorbelegt aus den Firmendaten im CRM (`settings`), änderbar unter Nachtlauf → Signatur. Der Entwurf selbst endet mit „Viele Grüße / Kim“ und dem P.S.; die Signatur hängt `outreach-send` hinter einer Trennzeile `-- ` an. Sie zählt nicht zur Wortzahl und ist im Editor als Vorschau sichtbar.
+
+## „Einen Suchlauf jetzt“
+
+Der Knopf ruft `outreach-night` mit dem Login auf. Der manuelle Lauf ignoriert das Nachtfenster, legt nur Entwürfe an und schickt nichts. Während er läuft, zeigt der Knopf einen Spinner, danach steht „X Betriebe gefunden, Y Entwürfe angelegt“ oder die echte Fehlermeldung im Nachtlauf-Kasten. Ursache des alten „passiert nichts“: overpass-api.de hat Anfragen aus der Supabase-Cloud sofort abgelehnt, die Funktion antwortete mit 400, und der Knopf zeigte nur die nichtssagende Meldung von supabase-js. Jetzt fragt die Kartensuche nacheinander mehrere Overpass-Server ab. Für Tests geht derselbe Lauf per Cron-Secret mit `{"manual": true}`.

@@ -994,7 +994,43 @@ export function subjectFor(o: Observation, v: BranchVoice, site: string): string
 
 export const MAIL_BRIDGE = "Genau solche Stellen sind mein Job.";
 export const MAIL_OPTOUT = "Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.";
-export const MAIL_SIGNATURE = ["Viele Grüße", "Kim", "Viral Outlaws"];
+/** Gruß im Entwurf. Die volle Geschäftssignatur (Adresse, Impressum) hängt der Versand an. */
+export const MAIL_SIGNATURE = ["Viele Grüße", "Kim"];
+export const SIGNATURE_DELIMITER = "-- ";
+export const IMPRESSUM_URL = "https://www.viraloutlaws.de/impressum";
+
+export type CompanyData = { name?: string; inhaber?: string; str?: string; plz?: string; tel?: string; email?: string; web?: string };
+
+/** Geschäftssignatur aus den Firmendaten im CRM. Ohne Preis- oder MwSt.-Hinweis. */
+export function buildSignature(c: CompanyData | null | undefined): string {
+  const d = c || {};
+  const clean = (v?: string) => String(v || "").replace(/\s+/g, " ").trim();
+  const name = clean(d.inhaber) || "Kim Lukas Tobler";
+  const firma = clean(d.name) || "Viral Outlaws";
+  const adresse = [clean(d.str), clean(d.plz)].filter(Boolean).join(", ");
+  const kontakt = [clean(d.tel) ? `Tel. ${clean(d.tel)}` : "", clean(d.email)].filter(Boolean).join(" · ");
+  const web = clean(d.web).replace(/^https?:\/\//, "");
+  return [
+    name,
+    firma,
+    adresse,
+    kontakt,
+    web,
+    `Impressum: ${IMPRESSUM_URL}`,
+  ].filter(Boolean).join("\n");
+}
+
+/** Entfernt eine schon angehängte Signatur (ab der Trennzeile "-- "). */
+export function stripSignature(body: string): string {
+  return String(body || "").replace(/\n-- ?\n[\s\S]*$/, "").trimEnd();
+}
+
+/** Text, wie er rausgeht: Entwurf plus Geschäftssignatur am Ende. */
+export function withSignature(body: string, signature: string | null | undefined): string {
+  const base = stripSignature(body);
+  const sig = String(signature || "").trim();
+  return sig ? `${base}\n\n${SIGNATURE_DELIMITER}\n${sig}` : base;
+}
 
 export function introFor(v: BranchVoice, ref?: PortfolioRef | null): string {
   const refLine = ref
@@ -1009,7 +1045,7 @@ export function ctaFor(v: BranchVoice): string {
 
 /** Text ohne Gruß und Signatur. */
 export function mailCore(body: string): string {
-  return String(body || "").replace(/\n\s*Viele Grüße\s*\n\s*Kim[^\n]*\n\s*Viral Outlaws[^\n]*/i, "\n");
+  return stripSignature(body).replace(/\n\s*Viele Grüße\s*\n\s*Kim[^\n]*(\n\s*Viral Outlaws[^\n]*)?/i, "\n");
 }
 
 /** Wortzahl des Fließtexts: ohne Anrede, Signatur und P.S. */
@@ -1198,8 +1234,8 @@ export function draftInstructions(): string {
     "4. Brücke und Vorstellung, zwei Sätze: 'Genau solche Stellen sind mein Job. Ich bin Kim Lukas Tobler von Viral Outlaws, wir bauen [Branche wie unten], damit aus Besuchern [Ziel wie unten] werden.' Danach die erlaubte Referenz, wenn eine vorgegeben ist, sonst 'Beispiele finden Sie auf viraloutlaws.de.'",
     "5. Terminfrage direkt, ohne Ausweichoption: 'Ich würde Ihnen gern unverbindlich zeigen, wie das für [Betrieb] aussehen könnte, in 15 Minuten online oder bei Ihnen vor Ort. Passt Ihnen ein kurzer Termin in den nächsten Tagen?' Nicht behaupten, es gebe schon einen Entwurf. Das Wort Entwurf kommt nicht vor.",
     "6. Opt-out wörtlich: 'Falls das kein Thema für Sie ist, genügt eine kurze Antwort, dann melde ich mich nicht mehr.'",
-    "7. Danach genau diese Signatur in drei Zeilen: Viele Grüße / Kim / Viral Outlaws.",
-    "8. Nach der Signatur ein P.S. mit einer zweiten, kleinen Beobachtung aus der Liste, die im Text noch nicht vorkam, als Wiedererkennungs-Haken. Ohne Folge, ohne Anleitung. Gibt es keine weitere, kein P.S.",
+    "7. Danach genau dieser Gruß in zwei Zeilen: Viele Grüße / Kim. Keine Adresse, kein Impressum, keine weitere Signatur, die hängt das System beim Versand an.",
+    "8. Nach dem Gruß ein P.S. mit einer zweiten, kleinen Beobachtung aus der Liste, die im Text noch nicht vorkam, als Wiedererkennungs-Haken. Ohne Folge, ohne Anleitung. Gibt es keine weitere, kein P.S.",
     "Betreff: greift die konkrete Beobachtung auf, persönlich und neugierig, z. B. 'praxis-muster.de mit Stand 2018' oder 'Anfragen nach Feierabend auf musterwerk.de'. Kein Werbe-Betreff.",
     "No-Gos: keine Preise, kein 'garantiert', keine erfundenen Zahlen oder Referenzen, kein Digitalbonus, keine Fachwörter wie viewport, defer, h1 oder meta description, keine Ausrufezeichen, kein 'zufällig', nie Möbel oder Schreinerei (außer der vorgegebenen Referenz Schreinerei Wagner), nie Kims Nebenjob.",
     "Antworte nur als JSON: {\"subject\":\"...\",\"body\":\"...\",\"beleg\":\"...\"}. In beleg steht die wörtliche Stelle aus dem Seitentext, auf die sich das Kompliment stützt (höchstens 120 Zeichen, exakt kopiert). Ohne Kompliment bleibt beleg leer.",
@@ -1259,7 +1295,8 @@ export function parseAiMail(raw: string | null, fallback: { subject: string; bod
     if (!/abmelden|keine weiteren/i.test(body)) {
       body += "\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.";
     }
-    if (!/viral outlaws/i.test(body)) body += "\n\nKim\nViral Outlaws";
+    body = stripSignature(body);
+    if (!/viele grüße/i.test(body)) body += "\n\nViele Grüße\nKim";
     return { subject, body, source: "ki" };
   } catch {
     return { ...fallback, source: "vorlage" };

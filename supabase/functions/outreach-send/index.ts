@@ -2,9 +2,9 @@
 // Cron: Header x-outreach-cron == OUTREACH_CRON_SECRET. Der Wert steht nicht im Repo.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json, userClient } from "../_shared/edge_auth.ts";
-import { loadGuard } from "../_shared/outreach_db.ts";
+import { loadGuard, loadSignature } from "../_shared/outreach_db.ts";
 import { mailConfig, sendAndFile, threadKey } from "../_shared/mail.ts";
-import { contactSeed, outreachMessageId, outreachSkip, websiteDomain } from "../_shared/outreach.ts";
+import { contactSeed, outreachMessageId, outreachSkip, websiteDomain, withSignature } from "../_shared/outreach.ts";
 
 const WORKSPACE_ID = Deno.env.get("CRM_WORKSPACE_ID") || "566f2d4d-5b66-4ba8-b6a1-1edf413a1689";
 const PERMANENT = new Set(["Abgemeldet", "Bestandskunde", "Schon im CRM", "Schon angeschrieben", "Bewusst abgelehnt"]);
@@ -80,7 +80,8 @@ async function sendApproved(sb: Sb, workspaceId: string) {
   }
 
   const subject = String(draft.subject || "").slice(0, 180);
-  const text = String(draft.body || "").slice(0, 8000);
+  // Volle Geschäftssignatur (Name, Adresse, Kontakt, Impressum) kommt erst hier dazu.
+  const text = withSignature(String(draft.body || "").slice(0, 7000), await loadSignature(sb, workspaceId));
   const to = [email].filter((e) => e.includes("@"));
   if (!to.length || !subject || !text) {
     await release(sb, draftId, token, "Empfänger, Betreff oder Text fehlt", false);

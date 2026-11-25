@@ -1,5 +1,5 @@
 // Lesehilfe für die Outreach-Funktionen. Zugangsdaten bleiben in den Secrets.
-import { websiteDomain, type KnownParty } from "./outreach.ts";
+import { buildSignature, websiteDomain, type CompanyData, type KnownParty } from "./outreach.ts";
 
 type Db = { from: (table: string) => any };
 
@@ -57,4 +57,33 @@ export async function sentStats(sb: Db, workspaceId: string, now = new Date()): 
     if (fmt.format(new Date(row.created_at)) === today) sentToday += 1;
   }
   return { sentToday, lastSentAt };
+}
+
+/** Geschäftssignatur für Outreach-Mails: gespeicherte Fassung, sonst aus den Firmendaten im CRM. */
+export async function loadSignature(sb: Db, workspaceId: string): Promise<string> {
+  const saved = await sb.from("outreach_settings").select("signature").eq("workspace_id", workspaceId).maybeSingle();
+  const own = String(saved.data?.signature || "").trim();
+  if (own) return own;
+  let company: CompanyData | null = null;
+  try {
+    const members = await sb.from("profiles").select("id").eq("workspace_id", workspaceId).limit(10);
+    const ids = (members.data || []).map((m: { id: string }) => m.id);
+    if (ids.length) {
+      const rows = await sb.from("settings").select("data").in("user_id", ids).limit(10);
+      for (const row of rows.data || []) {
+        const raw = typeof row.data === "string" ? JSON.parse(row.data) : row.data;
+        const c = (raw && (raw.settings || raw)) as CompanyData;
+        if (c && (c.str || c.plz)) { company = c; break; }
+      }
+    }
+  } catch { /* Firmendaten fehlen: Standard unten */ }
+  return buildSignature(company || {
+    name: "Viral Outlaws",
+    inhaber: "Kim Lukas Tobler",
+    str: "Kirchstraße 33",
+    plz: "87789 Woringen",
+    tel: "0163 9047958",
+    email: "info@viraloutlaws.de",
+    web: "www.viraloutlaws.de",
+  });
 }

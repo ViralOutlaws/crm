@@ -56,24 +56,49 @@ function cronAuthorized(req: Request) {
   return !!secret && !!given && safeEqual(given, secret);
 }
 
-async function overpass(query: string): Promise<{ ok: true; urls: { url: string; name: string }[] } | { ok: false; error: string }> {
-  try {
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      signal: AbortSignal.timeout(22000),
-      headers: {
-        "user-agent": "ViralOutlawsCRM/outreach",
-        "content-type": "application/x-www-form-urlencoded",
-        "accept": "application/json",
-      },
-      body: `data=${encodeURIComponent(query)}`,
-    });
-    if (res.status === 429 || res.status === 504) return { ok: false, error: "Overpass ist gerade belegt. Der nächste Lauf versucht dasselbe Gebiet erneut." };
-    if (!res.ok) return { ok: false, error: `Overpass antwortet mit ${res.status}` };
-    return { ok: true, urls: readOverpass(await res.json()) };
-  } catch {
-    return { ok: false, error: "Overpass ist nicht erreichbar. Der nächste Lauf versucht dasselbe Gebiet erneut." };
+// overpass-api.de lehnt Anfragen aus der Supabase-Cloud oft sofort ab oder ist überlastet.
+// Deshalb der Reihe nach mehrere öffentliche Overpass-Server, jeder mit eigenem Zeitlimit.
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+
+async function overpass(query: string): Promise<{ ok: true; urls: { url: string; name: string }[]; server: string } | { ok: false; error: string }> {
+  const tried: string[] = [];
+  const started = Date.now();
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    if (Date.now() - started > 45000) break;
+    const host = new URL(endpoint).host;
+    try {
+      // Kein "accept"-Header: overpass-api.de antwortet darauf mit 406 Not Acceptable.
+      const res = await fetch(endpoint, {
+        method: "POST",
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          "user-agent": "ViralOutlawsCRM/1.0 (+https://www.viraloutlaws.de; info@viraloutlaws.de)",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+      if (!res.ok) {
+        tried.push(`${host} ${res.status}`);
+        await res.body?.cancel();
+        continue;
+      }
+      const payload = await res.json().catch(() => null);
+      if (!payload || !Array.isArray((payload as { elements?: unknown[] }).elements)) {
+        tried.push(`${host} ohne Daten`);
+        continue;
+      }
+      return { ok: true, urls: readOverpass(payload), server: host };
+    } catch (e) {
+      tried.push(`${host} ${e instanceof Error && e.name === "TimeoutError" ? "Zeitüberschreitung" : "nicht erreichbar"}`);
+    }
   }
+  console.error("overpass failed", tried.join(", "));
+  return { ok: false, error: `Die Kartensuche (Overpass) antwortet gerade nicht (${tried.join(", ")}). Bitte in ein paar Minuten noch einmal versuchen.` };
 }
 
 async function ensureAreas(sb: Sb) {
@@ -277,7 +302,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
   }
   const waiting = await sb.from("outreach_drafts").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("status", "entwurf");
   const queue = waiting.count || 0;
-  if (queue >= prep.prep_target) return { ok: true, skipped: "Ziel erreicht", queue, target: prep.prep_target };
+  if (queue >= prep.prep_target) return { ok: true, skipped: `Ziel erreicht: ${queue} offene Entwürfe warten schon auf Freigabe.`, queue, target: prep.prep_target };
 
   const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
   const locked = await sb.from("outreach_settings").update({ prep_running_at: new Date().toISOString() })
@@ -304,6 +329,8 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
     let profileName = "";
     let areaName = "";
     let queried = false;
+    let foundCount = 0;
+    let freshCount = 0;
 
     if (!pool.data?.length) {
       const coverage = await sb.from("outreach_coverage").select("profile_id, area_id, searched_at").eq("workspace_id", workspaceId).limit(5000);
@@ -324,6 +351,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
       const found = await overpass(query);
       queried = true;
       if (!found.ok) return { ok: false, error: found.error, profile: profileName, area: areaName, queue, target: prep.prep_target };
+      foundCount = found.urls.length;
       const marked = await sb.from("outreach_coverage").upsert({
         workspace_id: workspaceId,
         profile_id: cell.profile.id,
@@ -343,6 +371,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
         const domain = websiteDomain(u.url);
         return domain && !taken.has(domain);
       }).slice(0, OVERPASS_OUT);
+      freshCount = fresh.length;
       if (fresh.length) {
         const saved = await sb.from("outreach_pool").upsert(fresh.map((u) => ({
           workspace_id: workspaceId,
@@ -386,6 +415,9 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
       profile: profileName,
       area: areaName,
       queried,
+      found: foundCount,
+      fresh: freshCount,
+      researched: researched.length,
       read: batch.length,
       drafted: created.length,
       errors: errors.slice(0, 3),
@@ -406,7 +438,9 @@ Deno.serve(async (req) => {
       const url = Deno.env.get("SUPABASE_URL") || "";
       if (!key || !url) return json({ error: "Nachtlauf ist serverseitig nicht eingerichtet" }, 500);
       const sb = createClient(url, key, { auth: { persistSession: false } });
-      const result = await runPrep(sb, WORKSPACE_ID, false);
+      const cronBody = await req.json().catch(() => ({}));
+      // manual: true wie der Knopf "Einen Suchlauf jetzt": ignoriert das Nachtfenster, legt nur Entwürfe an.
+      const result = await runPrep(sb, WORKSPACE_ID, cronBody?.manual === true);
       return json(result, result.error ? 400 : 200);
     }
     const { sb, workspaceId } = await userClient(req);
@@ -415,6 +449,7 @@ Deno.serve(async (req) => {
     const result = await runPrep(sb, workspaceId, true);
     return json(result, result.error ? 400 : 200);
   } catch (e) {
+    console.error("outreach-night", e);
     return json({ error: e instanceof Error ? e.message : "Fehler" }, 400);
   }
 });

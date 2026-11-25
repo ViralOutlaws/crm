@@ -1,8 +1,8 @@
 // Antwort im Outreach-Postfach. Ein KI-Entwurf verschickt nichts. Senden nur mit confirm.
 import { anthropicText, cors, json, userClient } from "../_shared/edge_auth.ts";
-import { sentStats } from "../_shared/outreach_db.ts";
+import { loadSignature, sentStats } from "../_shared/outreach_db.ts";
 import { mailConfig, sendAndFile } from "../_shared/mail.ts";
-import { DAILY_LIMIT_DEFAULT, GAP_MINUTES_DEFAULT, outreachMessageId, sendDecision } from "../_shared/outreach.ts";
+import { DAILY_LIMIT_DEFAULT, GAP_MINUTES_DEFAULT, outreachMessageId, sendDecision, withSignature } from "../_shared/outreach.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -30,15 +30,16 @@ Deno.serve(async (req) => {
       const system = "Du schreibst eine kurze Antwort auf Deutsch für Kim, Viral Outlaws. Halte die Wissensbasis ein. Erfinde keine Preise, Termine oder Referenzen. Nur der Mailtext, ohne Betreff. Du versendest nichts.";
       const user = `Regeln:\n${rules}\n\nBisheriges Gespräch:\n${history}\n\nUnsere erste Mail:\n${row.body || ""}`;
       const text = (await anthropicText(system, user, 700))?.trim()
-        || "Guten Tag,\n\nvielen Dank für Ihre Nachricht. Ich schaue es mir an und melde mich.\n\nViele Grüße\nKim\nViral Outlaws";
+        || "Guten Tag,\n\nvielen Dank für Ihre Nachricht. Ich schaue es mir an und melde mich.\n\nViele Grüße\nKim";
       await sb.from("outreach_drafts").update({ reply_body: text, updated_at: new Date().toISOString() }).eq("id", draftId);
       return json({ ok: true, sent: false, text });
     }
 
     if (op !== "send") return json({ error: "Unbekannte Operation" }, 400);
     if (body.confirm !== true) return json({ error: "Senden braucht eine Bestätigung." }, 400);
-    const text = String(body.text || "").trim().slice(0, 8000);
-    if (!text) return json({ error: "Text fehlt" }, 400);
+    const typed = String(body.text || "").trim().slice(0, 7000);
+    if (!typed) return json({ error: "Text fehlt" }, 400);
+    const text = withSignature(typed, await loadSignature(sb, workspaceId));
     const cfg = mailConfig();
     if (!cfg) return json({ connected: false, message: "E-Mail noch nicht verbunden" });
     const from = cfg.user.includes("@") ? cfg.user : "";
