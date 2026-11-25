@@ -38,14 +38,61 @@ export type OutreachThread = {
   contactId?: string | null;
 };
 
-export function clampSettings(input: { daily_limit?: number; gap_minutes?: number; guess_emails?: boolean }) {
+export const SEND_HOUR_FROM = 8;
+export const SEND_HOUR_TO = 18;
+export const SEND_WEEKDAYS = [1, 2, 3, 4, 5];
+
+export function clampSettings(input: { daily_limit?: number; gap_minutes?: number; guess_emails?: boolean; hour_from?: number; hour_to?: number; weekdays?: number[]; paused?: boolean }) {
   const daily = Number(input.daily_limit);
   const gap = Number(input.gap_minutes);
+  let hourFrom = Number(input.hour_from);
+  let hourTo = Number(input.hour_to);
+  if (!Number.isFinite(hourFrom)) hourFrom = SEND_HOUR_FROM;
+  if (!Number.isFinite(hourTo)) hourTo = SEND_HOUR_TO;
+  hourFrom = Math.min(23, Math.max(0, Math.round(hourFrom)));
+  hourTo = Math.min(24, Math.max(1, Math.round(hourTo)));
+  if (hourFrom >= hourTo) {
+    hourFrom = SEND_HOUR_FROM;
+    hourTo = SEND_HOUR_TO;
+  }
+  const days = (Array.isArray(input.weekdays) ? input.weekdays : SEND_WEEKDAYS)
+    .map((n) => Number(n))
+    .filter((n) => n >= 1 && n <= 7);
   return {
     daily_limit: Math.min(100, Math.max(1, Number.isFinite(daily) && daily > 0 ? Math.round(daily) : DAILY_LIMIT_DEFAULT)),
     gap_minutes: Math.min(120, Math.max(1, Number.isFinite(gap) && gap > 0 ? Math.round(gap) : GAP_MINUTES_DEFAULT)),
     guess_emails: input.guess_emails === true,
+    paused: input.paused === true,
+    hour_from: hourFrom,
+    hour_to: hourTo,
+    weekdays: days.length ? [...new Set(days)].sort((a, b) => a - b) : [...SEND_WEEKDAYS],
   };
+}
+
+const BERLIN_DOW: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+
+export function berlinClock(now: Date): { hour: number; isodow: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const weekday = parts.find((p) => p.type === "weekday")?.value || "";
+  return { hour, isodow: BERLIN_DOW[weekday] || 0 };
+}
+
+/** Stunde von einschließlich, Stunde bis ausschließlich. Wochentage 1 = Montag … 7 = Sonntag. */
+export function withinSendWindow(now: Date, input: { paused?: boolean; hourFrom?: number; hourTo?: number; weekdays?: number[] }): { ok: true } | { ok: false; reason: string } {
+  if (input.paused) return { ok: false, reason: "Versand pausiert." };
+  const clock = berlinClock(now);
+  const days = input.weekdays?.length ? input.weekdays : SEND_WEEKDAYS;
+  const from = Number.isFinite(Number(input.hourFrom)) ? Number(input.hourFrom) : SEND_HOUR_FROM;
+  const to = Number.isFinite(Number(input.hourTo)) ? Number(input.hourTo) : SEND_HOUR_TO;
+  if (!days.includes(clock.isodow)) return { ok: false, reason: "Außerhalb der Versandtage." };
+  if (clock.hour < from || clock.hour >= to) return { ok: false, reason: "Außerhalb der Versandzeit." };
+  return { ok: true };
 }
 
 export function splitUrls(raw: string): string[] {

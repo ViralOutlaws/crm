@@ -14,7 +14,7 @@
     people: [],
     drafts: [],
     messages: [],
-    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false },
+    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5] },
     queue: 'offen',
     mailFilter: 'alle',
     q: '',
@@ -26,7 +26,6 @@
     urls: '',
     branche: '',
     region: '',
-    armed: false,
     loaded: false,
   };
 
@@ -296,12 +295,15 @@
           <button type="button" class="btn-yellow" onclick="outreachResearch()">${ico('search', 14)} Websites lesen</button>
           <button type="button" class="btn-ghost" onclick="outreachDraftNew()">${ico('pencil', 14)} Entwürfe schreiben</button>
         </div>
-        <p class="outreach-help" style="margin-top:12px">Tageslimit ${esc(state.settings.daily_limit)} Mails, Abstand ${esc(state.settings.gap_minutes)} Minuten. Gilt auch für Antworten.</p>
+        <p class="outreach-help" style="margin-top:12px">Tageslimit ${esc(state.settings.daily_limit)}, Abstand ${esc(state.settings.gap_minutes)} Minuten. Versand ${esc(state.settings.hour_from)}–${esc(state.settings.hour_to)} Uhr, Berlin. Die Bis-Stunde ist nicht mehr dabei.</p>
         <div class="outreach-row">
           <div class="outreach-field" style="width:90px"><label>Limit</label><input type="number" min="1" max="100" value="${esc(state.settings.daily_limit)}" oninput="outreachSetting('daily_limit', this.value)"></div>
           <div class="outreach-field" style="width:110px"><label>Minuten</label><input type="number" min="1" max="120" value="${esc(state.settings.gap_minutes)}" oninput="outreachSetting('gap_minutes', this.value)"></div>
-          <button type="button" class="btn-ghost" onclick="outreachSaveSettings()">${ico('save', 14)} Sichern</button>
+          <div class="outreach-field" style="width:80px"><label>Von</label><input type="number" min="0" max="23" value="${esc(state.settings.hour_from)}" oninput="outreachSetting('hour_from', this.value)"></div>
+          <div class="outreach-field" style="width:80px"><label>Bis</label><input type="number" min="1" max="24" value="${esc(state.settings.hour_to)}" oninput="outreachSetting('hour_to', this.value)"></div>
         </div>
+        <div class="outreach-row" style="margin-bottom:8px">${[[1,'Mo'],[2,'Di'],[3,'Mi'],[4,'Do'],[5,'Fr'],[6,'Sa'],[7,'So']].map(([day, label]) => `<label class="outreach-check" style="margin:0"><input type="checkbox" ${(state.settings.weekdays || []).includes(day) ? 'checked' : ''} onchange="outreachDay(${day}, this.checked)"> ${label}</label>`).join('')}</div>
+        <button type="button" class="btn-ghost" onclick="outreachSaveSettings()">${ico('save', 14)} Sichern</button>
       </div>
       <div id="outreach-results" class="outreach-results">${shown.map(companyCard).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Noch keine Firmen. URLs einfügen oder Branche und Region suchen.</p></div>'}</div>
     </div>`;
@@ -331,10 +333,10 @@
     return `<div class="outreach-row" style="margin-bottom:8px">
       <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.queue === id ? 'on' : ''}" onclick="outreachQueue('${id}')">${label}</button>`).join('')}</div>
       <button type="button" class="btn-ghost" onclick="outreachApproveMany()">${ico('check', 14)} Ausgewählte freigeben</button>
-      <button type="button" class="btn-yellow" onclick="outreachSendQueue()">${ico('mail', 14)} Freigegebene senden${waiting ? ' (' + waiting + ')' : ''}</button>
-      ${state.armed ? `<button type="button" class="btn-ghost" onclick="outreachArm(false)">Versand anhalten</button>` : ''}
+      <button type="button" class="btn-yellow" onclick="outreachSendQueue()">${ico('mail', 14)} Jetzt eine senden${waiting ? ' (' + waiting + ')' : ''}</button>
+      <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.paused ? 'checked' : ''} onchange="outreachPause(this.checked)"> Versand pausieren</label>
     </div>
-    <p class="outreach-help">${state.armed ? 'Die Warteschlange läuft, solange diese Seite offen ist. Abstand und Tageslimit bleiben.' : 'Nach dem Klick geht höchstens eine freigegebene Mail raus. Weitere folgen mit Abstand, solange die Seite offen bleibt.'} Vermutete Adressen brauchen das Häkchen im Entwurf.</p>
+    <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist. Montag bis Freitag, 8 bis 18 Uhr Berlin, solange du das nicht änderst. Abstand und Tageslimit bleiben. Vermutete Adressen nur mit Häkchen.'}</p>
     <div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`;
   }
 
@@ -435,7 +437,10 @@
   window.outreachField = function (key, value) { state[key] = value; };
   window.outreachSearch = function (value) { state.q = value; const list = document.getElementById('outreach-mail-list'); if (!list) { render(); return; } render(); };
   window.outreachGuess = function (on) { state.settings.guess_emails = !!on; };
-  window.outreachSetting = function (key, value) { state.settings[key] = Number(value) || state.settings[key]; };
+  window.outreachSetting = function (key, value) {
+    const n = Number(value);
+    if (Number.isFinite(n)) state.settings[key] = n;
+  };
   window.outreachPick = function (id, on) { state.picked[id] = !!on; };
   window.outreachEdit = function (id) { state.editorId = id; state.tab = 'freigabe'; render(); };
   window.outreachCloseEdit = function () { state.editorId = null; render(); };
@@ -568,18 +573,21 @@
     render();
   };
 
-  let timer = 0;
-  window.outreachArm = function (on) { state.armed = !!on; if (!state.armed && timer) { clearInterval(timer); timer = 0; } render(); };
+  window.outreachDay = function (day, on) {
+    const set = new Set(state.settings.weekdays || []);
+    if (on) set.add(Number(day)); else set.delete(Number(day));
+    state.settings.weekdays = [...set].sort((a, b) => a - b);
+  };
+  window.outreachPause = async function (on) {
+    state.settings.paused = !!on;
+    await window.outreachSaveSettings();
+  };
   window.outreachSendQueue = async function () {
     if (state.demo) { toast('Demo: es wird nichts verschickt.'); return; }
-    state.armed = true;
     await sendOne();
-    if (!timer) timer = setInterval(sendOne, 30000);
-    render();
   };
   async function sendOne() {
-    if (!state.armed || state.demo || !signedIn()) return;
-    if (!state.drafts.some((d) => d.status === 'freigegeben')) return;
+    if (state.demo || !signedIn()) return;
     const sb = await getSupabase();
     const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'send' } });
     if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
@@ -626,9 +634,18 @@
   window.outreachSaveSettings = async function () {
     const daily = Math.min(100, Math.max(1, Number(state.settings.daily_limit) || 20));
     const gap = Math.min(120, Math.max(1, Number(state.settings.gap_minutes) || 5));
+    let hourFrom = Math.min(23, Math.max(0, Number(state.settings.hour_from)));
+    let hourTo = Math.min(24, Math.max(1, Number(state.settings.hour_to)));
+    if (!Number.isFinite(hourFrom)) hourFrom = 8;
+    if (!Number.isFinite(hourTo)) hourTo = 18;
+    if (hourFrom >= hourTo) { toast('Die Von-Stunde muss vor der Bis-Stunde liegen.', true); return; }
+    const weekdays = (state.settings.weekdays || []).map(Number).filter((n) => n >= 1 && n <= 7);
     state.settings.daily_limit = daily;
     state.settings.gap_minutes = gap;
-    if (state.demo) { toast('Demo: Limit gemerkt, nichts gespeichert.'); return; }
+    state.settings.hour_from = hourFrom;
+    state.settings.hour_to = hourTo;
+    state.settings.weekdays = weekdays.length ? weekdays : [1, 2, 3, 4, 5];
+    if (state.demo) { toast(state.settings.paused ? 'Demo: Versand pausiert, nichts gespeichert.' : 'Demo: Einstellung gemerkt, nichts gespeichert.'); render(); return; }
     if (!signedIn()) { toast('Bitte anmelden.', true); return; }
     const sb = await getSupabase();
     const { error } = await sb.from('outreach_settings').upsert({
@@ -636,9 +653,15 @@
       daily_limit: daily,
       gap_minutes: gap,
       guess_emails: state.settings.guess_emails === true,
+      paused: state.settings.paused === true,
+      hour_from: hourFrom,
+      hour_to: hourTo,
+      weekdays: state.settings.weekdays,
       updated_at: new Date().toISOString(),
     });
-    if (error) toast(error.message, true); else toast('Limit gesichert.');
+    if (error) toast(error.message, true);
+    else toast(state.settings.paused ? 'Versand pausiert.' : 'Versand-Einstellungen gesichert.');
+    render();
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

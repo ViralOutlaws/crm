@@ -12,19 +12,19 @@ Nichts wird ohne Freigabe genau dieser Mail verschickt. Antworten gehen nur raus
 2. **Entwurf.** Neben dem Impressum liest die Recherche die Startseite und, wenn vorhanden, die Kontaktseite. Gespeichert werden bis zu drei Beobachtungen mit Quelle, zum Beispiel Jahreszahl, fehlendes viewport-Meta, Formular erst auf der Unterseite, Skripte ohne defer, fehlende meta description. Weniger als zwei solcher Punkte: kein Entwurf, Status `zu wenig Substanz`.
    Die Mail ist ein sachlicher Hinweis plus zwei oder drei Punkte, die der Betrieb selbst umsetzen kann. Eine Referenz aus gewonnenen Kontakten nur, wenn Gewerk und Notiz passen. Sonst fällt sie weg. Siezen, etwa 120 Wörter, Frage ohne Druck, Absender Kim und Viral Outlaws, Abmeldesatz. Werbesprache und Ausrufezeichen fliegen raus. Ein KI-Entwurf, der das nicht erfüllt, wird einmal neu geschrieben und sonst durch die Vorlage aus den Beobachtungen ersetzt. Im Editor stehen die Beobachtungen mit Quelle neben dem Text.
 3. **Freigabe.** Status: Entwurf, Freigegeben, Gesendet, Antwort, Abgemeldet. Ablehnen und Löschen gibt es dazu. Mehrere Entwürfe lassen sich auf einmal freigeben. Vermutete Adressen nicht: die brauchen das eigene Häkchen. Ein Entwurf, der nach der Freigabe geändert wird, fällt auf Entwurf zurück.
-4. **Versand.** **Freigegebene senden** ruft `outreach-send` auf. Die Funktion nimmt nur den Status Freigegeben, prüft Sperrliste, Bestandskunden und das Limit, und schickt höchstens eine Mail pro Aufruf über `MAIL_*` (gleicher Weg wie `mail-send`). Solange die Seite offen bleibt, folgt die nächste Mail nach dem Abstand. **Versand anhalten** stoppt die Reihe. Ein Kontakt mit Kundennummer `KD-…` entsteht beim Versand, oder früher über **Kontakt anlegen**. Die Nummer vergibt der vorhandene Trigger. Schon vergebene Rechnungsnummern bleiben.
+4. **Versand.** pg_cron ruft alle 5 Minuten `outreach-send` auf, auch wenn das CRM zu ist. Jeder Lauf nimmt höchstens eine Mail mit Status Freigegeben. Eine vermutete Adresse nur mit dem Häkchen. Tageslimit, Abstand und das Fenster Montag–Freitag, 8 bis 18 Uhr Europe/Berlin gelten mit. Die Bis-Stunde ist aus. Tage und Stunden stehen in `outreach_settings` und lassen sich in der Oberfläche ändern. **Versand pausieren** setzt `paused` und stoppt Knopf und Cron. Browser und Cron teilen sich `claim_outreach_draft`: eine Advisory-Sperre pro Workspace, danach `sending_at` für 15 Minuten. Ein zweiter Lauf bekommt dieselbe Mail nicht. Der Kontakt mit Kundennummer `KD-…` entsteht beim Versand, oder früher über **Kontakt anlegen**. Die Nummer vergibt der vorhandene Trigger. Schon vergebene Rechnungsnummern bleiben.
 5. **Postfach.** Nur Mails, die Outreach verschickt hat, und die Antworten darauf. Filter Gesendet, Antwort, Abgemeldet, dazu Suche und ein Punkt für ungelesen. **KI-Entwurf** schreibt einen Text ins Feld und verschickt ihn nicht. **Senden** schickt genau diesen Text.
 6. **Antworten.** `mail-sync` erkennt eine Antwort an der Message-ID oder an Absender plus Betreff und setzt den Status auf Antwort. Eine Abmelde-Formulierung setzt Abgemeldet und die Adresse auf die Sperrliste. Dieselbe Adresse und dieselbe Firma werden nicht erneut angeschrieben. Kontakte, die schon im CRM sind, auch nicht. Gewonnene Kontakte heißen in der Liste Bestandskunde.
 
-Tageslimit und Abstand stehen auf der Seite Ziele (Standard 20 Mails am Tag, 5 Minuten, Europe/Berlin) und gelten auch für Antworten.
+Tageslimit und Abstand stehen auf der Seite Ziele (Standard 20 Mails am Tag, 5 Minuten). Das Fenster ist Montag bis Freitag, 8 bis 18 Uhr Europe/Berlin. Antworten, die Kim selbst schickt, zählen beim Abstand und beim Tageslimit mit, hängen aber nicht am Fenster.
 
 ## Tabellen
 
-Migrationen `supabase/migrations/20261125160000_outreach.sql` und `supabase/migrations/20261125170000_outreach_observations.sql`:
+Migrationen `20261125160000_outreach.sql`, `20261125170000_outreach_observations.sql` und `20261125180000_outreach_send_cron.sql`:
 
 | Tabelle | Inhalt |
 |---|---|
-| `outreach_settings` | Tageslimit, Abstand, ob Vermutungen an sind |
+| `outreach_settings` | Tageslimit, Abstand, Pause, Stunden, Wochentage |
 | `outreach_targets` | Gelesene Firma, Domain, Impressum, bis zu drei Beobachtungen mit Quelle |
 | `outreach_people` | Person, Rolle, Adresse, Art der E-Mail |
 | `outreach_drafts` | Betreff, Text, Status, Freigabe, Kundenlink |
@@ -37,11 +37,12 @@ RLS wie bei der Wissensbasis: nur der eigene Workspace. Der Service-Role-Key und
 
 Die Migration ist nicht angewendet. Die Funktionen sind nicht ausgerollt. Zuerst die Screenshots ansehen.
 
-1. Die Migrationen `20261125160000_outreach.sql` und `20261125170000_outreach_observations.sql` auf dem Projekt `jjfmxiqippkgqkwihgek` anwenden.
+1. Die drei Outreach-Migrationen anwenden, zuletzt `20261125180000_outreach_send_cron.sql`. Sie legt den Cron-Job an.
 2. Funktionen ausrollen: `outreach-research`, `outreach-draft`, `outreach-send`, `outreach-reply`, und `mail-sync` neu, damit Antworten im Postfach landen.
 3. Secrets bleiben, wo sie sind: `MAIL_IMAP_HOST`, `MAIL_IMAP_PORT`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM_NAME`, `ANTHROPIC_API_KEY`. Nichts davon ins Frontend oder ins Repo.
-4. Im Modul das Tageslimit prüfen.
-5. Eine eigene Testadresse freigeben und senden, bevor echte Firmen drankommen.
-6. Es gibt keinen Cron, der die Warteschlange allein leert. Dafür muss die Seite offen sein, oder Kim drückt erneut **Freigegebene senden**.
+4. `OUTREACH_CRON_SECRET` als Function-Secret setzen und denselben Wert in den Vault legen, ohne ihn zu loggen: `select vault.create_secret('<secret>', 'outreach_cron_secret', 'Header x-outreach-cron für outreach-send');` Der Cron sendet den Wert als Header `x-outreach-cron`. Fehlt er, geht nichts im Hintergrund raus.
+5. Optional `CRM_WORKSPACE_ID`, sonst der Workspace `566f2d4d-5b66-4ba8-b6a1-1edf413a1689`.
+6. Im Modul Tageslimit, Stunden und **Versand pausieren** prüfen.
+7. Eine eigene Testadresse freigeben. Innerhalb des Fensters holt der Cron sie auch bei geschlossenem CRM. Der Knopf **Jetzt eine senden** nimmt dieselbe Sperre.
 
 Die Demo unter `/?demo=outreach` zeigt erfundene Firmen auf `.example.test` und verschickt nichts.

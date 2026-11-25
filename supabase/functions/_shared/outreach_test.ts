@@ -19,6 +19,7 @@ import {
   reviewMail,
   sendDecision,
   splitUrls,
+  withinSendWindow,
   SUBSTANCE_LABEL,
   wordCount,
 } from "./outreach.ts";
@@ -110,6 +111,15 @@ Deno.test("Bestandskunden, CRM-Kontakte und alte Outreach-Ziele werden nicht ern
   assertEquals(outreachSkip({ ...base, email: "lead@neu.example.test", domain: "neu.example.test" }), "Schon im CRM");
   assertEquals(outreachSkip({ ...base, email: "andere@alt.example.test", domain: "alt.example.test" }), "Schon angeschrieben");
   assertEquals(outreachSkip({ ...base, email: "frei@offen.example.test", domain: "offen.example.test" }), null);
+});
+
+Deno.test("Versandfenster ist Mo–Fr 8 bis 18 Uhr Berlin, Pause stoppt", () => {
+  const open = { paused: false, hourFrom: 8, hourTo: 18, weekdays: [1, 2, 3, 4, 5] };
+  assertEquals(withinSendWindow(new Date("2026-11-25T07:00:00.000Z"), open).ok, true);
+  assertEquals(withinSendWindow(new Date("2026-11-25T06:59:00.000Z"), open).ok, false);
+  assertEquals(withinSendWindow(new Date("2026-11-25T17:00:00.000Z"), open).ok, false);
+  assertEquals(withinSendWindow(new Date("2026-11-28T09:00:00.000Z"), open).ok, false);
+  assertEquals(withinSendWindow(new Date("2026-11-25T09:00:00.000Z"), { ...open, paused: true }).ok, false);
 });
 
 Deno.test("Versand nur nach Freigabe, Vermutung nur mit Häkchen, mit Limit und Abstand", () => {
