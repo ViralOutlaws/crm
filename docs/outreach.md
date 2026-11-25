@@ -74,3 +74,5 @@ Jede Outreach-Mail und jede Antwort bekommt beim Versand eine volle Geschäftssi
 ## „Einen Suchlauf jetzt“
 
 Der Knopf ruft `outreach-night` mit dem Login auf. Der manuelle Lauf ignoriert das Nachtfenster, legt nur Entwürfe an und schickt nichts. Während er läuft, zeigt der Knopf einen Spinner, danach steht „X Betriebe gefunden, Y Entwürfe angelegt“ oder die echte Fehlermeldung im Nachtlauf-Kasten. Ursache des alten „passiert nichts“: overpass-api.de hat Anfragen aus der Supabase-Cloud sofort abgelehnt, die Funktion antwortete mit 400, und der Knopf zeigte nur die nichtssagende Meldung von supabase-js. Jetzt fragt die Kartensuche nacheinander mehrere Overpass-Server ab. Für Tests geht derselbe Lauf per Cron-Secret mit `{"manual": true}`.
+
+Pages-Deploy für PR #28 (vo-crm-v16) neu angestoßen, 25.11.2026.
