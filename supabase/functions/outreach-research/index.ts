@@ -3,6 +3,7 @@ import { cors, json, userClient } from "../_shared/edge_auth.ts";
 import { loadGuard } from "../_shared/outreach_db.ts";
 import { researchPage } from "../_shared/outreach_fetch.ts";
 import {
+  htmlToText,
   MAX_URLS,
   assertPublicHttpUrl,
   MIN_OBSERVATIONS,
@@ -98,6 +99,7 @@ Deno.serve(async (req) => {
           ort: read.ort || null,
           impressum_url: read.impressumUrl || null,
           excerpt: read.excerpt || null,
+          page_excerpt: htmlToText(page.pageHtml || "").slice(0, 2000) || null,
           branche: branche || null,
           observations,
           status,
