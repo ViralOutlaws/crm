@@ -1,8 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
+import { clampGap, GAP_CHOICES } from "./outreach.ts";
 import {
   DEFAULT_PROFILES,
   SEARCH_AREAS,
   areaIsSmall,
+  areasForRegion,
   clampPrep,
   cleanTags,
   nextSearchCell,
@@ -95,9 +97,27 @@ Deno.test("Die Nacht merkt sich Gebiete und fängt nicht jede Nacht vorn an", ()
   assertEquals(oldest?.profile.id, "p1");
   assertEquals(oldest?.area.id, areas[0].id);
   assertEquals(nextSearchCell([{ ...profiles[2], enabled: false, tags: ["craft=carpenter"] }], areas, []), null);
+  const city = nextSearchCell(
+    [{ id: "mu", name: "Ärzte", tags: ["amenity=doctors"], region: "München", enabled: true, sort: 0 }],
+    SEARCH_AREAS,
+    [],
+  );
+  assertEquals(city?.area.name.startsWith("München"), true);
+  assertEquals(areasForRegion(SEARCH_AREAS, "Deutschland").length, SEARCH_AREAS.length);
+  assertEquals(areasForRegion(SEARCH_AREAS, "Berlin").every((a) => a.name.startsWith("Berlin")), true);
+  assertEquals(areasForRegion(SEARCH_AREAS, "Nirgendwo").length, 0);
 });
 
-Deno.test("Nachtfenster ist 01:00 bis 07:00 Berlin, das Ziel ist 50", () => {
+Deno.test("Abstand ist 1, 2, 3 oder 5 Minuten, Standard 2", () => {
+  assertEquals(clampGap(Number.NaN), 2);
+  assertEquals(clampGap(2), 2);
+  assertEquals(clampGap(1), 1);
+  assertEquals(clampGap(4), 3);
+  assertEquals(clampGap(90), 5);
+  assertEquals(GAP_CHOICES.join(), "1,2,3,5");
+});
+
+Deno.test("Nachtlauf ist 01:00 bis 07:00 Berlin, das Ziel ist 50", () => {
   const open = { on: true, from: 1, until: 7 };
   assertEquals(withinPrepWindow(new Date("2026-11-25T00:00:00.000Z"), open).ok, true);
   assertEquals(withinPrepWindow(new Date("2026-11-24T23:59:00.000Z"), open).ok, false);

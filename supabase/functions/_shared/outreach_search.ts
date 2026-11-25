@@ -11,6 +11,7 @@ export type SearchProfile = {
   id: string;
   name: string;
   tags: string[];
+  region?: string;
   enabled: boolean;
   sort: number;
 };
@@ -98,7 +99,7 @@ export function clampPrep(input: {
   };
 }
 
-/** Stunde von einschließlich, Stunde bis ausschließlich. Gilt jede Nacht, auch am Wochenende. */
+/** Stunde von einschließlich, Stunde bis ausschließlich. Nachts, auch am Wochenende, damit die Entwürfe morgens liegen. */
 export function withinPrepWindow(now: Date, input: { on?: boolean; from?: number; until?: number }): { ok: true } | { ok: false; reason: string } {
   if (input.on === false) return { ok: false, reason: "Nachtlauf ist aus." };
   const clock = berlinClock(now);
@@ -106,6 +107,19 @@ export function withinPrepWindow(now: Date, input: { on?: boolean; from?: number
   const until = Number.isFinite(Number(input.until)) ? Number(input.until) : PREP_UNTIL;
   if (clock.hour < from || clock.hour >= until) return { ok: false, reason: "Außerhalb der Nacht." };
   return { ok: true };
+}
+
+function foldPlace(value: string): string {
+  return String(value || "").trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+}
+
+/** Deutschland heißt: durch die kleinen Gebiete rotieren. Ein Ortsname begrenzt die Abfrage auf passende Kästen. */
+export function areasForRegion(areas: SearchArea[], region?: string | null): SearchArea[] {
+  const raw = foldPlace(region || "");
+  if (!raw || /^(deutschland|germany|bundesweit|de)$/.test(raw)) return areas;
+  const slug = raw.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return areas.filter((area) => foldPlace(area.name).includes(raw) || area.id.includes(slug));
 }
 
 /**
@@ -122,6 +136,7 @@ export function nextSearchCell(profiles: SearchProfile[], areas: SearchArea[], c
   let oldest: { at: number; profile: SearchProfile; area: SearchArea } | null = null;
   for (const area of ordered) {
     for (const profile of enabled) {
+      if (!areasForRegion([area], profile.region).length) continue;
       const at = seen.get(`${profile.id}|${area.id}`);
       if (!at) return { profile, area };
       const ms = Date.parse(at);

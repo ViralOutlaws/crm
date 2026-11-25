@@ -14,7 +14,6 @@ import {
   parseMailJson,
   preferredPerson,
   readCompany,
-  reviewMail,
   SUBSTANCE_LABEL,
   websiteDomain,
   type EmailArt,
@@ -90,6 +89,7 @@ async function ensureProfiles(sb: Sb, workspaceId: string) {
     workspace_id: workspaceId,
     name: p.name,
     tags: cleanTags(p.tags),
+    region: "Deutschland",
     enabled: true,
     sort,
   })));
@@ -200,44 +200,36 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
     });
     if (skip) continue;
     const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
-    const prompt = draftUserPrompt({
-      wissen: wissen.data || [],
-      references,
-      firma: String(row.firma || ""),
-      person: String(person.person || ""),
-      rolle: String(person.rolle || ""),
-      web: String(row.web || ""),
-      branche: row.branche,
-      observations,
-    });
-    const attempts: { subject: string; body: string }[] = [];
-    const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 900));
-    if (first) attempts.push(first);
+    if (observations.length < MIN_OBSERVATIONS) continue;
     let mail = finalizeMail({
       person: String(person.person || ""),
       firma: String(row.firma || ""),
       observations,
       references,
       branche: row.branche,
-      attempts,
+      attempts: [],
     });
-    if (mail.ok && mail.source !== "ki" && first) {
-      const issues = reviewMail(first.body, { observations, references });
-      const second = parseMailJson(await anthropicText(
-        "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
-        `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu.`,
-        900,
-      ));
-      if (second) {
-        const again = finalizeMail({
+    if (!mail.ok) {
+      const prompt = draftUserPrompt({
+        wissen: wissen.data || [],
+        references,
+        firma: String(row.firma || ""),
+        person: String(person.person || ""),
+        rolle: String(person.rolle || ""),
+        web: String(row.web || ""),
+        branche: row.branche,
+        observations,
+      });
+      const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 900));
+      if (first) {
+        mail = finalizeMail({
           person: String(person.person || ""),
           firma: String(row.firma || ""),
           observations,
           references,
           branche: row.branche,
-          attempts: [second],
+          attempts: [first],
         });
-        if (again.ok && again.source === "ki") mail = again;
       }
     }
     if (!mail.ok) {
@@ -298,7 +290,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
     await ensureAreas(sb);
     await ensureProfiles(sb, workspaceId);
     const [profilesRes, areasRes] = await Promise.all([
-      sb.from("outreach_profiles").select("id, name, tags, enabled, sort").eq("workspace_id", workspaceId).order("sort"),
+      sb.from("outreach_profiles").select("id, name, tags, region, enabled, sort").eq("workspace_id", workspaceId).order("sort"),
       sb.from("outreach_areas").select("id, name, state, south, west, north, east, sort").order("sort"),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);
@@ -316,7 +308,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
       const coverage = await sb.from("outreach_coverage").select("profile_id, area_id, searched_at").eq("workspace_id", workspaceId).limit(5000);
       if (coverage.error) throw new Error(coverage.error.message);
       const cell = nextSearchCell(
-        profiles.map((p) => ({ ...p, tags: p.tags || [], enabled: p.enabled !== false, sort: Number(p.sort) || 0 })),
+        profiles.map((p) => ({ ...p, tags: p.tags || [], region: p.region || "Deutschland", enabled: p.enabled !== false, sort: Number(p.sort) || 0 })),
         areas,
         (coverage.data || []).map((c: { profile_id: string; area_id: string; searched_at: string }) => ({
           profileId: c.profile_id,

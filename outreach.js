@@ -14,7 +14,7 @@
     people: [],
     drafts: [],
     messages: [],
-    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5], prep_from: 1, prep_until: 7, prep_target: 50, prep_batch: 3, prep_on: true },
+    settings: { daily_limit: 50, gap_minutes: 2, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5], prep_from: 1, prep_until: 7, prep_target: 50, prep_batch: 3, prep_on: true },
     profiles: [],
     areas: [],
     coverage: [],
@@ -50,17 +50,19 @@
     state.branche = 'Handwerk';
     state.region = 'Allgäu';
     state.settings.guess_emails = true;
+    state.settings.daily_limit = 50;
+    state.settings.gap_minutes = 2;
     state.settings.prep_from = 1;
     state.settings.prep_until = 7;
     state.settings.prep_target = 50;
     state.settings.prep_on = true;
     state.profiles = [
-      { id: 'pa', name: 'Ärzte und Praxen', tags: ['amenity=doctors', 'amenity=dentist', 'healthcare=physiotherapist', 'amenity=clinic'], enabled: true, sort: 0 },
-      { id: 'pi', name: 'Maschinenbau und Industrie', tags: ['craft=metal_construction', 'office=engineer', 'man_made=works'], enabled: true, sort: 1 },
-      { id: 'ph', name: 'Handwerk', tags: ['craft=electrician', 'craft=plumber', 'craft=painter', 'craft=roofer', 'craft=hvac', 'shop=car_repair'], enabled: true, sort: 2 },
-      { id: 'pg', name: 'Gastronomie', tags: ['amenity=restaurant', 'amenity=cafe'], enabled: false, sort: 3 },
-      { id: 'pk', name: 'Kanzleien und Beratung', tags: ['office=tax_advisor', 'office=lawyer', 'office=estate_agent'], enabled: true, sort: 4 },
-      { id: 'ps', name: 'Salon und Fitness', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'], enabled: true, sort: 5 },
+      { id: 'pa', name: 'Ärzte und Praxen', region: 'Deutschland', tags: ['amenity=doctors', 'amenity=dentist', 'healthcare=physiotherapist', 'amenity=clinic'], enabled: true, sort: 0 },
+      { id: 'pi', name: 'Maschinenbau und Industrie', region: 'Deutschland', tags: ['craft=metal_construction', 'office=engineer', 'man_made=works'], enabled: true, sort: 1 },
+      { id: 'ph', name: 'Handwerk', region: 'Deutschland', tags: ['craft=electrician', 'craft=plumber', 'craft=painter', 'craft=roofer', 'craft=hvac', 'shop=car_repair'], enabled: true, sort: 2 },
+      { id: 'pg', name: 'Gastronomie', region: 'München', tags: ['amenity=restaurant', 'amenity=cafe'], enabled: false, sort: 3 },
+      { id: 'pk', name: 'Kanzleien und Beratung', region: 'Deutschland', tags: ['office=tax_advisor', 'office=lawyer', 'office=estate_agent'], enabled: true, sort: 4 },
+      { id: 'ps', name: 'Salon und Fitness', region: 'Deutschland', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'], enabled: true, sort: 5 },
     ];
     state.areas = [
       { id: 'berlin-mitte', name: 'Berlin-Mitte', sort: 0 },
@@ -141,7 +143,7 @@
   .outreach-help{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.45}
   .outreach-field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
   .outreach-field label{font-size:11px;font-weight:650;color:var(--muted)}
-  .outreach-field input,.outreach-field textarea,.outreach-search{width:100%;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:10px 12px;font:inherit}
+  .outreach-field input,.outreach-field textarea,.outreach-field select,.outreach-search{width:100%;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:10px 12px;font:inherit}
   .outreach-field textarea{min-height:96px;resize:vertical}
   .outreach-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .outreach-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:8px 0}
@@ -179,14 +181,18 @@
   .obs-card a{display:block;margin-top:4px;color:inherit;word-break:break-all}
   .obs-tip{color:var(--ink2);display:block;margin-top:4px}
   .outreach-night{margin:0 0 12px}
-  .profile-row{display:grid;grid-template-columns:24px minmax(140px,220px) minmax(0,1fr) auto;gap:8px;align-items:center;margin:0 0 8px}
+  .profile-row{display:grid;grid-template-columns:24px minmax(120px,180px) minmax(110px,150px) minmax(0,1fr) auto;gap:8px;align-items:center;margin:0 0 8px}
+  .profile-head{display:grid;grid-template-columns:24px minmax(120px,180px) minmax(110px,150px) minmax(0,1fr) auto;gap:8px;margin:0 0 4px}
+  .profile-head span{font-size:11px;font-weight:650;color:var(--muted)}
+  .outreach-warn{font-size:12px;line-height:1.45;margin:0 0 12px;padding:8px 10px;border-radius:8px;background:#fbf6ea;color:#8a5a00}
+  body.dark-mode .outreach-warn{background:#2a230f;color:#e4c56a}
   .profile-row input{width:100%;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:8px 10px;font:inherit}
   @media(max-width:900px){.outreach-editor-grid{grid-template-columns:1fr}}
   @media(max-width:900px){
     .outreach-grid,.mail-split{grid-template-columns:1fr}
     .outreach-draft{grid-template-columns:28px minmax(0,1fr)}
     .outreach-actions{grid-column:1 / -1;justify-content:flex-start}
-    .profile-row{grid-template-columns:24px minmax(0,1fr)}
+    .profile-row,.profile-head{grid-template-columns:24px minmax(0,1fr)}
   }`;
   document.head.appendChild(css);
 
@@ -324,6 +330,12 @@
     { name: 'Salon und Fitness', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'] },
   ];
 
+  function regionMatches(area, region) {
+    const raw = String(region || '').trim().toLowerCase();
+    if (!raw || raw === 'deutschland' || raw === 'germany' || raw === 'bundesweit') return true;
+    return String(area.name || '').toLowerCase().includes(raw) || String(area.id || '').includes(raw.replace(/\s+/g, '-'));
+  }
+
   function nextPrepCell() {
     const profiles = state.profiles.filter((p) => p.enabled && (p.tags || []).length).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
     const areas = state.areas.slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
@@ -332,6 +344,7 @@
     let oldest = null;
     for (const area of areas) {
       for (const profile of profiles) {
+        if (!regionMatches(area, profile.region)) continue;
         const at = seen.get(profile.id + '|' + area.id);
         if (!at) return { profile, area };
         const ms = Date.parse(at);
@@ -346,22 +359,32 @@
     const visited = new Set(state.coverage.map((c) => c.area_id)).size;
     const waiting = state.drafts.filter((d) => d.status === 'entwurf').length;
     const next = cell ? `${cell.profile.name} · ${cell.area.name}` : (state.profiles.some((p) => p.enabled) ? 'Gebiete fehlen noch. Der erste Lauf legt sie an.' : 'Kein Profil ist eingeschaltet.');
-    return `<div class="dash-card outreach-card outreach-night" id="outreach-night">
+    const gap = [1, 2, 3, 5].includes(Number(state.settings.gap_minutes)) ? Number(state.settings.gap_minutes) : 2;
+    return `<div class="dash-card outreach-card outreach-night" id="outreach-settings">
       <h3>Nachtlauf</h3>
-      <p class="outreach-help">Suche und Entwürfe laufen nachts in kleinen Schritten, von der Stunde „Start ab“ bis „Fertig bis“, Zeitzone Berlin. Ziel sind die offenen Entwürfe in der Freigabe. Pro Schritt ein Bezirk oder eine Stadt, nie ganz Deutschland auf einmal. Schon besuchte Gebiete bleiben gespeichert. Schreinerei und Möbel sind nicht dabei.</p>
+      <p class="outreach-help">Von „Start ab“ bis „Fertig bis“, Zeitzone Berlin, sucht das System in kleinen Schritten und legt Entwürfe mit Status Entwurf an. Standard ist 1 bis 7 Uhr, damit morgens etwa 50 Entwürfe in der Freigabe liegen. Es hört auf, wenn das Ziel erreicht ist, die Kandidaten aus sind, oder die Bis-Stunde da ist. Overpass bekommt nur einen Bezirk oder eine Stadt. Schon besuchte Gebiete bleiben gespeichert. Nichts geht ohne Freigabe raus.</p>
       <div class="outreach-row">
-        <div class="outreach-field" style="width:90px"><label>Start ab</label><input type="number" min="0" max="23" value="${esc(state.settings.prep_from)}" oninput="outreachSetting('prep_from', this.value)"></div>
-        <div class="outreach-field" style="width:90px"><label>Fertig bis</label><input type="number" min="1" max="24" value="${esc(state.settings.prep_until)}" oninput="outreachSetting('prep_until', this.value)"></div>
-        <div class="outreach-field" style="width:110px"><label>Ziel Entwürfe</label><input type="number" min="1" max="200" value="${esc(state.settings.prep_target)}" oninput="outreachSetting('prep_target', this.value)"></div>
+        <div class="outreach-field" style="width:110px"><label>Start ab</label><input id="outreach-prep-from" type="number" min="0" max="23" value="${esc(state.settings.prep_from)}" oninput="outreachSetting('prep_from', this.value)"></div>
+        <div class="outreach-field" style="width:120px"><label>Fertig bis</label><input id="outreach-prep-until" type="number" min="1" max="24" value="${esc(state.settings.prep_until)}" oninput="outreachSetting('prep_until', this.value)"></div>
+        <div class="outreach-field" style="width:120px"><label>Ziel Entwürfe</label><input id="outreach-prep-target" type="number" min="1" max="200" value="${esc(state.settings.prep_target)}" oninput="outreachSetting('prep_target', this.value)"></div>
         <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.prep_on !== false ? 'checked' : ''} onchange="outreachPrepOn(this.checked)"> Nachtlauf an</label>
       </div>
       <p class="outreach-help" id="outreach-night-status">Offene Entwürfe ${esc(waiting)} von ${esc(state.settings.prep_target)}. Nächste Suche: ${esc(next)}. ${esc(visited)} ${visited === 1 ? 'Gebiet' : 'Gebiete'} schon besucht${state.pool ? ', ' + esc(state.pool) + ' Websites warten noch' : ''}.</p>
+      <h3>Suchprofile</h3>
+      <div class="profile-head"><span></span><span>Branche</span><span>Ort</span><span>Merkmale</span><span></span></div>
       ${state.profiles.map((p) => `<div class="profile-row">
         <input type="checkbox" ${p.enabled ? 'checked' : ''} aria-label="${esc(p.name)} an" onchange="outreachProfileEnabled('${esc(p.id)}', this.checked)">
-        <input value="${esc(p.name)}" aria-label="Name der Branche" oninput="outreachProfileName('${esc(p.id)}', this.value)">
+        <input value="${esc(p.name)}" aria-label="Branche" oninput="outreachProfileName('${esc(p.id)}', this.value)">
+        <input value="${esc(p.region || 'Deutschland')}" aria-label="Ort" oninput="outreachProfileRegion('${esc(p.id)}', this.value)">
         <input value="${esc((p.tags || []).join(', '))}" aria-label="Merkmale" oninput="outreachProfileTags('${esc(p.id)}', this.value)">
         <button type="button" class="btn-ghost btn-sm" onclick="outreachProfileRemove('${esc(p.id)}')">Weg</button>
-      </div>`).join('') || '<p class="outreach-help">Noch keine Branchen. Standards laden legt Ärzte, Industrie, Handwerk, Gastronomie, Kanzleien und Salons an.</p>'}
+      </div>`).join('') || '<p class="outreach-help">Noch keine Branchen. Standards laden legt Ärzte, Industrie, Handwerk, Gastronomie, Kanzleien und Salons an, Ort Deutschland.</p>'}
+      <h3>Versandtempo</h3>
+      <div class="outreach-row">
+        <div class="outreach-field" style="width:140px"><label>Abstand</label><select id="outreach-gap" onchange="outreachSetting('gap_minutes', this.value)">${[1, 2, 3, 5].map((n) => `<option value="${n}" ${gap === n ? 'selected' : ''}>${n} ${n === 1 ? 'Minute' : 'Minuten'}</option>`).join('')}</select></div>
+        <div class="outreach-field" style="width:120px"><label>Tageslimit</label><input id="outreach-daily" type="number" min="1" max="100" value="${esc(state.settings.daily_limit)}" oninput="outreachSetting('daily_limit', this.value)"></div>
+      </div>
+      <p class="outreach-warn" id="outreach-speed-warn">Schneller Versand über das Hauptpostfach kann als Spam gelten und die Adresse blockieren. Eine Minute ist die schnellste Stufe.</p>
       <div class="outreach-row">
         <button type="button" class="btn-ghost" onclick="outreachProfileAdd()">Branche</button>
         <button type="button" class="btn-ghost" onclick="outreachProfileRestore()">Standards laden</button>
@@ -387,10 +410,8 @@
           <button type="button" class="btn-yellow" onclick="outreachResearch()">${ico('search', 14)} Websites lesen</button>
           <button type="button" class="btn-ghost" onclick="outreachDraftNew()">${ico('pencil', 14)} Entwürfe schreiben</button>
         </div>
-        <p class="outreach-help" style="margin-top:12px">Tageslimit ${esc(state.settings.daily_limit)}, Abstand ${esc(state.settings.gap_minutes)} Minuten. Versand ${esc(state.settings.hour_from)}–${esc(state.settings.hour_to)} Uhr, Berlin. Die Bis-Stunde ist nicht mehr dabei.</p>
+        <p class="outreach-help" style="margin-top:12px">Versand ${esc(state.settings.hour_from)}–${esc(state.settings.hour_to)} Uhr, Berlin. Die Bis-Stunde ist nicht mehr dabei. Abstand und Tageslimit stehen oben beim Nachtlauf.</p>
         <div class="outreach-row">
-          <div class="outreach-field" style="width:90px"><label>Limit</label><input type="number" min="1" max="100" value="${esc(state.settings.daily_limit)}" oninput="outreachSetting('daily_limit', this.value)"></div>
-          <div class="outreach-field" style="width:110px"><label>Minuten</label><input type="number" min="1" max="120" value="${esc(state.settings.gap_minutes)}" oninput="outreachSetting('gap_minutes', this.value)"></div>
           <div class="outreach-field" style="width:80px"><label>Von</label><input type="number" min="0" max="23" value="${esc(state.settings.hour_from)}" oninput="outreachSetting('hour_from', this.value)"></div>
           <div class="outreach-field" style="width:80px"><label>Bis</label><input type="number" min="1" max="24" value="${esc(state.settings.hour_to)}" oninput="outreachSetting('hour_to', this.value)"></div>
         </div>
@@ -428,7 +449,7 @@
       <button type="button" class="btn-yellow" onclick="outreachSendQueue()">${ico('mail', 14)} Jetzt eine senden${waiting ? ' (' + waiting + ')' : ''}</button>
       <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.paused ? 'checked' : ''} onchange="outreachPause(this.checked)"> Versand pausieren</label>
     </div>
-    <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist. Montag bis Freitag, 8 bis 18 Uhr Berlin, solange du das nicht änderst. Abstand und Tageslimit bleiben. Vermutete Adressen nur mit Häkchen.'}</p>
+    <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist. Montag bis Freitag, 8 bis 18 Uhr Berlin, Abstand ' + esc(state.settings.gap_minutes) + ' Minuten, höchstens ' + esc(state.settings.daily_limit) + ' am Tag. Vermutete Adressen nur mit Häkchen. Ohne Freigabe geht nichts raus.'}</p>
     <div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`;
   }
 
@@ -548,6 +569,10 @@
     const p = state.profiles.find((x) => x.id === id);
     if (p) p.name = value;
   };
+  window.outreachProfileRegion = function (id, value) {
+    const p = state.profiles.find((x) => x.id === id);
+    if (p) p.region = value;
+  };
   window.outreachProfileTags = function (id, value) {
     const p = state.profiles.find((x) => x.id === id);
     if (!p) return;
@@ -555,7 +580,7 @@
     p._tagsChanged = true;
   };
   window.outreachProfileAdd = function () {
-    state.profiles.push({ id: 'neu-' + Date.now(), name: 'Neue Branche', tags: [], enabled: true, sort: state.profiles.length });
+    state.profiles.push({ id: 'neu-' + Date.now(), name: 'Neue Branche', region: 'Deutschland', tags: [], enabled: true, sort: state.profiles.length });
     render();
   };
   window.outreachProfileRemove = function (id) {
@@ -567,7 +592,7 @@
     const have = new Set(state.profiles.map((p) => p.name));
     DEFAULT_PROFILES.forEach((p) => {
       if (have.has(p.name)) return;
-      state.profiles.push({ id: 'neu-' + p.name, name: p.name, tags: p.tags.slice(), enabled: true, sort: state.profiles.length });
+      state.profiles.push({ id: 'neu-' + p.name, name: p.name, region: 'Deutschland', tags: p.tags.slice(), enabled: true, sort: state.profiles.length });
     });
     render();
     toast('Fehlende Standards stehen in der Liste. Sichern schreibt sie.');
@@ -775,8 +800,10 @@
     render();
   };
   window.outreachSaveSettings = async function () {
-    const daily = Math.min(100, Math.max(1, Number(state.settings.daily_limit) || 20));
-    const gap = Math.min(120, Math.max(1, Number(state.settings.gap_minutes) || 5));
+    const daily = Math.min(100, Math.max(1, Number(state.settings.daily_limit) || 50));
+    const gapChoices = [1, 2, 3, 5];
+    const gapRaw = Number(state.settings.gap_minutes);
+    const gap = gapChoices.includes(gapRaw) ? gapRaw : gapChoices.reduce((best, n) => Math.abs(n - gapRaw) < Math.abs(best - gapRaw) ? n : best, 2);
     let hourFrom = Math.min(23, Math.max(0, Number(state.settings.hour_from)));
     let hourTo = Math.min(24, Math.max(1, Number(state.settings.hour_to)));
     if (!Number.isFinite(hourFrom)) hourFrom = 8;
@@ -814,6 +841,7 @@
       p.tags = tags;
       p.sort = sort;
       p.name = String(p.name || '').trim().slice(0, 80) || 'Branche';
+      p.region = String(p.region || 'Deutschland').trim().slice(0, 80) || 'Deutschland';
     });
     if (state.demo) {
       toast(droppedWood ? 'Schreinerei und Möbel bleiben draußen.' : 'Demo: Einstellung gemerkt, nichts gespeichert.', droppedWood);
@@ -849,6 +877,7 @@
         const ins = await sb.from('outreach_profiles').insert({
           workspace_id: workspaceId(),
           name: p.name,
+          region: p.region || 'Deutschland',
           tags: p.tags,
           enabled: p.enabled !== false,
           sort: p.sort,
@@ -858,6 +887,7 @@
       } else {
         const upd = await sb.from('outreach_profiles').update({
           name: p.name,
+          region: p.region || 'Deutschland',
           tags: p.tags,
           enabled: p.enabled !== false,
           sort: p.sort,

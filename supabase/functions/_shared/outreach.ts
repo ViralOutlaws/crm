@@ -2,8 +2,9 @@
 import { threadKey } from "./mail.ts";
 
 export const MAX_URLS = 8;
-export const DAILY_LIMIT_DEFAULT = 20;
-export const GAP_MINUTES_DEFAULT = 5;
+export const DAILY_LIMIT_DEFAULT = 50;
+export const GAP_MINUTES_DEFAULT = 2;
+export const GAP_CHOICES = [1, 2, 3, 5];
 
 export const DRAFT_STATUSES = ["entwurf", "freigegeben", "gesendet", "antwort", "abgemeldet", "abgelehnt"] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
@@ -38,13 +39,20 @@ export type OutreachThread = {
   contactId?: string | null;
 };
 
+export function clampGap(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return GAP_MINUTES_DEFAULT;
+  const rounded = Math.round(value);
+  if (GAP_CHOICES.includes(rounded)) return rounded;
+  return GAP_CHOICES.reduce((best, choice) => Math.abs(choice - rounded) < Math.abs(best - rounded) ? choice : best, GAP_MINUTES_DEFAULT);
+}
+
 export const SEND_HOUR_FROM = 8;
 export const SEND_HOUR_TO = 18;
 export const SEND_WEEKDAYS = [1, 2, 3, 4, 5];
 
 export function clampSettings(input: { daily_limit?: number; gap_minutes?: number; guess_emails?: boolean; hour_from?: number; hour_to?: number; weekdays?: number[]; paused?: boolean }) {
   const daily = Number(input.daily_limit);
-  const gap = Number(input.gap_minutes);
+  const gap = clampGap(Number(input.gap_minutes));
   let hourFrom = Number(input.hour_from);
   let hourTo = Number(input.hour_to);
   if (!Number.isFinite(hourFrom)) hourFrom = SEND_HOUR_FROM;
@@ -60,7 +68,7 @@ export function clampSettings(input: { daily_limit?: number; gap_minutes?: numbe
     .filter((n) => n >= 1 && n <= 7);
   return {
     daily_limit: Math.min(100, Math.max(1, Number.isFinite(daily) && daily > 0 ? Math.round(daily) : DAILY_LIMIT_DEFAULT)),
-    gap_minutes: Math.min(120, Math.max(1, Number.isFinite(gap) && gap > 0 ? Math.round(gap) : GAP_MINUTES_DEFAULT)),
+    gap_minutes: gap,
     guess_emails: input.guess_emails === true,
     paused: input.paused === true,
     hour_from: hourFrom,
