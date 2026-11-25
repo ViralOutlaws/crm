@@ -64,3 +64,15 @@ Deno.test("Freemail, Thread, HTML, Klassifikation", () => {
   assertEquals(shouldDraft("anfrage", false), true);
   assertEquals(shouldDraft("sonstiges", true), true);
 });
+
+Deno.test("Mail-Header: Umlaute kodiert, nur CRLF, Datum gesetzt", async () => {
+  const { buildRfc822, encodeHeader } = await import("./mail.ts");
+  const enc = encodeHeader("Anfragen nach Feierabend auf zahnärzte-wedding.de unterwegs am Handy – Größe");
+  if (!/^=\?UTF-8\?B\?/.test(enc)) throw new Error("nicht kodiert");
+  for (const word of enc.split("\r\n ")) if (word.length > 75) throw new Error("Wort zu lang");
+  if (encodeHeader("Nur ASCII") !== "Nur ASCII") throw new Error("ASCII verändert");
+  const raw = buildRfc822("info@viraloutlaws.de", ["a@b.de"], "Grüße", "Zeile 1\nZeile 2\r\n", "Kim");
+  if (/[^\r]\n/.test(raw)) throw new Error("nacktes LF");
+  if (!/^Date: /m.test(raw)) throw new Error("Datum fehlt");
+  if (!raw.includes("Content-Transfer-Encoding: 8bit")) throw new Error("CTE fehlt");
+});

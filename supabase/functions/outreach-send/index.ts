@@ -37,13 +37,21 @@ async function release(sb: Sb, id: string, token: string, reason: string, reject
   await sb.from("outreach_drafts").update(patch).eq("id", id).eq("sending_token", token);
 }
 
-async function sendApproved(sb: Sb, workspaceId: string) {
+// Eigene Adressen (Testmails) bekommen keinen CRM-Kontakt und verbrauchen keine Kundennummer.
+const OWN_DOMAINS = new Set(["viraloutlaws.de"]);
+const NOW_MAX = 10;
+const NOW_GAP_MS = 4000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
   const cfg = mailConfig();
   if (!cfg) return { connected: false, message: "E-Mail noch nicht verbunden" };
   const from = cfg.user.includes("@") ? cfg.user : "";
   if (!from.includes("@")) return { error: "Absender fehlt. MAIL_USER als volle Adresse setzen." };
 
-  const claimed = await sb.rpc("claim_outreach_draft", { p_ws: workspaceId });
+  const claimed = onlyDraftId
+    ? await sb.rpc("claim_outreach_draft_now", { p_ws: workspaceId, p_draft: onlyDraftId })
+    : await sb.rpc("claim_outreach_draft", { p_ws: workspaceId });
   if (claimed.error) return { error: claimed.error.message || "Freigabe nicht lesbar" };
   const gate = claimed.data || {};
   if (!gate.ok) return { ok: false, sent: false, reason: gate.reason || "Nichts Freigegebenes wartet." };
@@ -100,7 +108,8 @@ async function sendApproved(sb: Sb, workspaceId: string) {
 
   const now = new Date().toISOString();
   let contact: { id: string; kundennummer: string | null } | null = null;
-  try {
+  const own = OWN_DOMAINS.has(email.split("@")[1] || "");
+  if (!own) try {
     contact = await ensureContact(sb, workspaceId, { ...draft, person: person.data?.person || "" }, target.data);
   } catch (e) {
     warning = [warning, e instanceof Error ? e.message : "Kontakt nicht angelegt"].filter(Boolean).join(" ");
@@ -182,6 +191,49 @@ async function ensureContact(sb: Sb, workspaceId: string, draft: Record<string, 
   return inserted.data as { id: string; kundennummer: string | null };
 }
 
+/**
+ * "Jetzt senden": genau die übergebenen, freigegebenen Entwürfe sofort, ohne Versandfenster und Abstand.
+ * Sperrliste, Opt-out, Duplikate, Bestandskunden, Pause, Tageslimit und die Cron-Sperre gelten weiter.
+ * Zwischen zwei Mails ein paar Sekunden Pause, damit der SMTP-Server nicht blockt.
+ */
+async function sendNow(sb: Sb, workspaceId: string, rawIds: unknown) {
+  const ids = Array.isArray(rawIds) ? [...new Set(rawIds.map((x) => String(x || "")).filter((x) => /^[0-9a-f-]{36}$/i.test(x)))] : [];
+  if (!ids.length) return { error: "Keine Entwürfe gewählt." };
+  if (ids.length > NOW_MAX) return { error: `Höchstens ${NOW_MAX} Mails pro Aufruf.` };
+  const results: { draftId: string; sent: boolean; reason?: string; warning?: string }[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const draftId = ids[i];
+    let res: Record<string, unknown> = {};
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await sendApproved(sb, workspaceId, draftId) as Record<string, unknown>;
+      if (res.reason !== "Ein Versand läuft bereits.") break;
+      await sleep(5000);
+    }
+    if (res.connected === false) {
+      results.push({ draftId, sent: false, reason: String(res.message || "E-Mail noch nicht verbunden") });
+      break;
+    }
+    const sent = res.sent === true;
+    results.push({
+      draftId,
+      sent,
+      reason: sent ? undefined : String(res.error || res.reason || "Nicht gesendet"),
+      warning: res.warning ? String(res.warning) : undefined,
+    });
+    if (!sent && (res.reason === "Tageslimit erreicht." || res.reason === "Versand pausiert.")) {
+      for (const rest of ids.slice(i + 1)) results.push({ draftId: rest, sent: false, reason: String(res.reason) });
+      break;
+    }
+    if (sent && i < ids.length - 1) await sleep(NOW_GAP_MS);
+  }
+  return {
+    ok: true,
+    sent: results.filter((r) => r.sent).length,
+    failed: results.filter((r) => !r.sent).length,
+    results,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json({ error: "Nur POST" }, 405);
@@ -192,6 +244,11 @@ Deno.serve(async (req) => {
       if (!key || !url) return json({ error: "Versand ist serverseitig nicht eingerichtet" }, 500);
       const sb = createClient(url, key, { auth: { persistSession: false } });
       const body = await req.json().catch(() => ({}));
+      if (String(body.op || "send") === "now") {
+        // Nur für Server-Tests mit ausdrücklich genannten Entwürfen. Das Frontend nutzt den Login.
+        const result = await sendNow(sb, WORKSPACE_ID, body.draftIds);
+        return json(result, result.error ? 400 : 200);
+      }
       if (String(body.op || "send") !== "send") return json({ error: "Der Cron sendet nur freigegebene Mails" }, 400);
       const result = await sendApproved(sb, WORKSPACE_ID);
       const status = result.error ? 400 : 200;
@@ -213,6 +270,10 @@ Deno.serve(async (req) => {
       const contact = await ensureContact(sb, workspaceId, { ...draft.data, person: person.data?.person || "" }, target.data);
       await sb.from("outreach_drafts").update({ contact_id: contact.id, updated_at: new Date().toISOString() }).eq("id", draftId);
       return json({ ok: true, contactId: contact.id, kundennummer: contact.kundennummer, sent: false });
+    }
+    if (op === "now") {
+      const result = await sendNow(sb, workspaceId, body.draftIds);
+      return json(result, result.error ? 400 : 200);
     }
     if (op !== "send") return json({ error: "Unbekannte Operation" }, 400);
     const result = await sendApproved(sb, workspaceId);

@@ -20,7 +20,7 @@
     coverage: [],
     pool: 0,
     removedProfiles: [],
-    queue: 'offen',
+    queue: 'entwurf',
     mailFilter: 'alle',
     q: '',
     picked: {},
@@ -195,6 +195,11 @@
   .bubble.in{background:var(--glass-bg,rgba(255,255,255,.4))}
   .dot-unread{width:8px;height:8px;border-radius:99px;background:#d63030;display:inline-block}
   #outreach-editor.overlay{z-index:600}
+  #outreach-confirm.overlay{z-index:700}
+  .outreach-confirm-list{list-style:none;margin:12px 0 16px;padding:0;display:grid;gap:8px;max-height:280px;overflow:auto}
+  .outreach-confirm-list li{display:grid;gap:2px;padding:8px 10px;border:1px solid rgba(212,175,55,.3);border-radius:10px;font-size:13px}
+  .outreach-confirm-list li span{opacity:.75;font-size:12px}
+  .outreach-now{margin-left:6px}
   .outreach-sig{white-space:pre-wrap;font-size:12px;line-height:1.5;opacity:.85;border-top:1px dashed rgba(212,175,55,.35);padding-top:8px;margin:6px 0 0}
   .outreach-sig-box textarea{min-height:130px;font-size:13px}
   .outreach-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:outreach-spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -338,16 +343,18 @@
     if (!root) return;
     // Der Editor hängt am <body> (damit er über allem liegt). Beim Neuzeichnen die alte Kopie entfernen,
     // sonst bleibt sie nach dem Schließen offen stehen und fängt alle Klicks ab.
-    document.querySelectorAll('#outreach-editor').forEach((el) => el.remove());
+    document.querySelectorAll('#outreach-editor, #outreach-confirm').forEach((el) => el.remove());
     const tabs = [['ziele', 'Ziele'], ['freigabe', 'Freigabe'], ['postfach', 'Postfach']];
     root.innerHTML = `
       <p class="outreach-lead">Finde Entscheider, lass Entwürfe schreiben und gib jede Mail einzeln frei. Versand läuft nur über dein Postfach und nur nach Freigabe.</p>
       ${state.note ? `<div class="reel-banner outreach-note"><span>${esc(state.note)}</span></div>` : ''}
       <div class="seg" id="outreach-tabs">${tabs.map(([id, label]) => `<button type="button" class="${state.tab === id ? 'on' : ''}" onclick="outreachTab('${id}')">${label}</button>`).join('')}</div>
       <div id="outreach-panel">${state.tab === 'freigabe' ? queueHtml() : state.tab === 'postfach' ? mailHtml() : goalsHtml()}</div>
-      ${editorHtml()}`;
+      ${editorHtml()}${confirmHtml()}`;
     const editor = document.getElementById('outreach-editor');
     if (editor) document.body.appendChild(editor);
+    const confirmBox = document.getElementById('outreach-confirm');
+    if (confirmBox) document.body.appendChild(confirmBox);
     paintBadge();
   }
 
@@ -399,7 +406,7 @@
         <div class="outreach-field" style="width:120px"><label>Ziel Entwürfe</label><input id="outreach-prep-target" type="number" min="1" max="200" value="${esc(state.settings.prep_target)}" oninput="outreachSetting('prep_target', this.value)"></div>
         <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.prep_on !== false ? 'checked' : ''} onchange="outreachPrepOn(this.checked)"> Nachtlauf an</label>
       </div>
-      <p class="outreach-help" id="outreach-night-status">Offene Entwürfe ${esc(waiting)} von ${esc(state.settings.prep_target)}. Nächste Suche: ${esc(next)}. ${esc(visited)} ${visited === 1 ? 'Gebiet' : 'Gebiete'} schon besucht${state.pool ? ', ' + esc(state.pool) + ' Websites warten noch' : ''}.</p>
+      <p class="outreach-help" id="outreach-night-status">Entwürfe ${esc(waiting)} von ${esc(state.settings.prep_target)}. Nächste Suche: ${esc(next)}. ${esc(visited)} ${visited === 1 ? 'Gebiet' : 'Gebiete'} schon besucht${state.pool ? ', ' + esc(state.pool) + ' Websites warten noch' : ''}.</p>
       <h3>Suchprofile</h3>
       <div class="profile-head"><span></span><span>Branche</span><span>Ort</span><span>Merkmale</span><span></span></div>
       ${state.profiles.map((p) => `<div class="profile-row">
@@ -471,19 +478,19 @@
 
   function queueHtml() {
     const rows = state.drafts.filter((d) => {
-      if (state.queue === 'offen') return d.status === 'entwurf' || d.status === 'freigegeben';
       if (state.queue === 'alle') return true;
       return d.status === state.queue;
     });
-    const chips = [['offen', 'Offen'], ['entwurf', 'Entwurf'], ['freigegeben', 'Freigegeben'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet'], ['alle', 'Alle']];
+    const chips = [['entwurf', 'Entwurf'], ['freigegeben', 'Freigegeben'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet'], ['alle', 'Alle']];
     const waiting = state.drafts.filter((d) => d.status === 'freigegeben').length;
     return `<div class="outreach-row" style="margin-bottom:8px">
       <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.queue === id ? 'on' : ''}" onclick="outreachQueue('${id}')">${label}</button>`).join('')}</div>
       <button type="button" class="btn-ghost" onclick="outreachApproveMany()">${ico('check', 14)} Ausgewählte freigeben</button>
-      <button type="button" class="btn-yellow" onclick="outreachSendQueue()">${ico('mail', 14)} Jetzt eine senden${waiting ? ' (' + waiting + ')' : ''}</button>
+      <button type="button" class="btn-yellow" id="outreach-send-all" onclick="outreachSendNowAll()" ${state.sending || !waiting ? 'disabled' : ''}>${state.sending ? '<span class="outreach-spin" aria-hidden="true"></span>Sendet …' : ico('mail', 14) + ' Alle freigegebenen jetzt senden (' + waiting + ')'}</button>
       <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.paused ? 'checked' : ''} onchange="outreachPause(this.checked)"> Versand pausieren</label>
     </div>
-    <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist. Montag bis Freitag, 8 bis 18 Uhr Berlin, Abstand ' + esc(state.settings.gap_minutes) + ' Minuten, höchstens ' + esc(state.settings.daily_limit) + ' am Tag. Vermutete Adressen nur mit Häkchen. Ohne Freigabe geht nichts raus.'}</p>
+    <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist, oder sofort per „Jetzt senden“ (ohne Wartezeit, nach Bestätigung). Montag bis Freitag, 8 bis 18 Uhr Berlin, Abstand ' + esc(state.settings.gap_minutes) + ' Minuten, höchstens ' + esc(state.settings.daily_limit) + ' am Tag. Vermutete Adressen nur mit Häkchen. Ohne Freigabe geht nichts raus.'}</p>
+    ${state.sendResult ? `<p class="outreach-help outreach-run-result ${state.sendResult.bad ? 'bad' : ''}" role="status">${esc(state.sendResult.text)}</p>` : ''}
     <div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`;
   }
 
@@ -493,8 +500,28 @@
     return `<article class="dash-card outreach-draft ${state.editorId === d.id ? 'on' : ''}" onclick="outreachEdit('${esc(d.id)}')">
       <input type="checkbox" ${state.picked[d.id] ? 'checked' : ''} onclick="event.stopPropagation();outreachPick('${esc(d.id)}', this.checked)" aria-label="Auswählen">
       <div><b>${esc(d.subject || 'Ohne Betreff')}</b><div class="outreach-meta">${esc(t?.firma || '')}${p?.person ? ' · ' + esc(p.person) : ''} · ${esc(d.email || '')}</div></div>
-      <div class="outreach-actions">${artPill(d.email_art)}${statusPill(d.status)}</div>
+      <div class="outreach-actions">${artPill(d.email_art)}${statusPill(d.status)}${d.status === 'freigegeben' ? `<button type="button" class="btn-yellow btn-sm outreach-now" onclick="event.stopPropagation();outreachSendNow(['${esc(d.id)}'])" ${state.sending ? 'disabled' : ''}>${ico('mail', 12)} Jetzt senden</button>` : ''}</div>
     </article>`;
+  }
+
+  function confirmHtml() {
+    const ids = state.confirmIds || [];
+    if (!ids.length) return '';
+    const rows = ids.map((id) => draftOf(id)).filter(Boolean);
+    const n = rows.length;
+    return `<div class="overlay open" id="outreach-confirm" onclick="if(event.target===this)outreachConfirmCancel()">
+      <div class="modal" role="alertdialog" aria-labelledby="outreach-confirm-title" style="max-width:520px">
+        <div class="modal-header"><h2 id="outreach-confirm-title">${n} ${n === 1 ? 'Mail' : 'Mails'} jetzt sofort senden?</h2><button type="button" class="icon-btn" onclick="outreachConfirmCancel()" aria-label="Abbrechen">${ico('x', 16)}</button></div>
+        <div style="padding:16px 20px 20px">
+          <p class="outreach-help">Ohne Wartezeit und auch außerhalb der Versandzeit. Sperrliste, Abmeldungen, Bestandskunden und das Tageslimit gelten weiter. Die Signatur wird angehängt.</p>
+          <ul class="outreach-confirm-list">${rows.map((d) => `<li><b>${esc(d.email || '')}</b><span>${esc(targetOf(d.target_id)?.firma || '')}${targetOf(d.target_id)?.firma ? ' · ' : ''}${esc(d.subject || '')}</span></li>`).join('')}</ul>
+          <div class="outreach-row" style="justify-content:flex-end">
+            <button type="button" class="btn-ghost" onclick="outreachConfirmCancel()">Abbrechen</button>
+            <button type="button" class="btn-yellow" id="outreach-confirm-send" onclick="outreachConfirmSend()">${ico('mail', 14)} ${n === 1 ? 'Jetzt senden' : n + ' jetzt senden'}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
   }
 
   function editorHtml() {
@@ -525,7 +552,9 @@
           </div>
           <div class="outreach-row">
             <button type="button" class="btn-ghost" onclick="outreachSaveDraft('${esc(d.id)}')">${ico('save', 14)} Speichern</button>
-            <button type="button" class="btn-yellow" onclick="outreachApprove('${esc(d.id)}')">${ico('check', 14)} Freigeben</button>
+            ${d.status === 'freigegeben'
+              ? `<button type="button" class="btn-yellow" onclick="outreachSendNow(['${esc(d.id)}'])" ${state.sending ? 'disabled' : ''}>${ico('mail', 14)} Jetzt senden</button>`
+              : `<button type="button" class="btn-yellow" onclick="outreachApprove('${esc(d.id)}')">${ico('check', 14)} Freigeben</button>`}
             <button type="button" class="btn-ghost" onclick="outreachReject('${esc(d.id)}')">Ablehnen</button>
             <button type="button" class="btn-ghost" onclick="outreachMakeContact('${esc(d.id)}')">${ico('user', 14)} Kontakt anlegen</button>
             <button type="button" class="btn-ghost" onclick="outreachDelete('${esc(d.id)}')">${ico('trash', 14)} Löschen</button>
@@ -695,6 +724,11 @@
     if (d && d._dirty) await window.outreachSaveDraft(d.id);
   };
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.confirmIds && state.confirmIds.length) {
+      e.preventDefault();
+      window.outreachConfirmCancel();
+      return;
+    }
     if (e.key === 'Escape' && state.editorId && document.getElementById('outreach-editor')) {
       e.preventDefault();
       window.outreachCloseEdit();
@@ -839,22 +873,65 @@
     state.settings.paused = !!on;
     await window.outreachSaveSettings();
   };
-  window.outreachSendQueue = async function () {
-    if (state.demo) { toast('Demo: es wird nichts verschickt.'); return; }
-    await sendOne();
+  // "Jetzt senden": nur freigegebene Entwürfe, nach Bestätigung, ohne Versandfenster und Abstand.
+  window.outreachSendNow = function (ids) {
+    if (state.sending) return;
+    const list = (ids || []).filter((id) => draftOf(id)?.status === 'freigegeben');
+    if (!list.length) { toast('Nichts Freigegebenes ausgewählt.', true); return; }
+    state.confirmIds = list;
+    render();
   };
-  async function sendOne() {
-    if (state.demo || !signedIn()) return;
-    const sb = await getSupabase();
-    const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'send' } });
-    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
-    if (data && data.sent) {
-      toast(data.kundennummer ? 'Gesendet. Kontakt ' + data.kundennummer : 'Gesendet.');
-      state.loaded = false;
-      await loadLive();
+  window.outreachSendNowAll = function () {
+    window.outreachSendNow(state.drafts.filter((d) => d.status === 'freigegeben').map((d) => d.id));
+  };
+  window.outreachSendQueue = window.outreachSendNowAll;
+  window.outreachConfirmCancel = function () { state.confirmIds = null; render(); };
+  window.outreachConfirmSend = async function () {
+    const ids = (state.confirmIds || []).slice();
+    state.confirmIds = null;
+    if (!ids.length) { render(); return; }
+    if (state.demo) {
+      state.sendResult = { bad: false, text: `Demo: ${ids.length} ${ids.length === 1 ? 'Mail wäre' : 'Mails wären'} jetzt gesendet worden. Nichts ist raus.` };
+      toast(state.sendResult.text);
       render();
-    } else if (data && data.reason) toast(data.reason);
-  }
+      return;
+    }
+    if (!signedIn()) { toast('Bitte anmelden.', true); render(); return; }
+    state.sending = true;
+    state.sendResult = null;
+    state.editorId = null;
+    render();
+    let sent = 0;
+    const fails = [];
+    const warnings = [];
+    try {
+      const sb = await getSupabase();
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10);
+        const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'now', draftIds: chunk } });
+        if (error || (data && data.error)) {
+          const why = await functionError(error, data);
+          chunk.forEach(() => fails.push(why));
+          continue;
+        }
+        sent += Number(data.sent) || 0;
+        (data.results || []).forEach((r) => {
+          if (!r.sent) fails.push(r.reason || 'Nicht gesendet');
+          if (r.warning) warnings.push(r.warning);
+        });
+      }
+    } catch (e) {
+      fails.push(String((e && e.message) || 'Verbindung fehlgeschlagen'));
+    }
+    const reasons = [...new Set(fails)].slice(0, 2).join('; ');
+    let text = `${sent} gesendet, ${fails.length} fehlgeschlagen${fails.length ? ' (' + reasons + ')' : ''}.`;
+    if (warnings.length) text += ' Hinweis: ' + [...new Set(warnings)][0];
+    state.sending = false;
+    state.sendResult = { bad: fails.length > 0, text };
+    toast(text, fails.length > 0);
+    try { state.loaded = false; await loadLive(); } catch (_) { /* nächster Aufruf lädt */ }
+    render();
+  };
 
   window.outreachAiReply = async function (id) {
     if (state.demo) {

@@ -76,3 +76,11 @@ Jede Outreach-Mail und jede Antwort bekommt beim Versand eine volle Geschäftssi
 Der Knopf ruft `outreach-night` mit dem Login auf. Der manuelle Lauf ignoriert das Nachtfenster, legt nur Entwürfe an und schickt nichts. Während er läuft, zeigt der Knopf einen Spinner, danach steht „X Betriebe gefunden, Y Entwürfe angelegt“ oder die echte Fehlermeldung im Nachtlauf-Kasten. Ursache des alten „passiert nichts“: overpass-api.de hat Anfragen aus der Supabase-Cloud sofort abgelehnt, die Funktion antwortete mit 400, und der Knopf zeigte nur die nichtssagende Meldung von supabase-js. Jetzt fragt die Kartensuche nacheinander mehrere Overpass-Server ab. Für Tests geht derselbe Lauf per Cron-Secret mit `{"manual": true}`.
 
 Pages-Deploy für PR #28 (vo-crm-v16) neu angestoßen, 25.11.2026.
+
+## „Jetzt senden“ (seit 25.11.2026)
+
+In der Freigabe-Liste und im Editor eines freigegebenen Entwurfs gibt es „Jetzt senden“, in der Liste zusätzlich „Alle freigegebenen jetzt senden (N)“. Vorher kommt ein Bestätigungsdialog mit den Empfängern. `outreach-send` mit `op: "now"` und `draftIds` (Login des Nutzers, höchstens 10 pro Aufruf) nimmt per `claim_outreach_draft_now` genau diese Entwürfe: nur Status freigegeben, nur eigener Workspace. Versandfenster und Abstand gelten nicht; Pause, Tageslimit, Sperrliste, Abmeldungen, Duplikate, Bestandskunden und die gemeinsame Sperre mit dem Cron gelten weiter. Zwischen zwei Mails 4 Sekunden. Eigene Adressen (@viraloutlaws.de) bekommen keinen CRM-Kontakt.
+
+Mails gehen jetzt mit `Date`-Header, RFC-2047-kodiertem Betreff und nur CRLF raus; damit klappt auch die Kopie in „Gesendet“.
+
+Der Filter „Offen“ in der Freigabe ist entfallen. Er war kein eigener Status, nur die Sicht „Entwurf + Freigegeben“; in der Datenbank gab es nie den Status „offen“.

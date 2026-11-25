@@ -1,5 +1,5 @@
 // Viral Outlaws CRM – Service Worker
-const CACHE = 'vo-crm-v17';
+const CACHE = 'vo-crm-v18';
 const ASSETS = ['/', '/index.html', '/crm-reel.js', '/outreach.js', '/anruf-rules.js', '/anruf-cockpit.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
