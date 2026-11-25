@@ -359,16 +359,39 @@ export async function imapAppend(folder: string, raw: string) {
 
 export type OutboundMail = { messageId?: string; inReplyTo?: string; references?: string };
 
+/** RFC 2047: Umlaute im Betreff und Namen als =?UTF-8?B?...?=, in Stücken unter 75 Zeichen. */
+export function encodeHeader(value: string): string {
+  const s = String(value || "").replace(/[\r\n]+/g, " ");
+  if (!/[^\x20-\x7e]/.test(s)) return s;
+  const enc = new TextEncoder();
+  const words: string[] = [];
+  let chunk = "";
+  for (const ch of s) {
+    if (enc.encode(chunk + ch).length > 45) { words.push(chunk); chunk = ""; }
+    chunk += ch;
+  }
+  if (chunk) words.push(chunk);
+  const b64 = (t: string) => btoa(String.fromCharCode(...enc.encode(t)));
+  return words.map((w) => `=?UTF-8?B?${b64(w)}?=`).join("\r\n ");
+}
+
+export function rfc2822Date(d = new Date()): string {
+  return d.toUTCString().replace(/GMT$/, "+0000");
+}
+
 export function buildRfc822(from: string, to: string[], subject: string, text: string, fromName: string, extra?: OutboundMail): string {
   const lines = [
-    `From: ${fromName} <${from}>`,
+    `Date: ${rfc2822Date()}`,
+    `From: ${encodeHeader(fromName)} <${from}>`,
     `To: ${to.join(", ")}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeHeader(subject)}`,
   ];
   if (extra?.messageId) lines.push(`Message-ID: ${extra.messageId}`);
   if (extra?.inReplyTo) lines.push(`In-Reply-To: ${extra.inReplyTo}`);
   if (extra?.references) lines.push(`References: ${extra.references}`);
-  lines.push("MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", text);
+  // Nur CRLF: nackte LF lehnen manche Server (SMTP und IMAP APPEND) ab.
+  const body = String(text || "").replace(/\r?\n/g, "\r\n");
+  lines.push("MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: 8bit", "", body);
   return lines.join("\r\n");
 }
 
@@ -441,7 +464,8 @@ export async function sendAndFile(to: string[], subject: string, text: string, f
     if (!sent) return "Gesendet-Ordner nicht erkannt. MAIL_SENT_FOLDER optional setzen.";
     await imapAppend(sent, rfc822(from, to, subject, text, cfg.fromName, extra));
     return "";
-  } catch {
-    return "Die Mail ist raus, die Kopie in Gesendet hat nicht geklappt.";
+  } catch (e) {
+    const why = e instanceof Error ? e.message.replace(/[\r\n]+/g, " ").slice(0, 120) : "";
+    return `Die Mail ist raus, die Kopie in Gesendet hat nicht geklappt${why ? ` (${why})` : ""}.`;
   }
 }
