@@ -336,6 +336,9 @@
   function render() {
     const root = document.getElementById('outreach-root');
     if (!root) return;
+    // Der Editor hängt am <body> (damit er über allem liegt). Beim Neuzeichnen die alte Kopie entfernen,
+    // sonst bleibt sie nach dem Schließen offen stehen und fängt alle Klicks ab.
+    document.querySelectorAll('#outreach-editor').forEach((el) => el.remove());
     const tabs = [['ziele', 'Ziele'], ['freigabe', 'Freigabe'], ['postfach', 'Postfach']];
     root.innerHTML = `
       <p class="outreach-lead">Finde Entscheider, lass Entwürfe schreiben und gib jede Mail einzeln frei. Versand läuft nur über dein Postfach und nur nach Freigabe.</p>
@@ -684,7 +687,19 @@
   };
   window.outreachPick = function (id, on) { state.picked[id] = !!on; };
   window.outreachEdit = function (id) { state.editorId = id; state.tab = 'freigabe'; render(); };
-  window.outreachCloseEdit = function () { state.editorId = null; render(); };
+  // Schließen per X, Escape oder Klick auf den Hintergrund. Ungespeicherte Änderungen werden vorher gespeichert.
+  window.outreachCloseEdit = async function () {
+    const d = draftOf(state.editorId);
+    state.editorId = null;
+    render();
+    if (d && d._dirty) await window.outreachSaveDraft(d.id);
+  };
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.editorId && document.getElementById('outreach-editor')) {
+      e.preventDefault();
+      window.outreachCloseEdit();
+    }
+  });
   window.outreachEditField = function (id, key, value) { const d = draftOf(id); if (d) { d[key] = value; d._dirty = true; } };
   window.outreachGuessOk = function (id, on) { const d = draftOf(id); if (d) d.guess_ok = !!on; };
   window.outreachReplyInput = function (value) { state.replyText = value; };
@@ -741,10 +756,11 @@
     const d = draftOf(id);
     if (!d) return;
     if (d.status === 'freigegeben') d.status = 'entwurf';
+    d._dirty = false;
     if (state.demo) { toast('Demo: Entwurf gemerkt.'); render(); return; }
     const sb = await getSupabase();
     const { error } = await sb.from('outreach_drafts').update({ subject: d.subject, body: d.body, status: d.status, guess_ok: !!d.guess_ok, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) toast(error.message, true); else toast('Gespeichert.');
+    if (error) { d._dirty = true; toast('Nicht gespeichert: ' + error.message, true); } else toast('Gespeichert.');
     render();
   };
   window.outreachApprove = async function (id) {
