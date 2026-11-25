@@ -14,7 +14,12 @@
     people: [],
     drafts: [],
     messages: [],
-    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5] },
+    settings: { daily_limit: 20, gap_minutes: 5, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5], prep_from: 1, prep_until: 7, prep_target: 50, prep_batch: 3, prep_on: true },
+    profiles: [],
+    areas: [],
+    coverage: [],
+    pool: 0,
+    removedProfiles: [],
     queue: 'offen',
     mailFilter: 'alle',
     q: '',
@@ -45,28 +50,44 @@
     state.branche = 'Handwerk';
     state.region = 'Allgäu';
     state.settings.guess_emails = true;
+    state.settings.prep_from = 1;
+    state.settings.prep_until = 7;
+    state.settings.prep_target = 50;
+    state.settings.prep_on = true;
+    state.profiles = [
+      { id: 'pa', name: 'Ärzte und Praxen', tags: ['amenity=doctors', 'amenity=dentist', 'healthcare=physiotherapist', 'amenity=clinic'], enabled: true, sort: 0 },
+      { id: 'pi', name: 'Maschinenbau und Industrie', tags: ['craft=metal_construction', 'office=engineer', 'man_made=works'], enabled: true, sort: 1 },
+      { id: 'ph', name: 'Handwerk', tags: ['craft=electrician', 'craft=plumber', 'craft=painter', 'craft=roofer', 'craft=hvac', 'shop=car_repair'], enabled: true, sort: 2 },
+      { id: 'pg', name: 'Gastronomie', tags: ['amenity=restaurant', 'amenity=cafe'], enabled: false, sort: 3 },
+      { id: 'pk', name: 'Kanzleien und Beratung', tags: ['office=tax_advisor', 'office=lawyer', 'office=estate_agent'], enabled: true, sort: 4 },
+      { id: 'ps', name: 'Salon und Fitness', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'], enabled: true, sort: 5 },
+    ];
+    state.areas = [
+      { id: 'berlin-mitte', name: 'Berlin-Mitte', sort: 0 },
+      { id: 'berlin-kreuzberg', name: 'Berlin-Kreuzberg', sort: 1 },
+      { id: 'hh-altona', name: 'Hamburg-Altona', sort: 2 },
+    ];
+    state.coverage = state.profiles.filter((p) => p.id !== 'pg').map((p) => ({ profile_id: p.id, area_id: 'berlin-mitte', searched_at: '2026-11-25T00:15:00.000Z' }));
+    state.pool = 6;
     const obs1 = [
-      { kind: 'aktualitaet', text: 'Im Impressum steht als Stand das Jahr 2019.', source: 'https://musterwerk.example.test/impressum', tip: 'Die Jahreszahl auf 2026 setzen, sobald der Text dazu stimmt.' },
-      { kind: 'mobil', text: 'Die Startseite hat kein viewport-Meta.', source: 'https://musterwerk.example.test/', tip: 'Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.' },
-      { kind: 'kontakt', text: 'Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.', source: 'https://musterwerk.example.test/', tip: 'Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.' },
+      { kind: 'mobil', text: 'Auf dem Handy wird die Seite winzig dargestellt.', source: 'https://musterwerk.example.test/', tip: 'Die Seite auf die Breite des Handys einstellen.', impact: 'Auf dem Handy wird die Seite winzig dargestellt. Viele Besucher springen da ab.', wert: 'Die Seite auf die Breite des Handys einstellen, damit der erste Blick lesbar ist.' },
+      { kind: 'kontakt', text: 'Abends findet man nur eine Telefonnummer.', source: 'https://musterwerk.example.test/', tip: 'Ein kurzes Formular mit Name und Anliegen.', impact: 'Wer abends anfragen will, findet nur eine Telefonnummer.', wert: 'Ein kurzes Formular mit Name und Anliegen fängt die Anfrage auf, auch wenn niemand rangeht.' },
     ];
     const obs2 = [
-      { kind: 'seo', text: 'Die Startseite hat keine meta description.', source: 'https://beispielhof.example.test/', tip: 'Eine meta description mit einem Satz schreiben: was der Hof verkauft und wo die Abholung ist.' },
-      { kind: 'kontakt', text: 'Ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.', source: 'https://beispielhof.example.test/kontakt', tip: 'Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.' },
-      { kind: 'buchung', text: 'Auf den gelesenen Seiten steht kein Link mit Termin, Buchen oder Reservierung.', source: 'https://beispielhof.example.test/', tip: 'Auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.' },
+      { kind: 'kontakt', text: 'Die Anfrage liegt erst auf der Kontaktseite.', source: 'https://beispielhof.example.test/kontakt', tip: 'Telefon und Anfrage in den ersten Blick.', impact: 'Wer anfragen will, muss die Kontaktseite erst suchen.', wert: 'Telefon und den Weg zur Anfrage in den ersten Blick auf dem Handy legen.' },
+      { kind: 'seo', text: 'In der Suche fehlt ein Satz zum Hof.', source: 'https://beispielhof.example.test/', tip: 'Einen Satz hinterlegen, was der Hof macht und wo er sitzt.', impact: 'In der Google-Suche fehlt ein Satz, was der Hof macht und wo er sitzt.', wert: 'Diesen einen Satz hinterlegen, damit die Suche nicht nur den Seitentitel zeigt.' },
     ];
     const obs3 = [
-      { kind: 'tempo', text: 'Im Kopf der Startseite liegen 4 Skripte ohne defer oder async.', source: 'https://holzform.example.test/', tip: 'Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.' },
-      { kind: 'seo', text: 'Die Startseite hat kein h1.', source: 'https://holzform.example.test/', tip: 'Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.' },
-      { kind: 'kontakt', text: 'Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.', source: 'https://holzform.example.test/', tip: 'Unter die Telefonnummer ein Formular mit Holzart, Maß und Terminwunsch setzen, das eine Mail schickt.' },
+      { kind: 'buchung', text: 'Einen Termin kann man auf der Seite nicht hinterlegen.', source: 'https://praxis-vitalis.example.test/', tip: 'Einen Weg Termin anfragen auf die Startseite setzen.', impact: 'Einen Termin kann man auf der Seite nicht hinterlegen.', wert: 'Einen sichtbaren Weg Termin anfragen auf die Startseite setzen.' },
+      { kind: 'tempo', text: 'Besucher warten, bevor der Text da ist.', source: 'https://praxis-vitalis.example.test/', tip: 'Schwere Dateien nach hinten schieben.', impact: 'Besucher warten, bevor der Text auf der Seite da ist.', wert: 'Die schweren Dateien nach hinten schieben, damit der Text sofort lesbar ist.' },
     ];
-    const mail1 = `Guten Tag Lena,\n\nauf der Seite von Musterwerk GmbH: Im Impressum steht als Stand das Jahr 2019, und die Startseite hat kein viewport-Meta.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Die Jahreszahl auf 2026 setzen, sobald der Text dazu stimmt.\n- Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.\n- Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
-    const mail2 = `Guten Tag Jonas,\n\nauf der Seite von Beispielhof: Die Startseite hat keine meta description, und ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Eine meta description mit einem Satz schreiben: was der Hof verkauft und wo die Abholung ist.\n- Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.\n- Auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
-    const mail3 = `Guten Tag Mara,\n\nauf der Seite von Holzform e.K.: Im Kopf der Startseite liegen 4 Skripte ohne defer oder async, und die Startseite hat kein h1.\n\nDas lässt sich ändern, ohne die Seite neu zu bauen:\n- Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.\n- Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.\n- Unter die Telefonnummer ein Formular mit Holzart, Maß und Terminwunsch setzen, das eine Mail schickt.\n\nBei Werkstatt Berg in Immenstadt lag derselbe Punkt: Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.\n\nSoll ich Ihnen das kurz zeigen?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    const mail1 = `Guten Tag Frau Muster,\n\nauf dem Handy wird die Seite von Musterwerk GmbH winzig dargestellt. Viele Besucher springen da ab.\n\nStellen Sie die Seite auf die Breite des Handys, damit der erste Blick lesbar ist. Wer abends anfragen will, findet nur eine Telefonnummer. Ein kurzes Formular mit Name und Anliegen fängt die Anfrage auf, auch wenn niemand rangeht.\n\nSoll ich Ihnen das kurz aufschreiben?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    const mail2 = `Guten Tag Herr Beispiel,\n\nwer bei Beispielhof anfragen will, muss die Kontaktseite erst suchen. In der Google-Suche fehlt außerdem ein Satz, was der Hof macht und wo er sitzt.\n\nLegen Sie Telefon und den Weg zur Anfrage in den ersten Blick auf dem Handy. Hinterlegen Sie diesen einen Satz, damit die Suche nicht nur den Seitentitel zeigt.\n\nSoll ich den Ablauf in ein paar Sätzen skizzieren?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
+    const mail3 = `Guten Tag Frau Holm,\n\neinen Termin kann man auf der Seite der Praxis Vitalis nicht hinterlegen. Besucher warten außerdem, bevor der Text da ist.\n\nSetzen Sie einen sichtbaren Weg „Termin anfragen“ auf die Startseite. Schieben Sie die schweren Dateien nach hinten, damit der Text sofort lesbar ist.\n\nDarf ich Ihnen dazu eine knappe Skizze schicken?\n\nWenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.\n\nViele Grüße\nKim\nViral Outlaws`;
     state.targets = [
       { id: 't1', firma: 'Musterwerk GmbH', web: 'https://musterwerk.example.test', domain: 'musterwerk.example.test', str: 'Hafenstraße 4', plz: '87435', ort: 'Kempten', impressum_url: 'https://musterwerk.example.test/impressum', status: 'recherchiert', skip_reason: '', observations: obs1 },
       { id: 't2', firma: 'Beispielhof', web: 'https://beispielhof.example.test', domain: 'beispielhof.example.test', str: 'Dorfweg 2', plz: '87435', ort: 'Kempten', status: 'recherchiert', skip_reason: '', observations: obs2 },
-      { id: 't3', firma: 'Holzform e.K.', web: 'https://holzform.example.test', domain: 'holzform.example.test', str: 'Werkstatt 1', plz: '87509', ort: 'Immenstadt', branche: 'Schreinerei', status: 'recherchiert', skip_reason: '', observations: obs3 },
+      { id: 't3', firma: 'Praxis Vitalis', web: 'https://praxis-vitalis.example.test', domain: 'praxis-vitalis.example.test', str: 'Gartenstraße 8', plz: '87435', ort: 'Kempten', branche: 'Physiotherapie', status: 'recherchiert', skip_reason: '', observations: obs3 },
       { id: 't4', firma: 'Bestandskunde Demo AG', web: 'https://demo-ag.example.test', domain: 'demo-ag.example.test', status: 'uebersprungen', skip_reason: 'Bestandskunde', observations: [] },
       { id: 't8', firma: 'Stillstand Demo', web: 'https://stillstand.example.test', domain: 'stillstand.example.test', status: 'duenn', skip_reason: 'zu wenig Substanz', observations: [{ kind: 'social', text: 'Auf den gelesenen Seiten liegt kein Link zu Instagram, Facebook oder LinkedIn.', source: 'https://stillstand.example.test/', tip: '' }] },
     ];
@@ -74,15 +95,15 @@
       { id: 'p1', target_id: 't1', person: 'Lena Muster', rolle: 'Geschäftsführerin', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website', adresse: 'Hafenstraße 4, 87435 Kempten' },
       { id: 'p2', target_id: 't2', person: 'Jonas Beispiel', rolle: 'Inhaber', email: 'info@beispielhof.example.test', email_art: 'generisch', hinweis: 'Nur eine allgemeine Adresse veröffentlicht', adresse: 'Dorfweg 2, 87435 Kempten' },
       { id: 'p3', target_id: 't2', person: 'Jonas Beispiel', rolle: 'Inhaber', email: 'jonas.beispiel@beispielhof.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Dorfweg 2, 87435 Kempten' },
-      { id: 'p4', target_id: 't3', person: 'Mara Holm', rolle: 'Inhaberin', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', hinweis: 'Vermutet (vorname.nachname), nicht geprüft', adresse: 'Werkstatt 1, 87509 Immenstadt' },
+      { id: 'p4', target_id: 't3', person: 'Mara Holm', rolle: 'Inhaberin', email: 'mara.holm@praxis-vitalis.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website', adresse: 'Gartenstraße 8, 87435 Kempten' },
     ];
     state.drafts = [
-      { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Musterwerk GmbH: Im Impressum steht als Stand das Jahr 2019', body: mail1, observations: obs1, status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
-      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Beispielhof: Die Startseite hat keine meta description', body: mail2, observations: obs2, status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
-      { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Holzform e.K.: Im Kopf der Startseite liegen 4 Skripte ohne defer oder async', body: mail3, observations: obs3, status: 'entwurf', email: 'mara.holm@holzform.example.test', email_art: 'vermutet', guess_ok: false, unread: false },
-      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Seenadel Studio: eine Frage zur Website', body: mail1.replace('Lena', 'Ada').replace('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
-      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Klarwerk OHG: eine Frage zur Website', body: mail2.replace('Jonas', 'Noel').replace('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
-      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Nordlicht Demo: eine Frage zur Website', body: mail1.replace('Lena', 'Ruth').replace('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Ihre Seite auf dem Handy', body: mail1, observations: obs1, status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Anfragen am Abend', body: mail2, observations: obs2, status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
+      { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Termine auf Ihrer Seite', body: mail3, observations: obs3, status: 'entwurf', email: 'mara.holm@praxis-vitalis.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
+      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Anfragen am Abend', body: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
+      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
     ];
     state.targets.push(
       { id: 't5', firma: 'Seenadel Studio', web: 'https://seenadel.example.test', domain: 'seenadel.example.test', status: 'recherchiert' },
@@ -95,10 +116,10 @@
       { id: 'p7', target_id: 't7', person: 'Ruth Nord', rolle: 'Inhaberin', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', hinweis: 'Persönliche Adresse auf der Website' },
     );
     state.messages = [
-      { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Seenadel Studio: eine Frage zur Website', body_text: mail1.replace('Lena', 'Ada').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), created_at: '2026-11-20T09:00:00.000Z' },
-      { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Klarwerk OHG: eine Frage zur Website', body_text: mail2.replace('Jonas', 'Noel').replaceAll('Beispielhof', 'Klarwerk OHG'), created_at: '2026-11-18T09:00:00.000Z' },
-      { id: 'm3', draft_id: 'd5', direction: 'in', from_addr: 'noel.klar@klarwerk.example.test', subject: 'AW: Klarwerk OHG: eine Frage zur Website', body_text: 'Guten Tag Kim,\n\ndanke für die Zeilen. Die Website ist von 2019 und die Anfragen landen bei mir im Postfach. Können Sie kurz sagen, wie so ein Ablauf bei einem kleinen Betrieb aussieht?\n\nViele Grüße\nNoel Klar', created_at: '2026-11-19T14:12:00.000Z' },
-      { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Nordlicht Demo: eine Frage zur Website', body_text: mail1.replace('Lena', 'Ruth').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), created_at: '2026-11-12T09:00:00.000Z' },
+      { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Ihre Seite auf dem Handy', body_text: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), created_at: '2026-11-20T09:00:00.000Z' },
+      { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Anfragen am Abend', body_text: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), created_at: '2026-11-18T09:00:00.000Z' },
+      { id: 'm3', draft_id: 'd5', direction: 'in', from_addr: 'noel.klar@klarwerk.example.test', subject: 'AW: Anfragen am Abend', body_text: 'Guten Tag Kim,\n\ndanke für die Zeilen. Die Anfragen landen bei mir im Postfach. Können Sie kurz sagen, wie so ein Ablauf bei einem kleinen Betrieb aussieht?\n\nViele Grüße\nNoel Klar', created_at: '2026-11-19T14:12:00.000Z' },
+      { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Ihre Seite auf dem Handy', body_text: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), created_at: '2026-11-12T09:00:00.000Z' },
       { id: 'm5', draft_id: 'd6', direction: 'in', from_addr: 'ruth.nord@nordlicht.example.test', subject: 'AW: Nordlicht Demo', body_text: 'Bitte abmelden. Kein Interesse an weiteren Nachrichten.', created_at: '2026-11-12T11:40:00.000Z' },
     ];
     state.note = 'Demo mit erfundenen Firmen. Es wird nichts gelesen und nichts verschickt.';
@@ -155,13 +176,17 @@
   #outreach-editor textarea{min-height:220px}
   .outreach-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
   .obs-card{background:rgba(245,196,0,.08);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 8px;font-size:12px;line-height:1.45}
-  .obs-card a{color:inherit;word-break:break-all}
+  .obs-card a{display:block;margin-top:4px;color:inherit;word-break:break-all}
   .obs-tip{color:var(--ink2);display:block;margin-top:4px}
+  .outreach-night{margin:0 0 12px}
+  .profile-row{display:grid;grid-template-columns:24px minmax(140px,220px) minmax(0,1fr) auto;gap:8px;align-items:center;margin:0 0 8px}
+  .profile-row input{width:100%;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:8px 10px;font:inherit}
   @media(max-width:900px){.outreach-editor-grid{grid-template-columns:1fr}}
   @media(max-width:900px){
     .outreach-grid,.mail-split{grid-template-columns:1fr}
     .outreach-draft{grid-template-columns:28px minmax(0,1fr)}
     .outreach-actions{grid-column:1 / -1;justify-content:flex-start}
+    .profile-row{grid-template-columns:24px minmax(0,1fr)}
   }`;
   document.head.appendChild(css);
 
@@ -238,14 +263,18 @@
 
   async function loadLive() {
     const sb = await getSupabase();
-    const [settings, targets, people, drafts, messages] = await Promise.all([
+    const [settings, targets, people, drafts, messages, profiles, areas, coverage, pool] = await Promise.all([
       sb.from('outreach_settings').select('*').eq('workspace_id', workspaceId()).maybeSingle(),
       sb.from('outreach_targets').select('*').order('created_at', { ascending: false }).limit(80),
       sb.from('outreach_people').select('*').limit(240),
       sb.from('outreach_drafts').select('*').order('updated_at', { ascending: false }).limit(160),
       sb.from('outreach_messages').select('*').order('created_at', { ascending: true }).limit(400),
+      sb.from('outreach_profiles').select('*').order('sort'),
+      sb.from('outreach_areas').select('id, name, state, sort').order('sort'),
+      sb.from('outreach_coverage').select('profile_id, area_id, searched_at').limit(5000),
+      sb.from('outreach_pool').select('id', { count: 'exact', head: true }),
     ]);
-    const err = targets.error || drafts.error;
+    const err = targets.error || drafts.error || profiles.error || areas.error || coverage.error || pool.error;
     if (err && /outreach_|schema cache|does not exist|PGRST205/i.test(err.message || '')) {
       state.note = 'Die Outreach-Tabellen sind noch nicht migriert. Live-Daten gibt es erst nach der Migration.';
       return;
@@ -256,6 +285,11 @@
     state.people = people.data || [];
     state.drafts = drafts.data || [];
     state.messages = messages.data || [];
+    state.profiles = profiles.data || [];
+    state.areas = areas.data || [];
+    state.coverage = coverage.data || [];
+    state.pool = pool.count || 0;
+    state.removedProfiles = [];
   }
 
   function paintBadge() {
@@ -276,12 +310,70 @@
       <div class="seg" id="outreach-tabs">${tabs.map(([id, label]) => `<button type="button" class="${state.tab === id ? 'on' : ''}" onclick="outreachTab('${id}')">${label}</button>`).join('')}</div>
       <div id="outreach-panel">${state.tab === 'freigabe' ? queueHtml() : state.tab === 'postfach' ? mailHtml() : goalsHtml()}</div>
       ${editorHtml()}`;
+    const editor = document.getElementById('outreach-editor');
+    if (editor) document.body.appendChild(editor);
     paintBadge();
+  }
+
+  const DEFAULT_PROFILES = [
+    { name: 'Ärzte und Praxen', tags: ['amenity=doctors', 'amenity=dentist', 'healthcare=physiotherapist', 'amenity=clinic'] },
+    { name: 'Maschinenbau und Industrie', tags: ['craft=metal_construction', 'office=engineer', 'man_made=works'] },
+    { name: 'Handwerk', tags: ['craft=electrician', 'craft=plumber', 'craft=painter', 'craft=roofer', 'craft=hvac', 'shop=car_repair', 'craft=tiler', 'craft=glaziery'] },
+    { name: 'Gastronomie', tags: ['amenity=restaurant', 'amenity=cafe'] },
+    { name: 'Kanzleien und Beratung', tags: ['office=tax_advisor', 'office=lawyer', 'office=estate_agent'] },
+    { name: 'Salon und Fitness', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'] },
+  ];
+
+  function nextPrepCell() {
+    const profiles = state.profiles.filter((p) => p.enabled && (p.tags || []).length).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
+    const areas = state.areas.slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
+    if (!profiles.length || !areas.length) return null;
+    const seen = new Map(state.coverage.map((c) => [c.profile_id + '|' + c.area_id, c.searched_at]));
+    let oldest = null;
+    for (const area of areas) {
+      for (const profile of profiles) {
+        const at = seen.get(profile.id + '|' + area.id);
+        if (!at) return { profile, area };
+        const ms = Date.parse(at);
+        if (!oldest || ms < oldest.rank) oldest = { rank: ms, profile, area };
+      }
+    }
+    return oldest;
+  }
+
+  function nightHtml() {
+    const cell = nextPrepCell();
+    const visited = new Set(state.coverage.map((c) => c.area_id)).size;
+    const waiting = state.drafts.filter((d) => d.status === 'entwurf').length;
+    const next = cell ? `${cell.profile.name} · ${cell.area.name}` : (state.profiles.some((p) => p.enabled) ? 'Gebiete fehlen noch. Der erste Lauf legt sie an.' : 'Kein Profil ist eingeschaltet.');
+    return `<div class="dash-card outreach-card outreach-night" id="outreach-night">
+      <h3>Nachtlauf</h3>
+      <p class="outreach-help">Suche und Entwürfe laufen nachts in kleinen Schritten, von der Stunde „Start ab“ bis „Fertig bis“, Zeitzone Berlin. Ziel sind die offenen Entwürfe in der Freigabe. Pro Schritt ein Bezirk oder eine Stadt, nie ganz Deutschland auf einmal. Schon besuchte Gebiete bleiben gespeichert. Schreinerei und Möbel sind nicht dabei.</p>
+      <div class="outreach-row">
+        <div class="outreach-field" style="width:90px"><label>Start ab</label><input type="number" min="0" max="23" value="${esc(state.settings.prep_from)}" oninput="outreachSetting('prep_from', this.value)"></div>
+        <div class="outreach-field" style="width:90px"><label>Fertig bis</label><input type="number" min="1" max="24" value="${esc(state.settings.prep_until)}" oninput="outreachSetting('prep_until', this.value)"></div>
+        <div class="outreach-field" style="width:110px"><label>Ziel Entwürfe</label><input type="number" min="1" max="200" value="${esc(state.settings.prep_target)}" oninput="outreachSetting('prep_target', this.value)"></div>
+        <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.prep_on !== false ? 'checked' : ''} onchange="outreachPrepOn(this.checked)"> Nachtlauf an</label>
+      </div>
+      <p class="outreach-help" id="outreach-night-status">Offene Entwürfe ${esc(waiting)} von ${esc(state.settings.prep_target)}. Nächste Suche: ${esc(next)}. ${esc(visited)} ${visited === 1 ? 'Gebiet' : 'Gebiete'} schon besucht${state.pool ? ', ' + esc(state.pool) + ' Websites warten noch' : ''}.</p>
+      ${state.profiles.map((p) => `<div class="profile-row">
+        <input type="checkbox" ${p.enabled ? 'checked' : ''} aria-label="${esc(p.name)} an" onchange="outreachProfileEnabled('${esc(p.id)}', this.checked)">
+        <input value="${esc(p.name)}" aria-label="Name der Branche" oninput="outreachProfileName('${esc(p.id)}', this.value)">
+        <input value="${esc((p.tags || []).join(', '))}" aria-label="Merkmale" oninput="outreachProfileTags('${esc(p.id)}', this.value)">
+        <button type="button" class="btn-ghost btn-sm" onclick="outreachProfileRemove('${esc(p.id)}')">Weg</button>
+      </div>`).join('') || '<p class="outreach-help">Noch keine Branchen. Standards laden legt Ärzte, Industrie, Handwerk, Gastronomie, Kanzleien und Salons an.</p>'}
+      <div class="outreach-row">
+        <button type="button" class="btn-ghost" onclick="outreachProfileAdd()">Branche</button>
+        <button type="button" class="btn-ghost" onclick="outreachProfileRestore()">Standards laden</button>
+        <button type="button" class="btn-ghost" onclick="outreachSaveSettings()">${ico('save', 14)} Sichern</button>
+        <button type="button" class="btn-yellow" onclick="outreachNightRun()">Einen Suchlauf jetzt</button>
+      </div>
+    </div>`;
   }
 
   function goalsHtml() {
     const shown = state.demo ? state.targets.filter((t) => ['t1', 't2', 't3', 't4', 't8'].includes(t.id)) : state.targets.filter((t) => !state.drafts.some((d) => d.target_id === t.id && ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)));
-    return `<div class="outreach-grid">
+    return `${nightHtml()}<div class="outreach-grid">
       <div class="dash-card outreach-card haptik-in" id="outreach-input">
         <h3>Firmen</h3>
         <p class="outreach-help">Eine URL pro Zeile, oder Branche und Region. Es werden nur die öffentliche Website und das Impressum gelesen. Kein LinkedIn, keine bezahlte Suche.</p>
@@ -440,6 +532,57 @@
   window.outreachSetting = function (key, value) {
     const n = Number(value);
     if (Number.isFinite(n)) state.settings[key] = n;
+  };
+  window.outreachPrepOn = function (on) { state.settings.prep_on = !!on; };
+  window.outreachProfileEnabled = async function (id, on) {
+    const p = state.profiles.find((x) => x.id === id);
+    if (!p) return;
+    p.enabled = !!on;
+    if (state.demo || String(id).startsWith('neu-') || !signedIn()) { render(); return; }
+    const sb = await getSupabase();
+    const { error } = await sb.from('outreach_profiles').update({ enabled: !!on, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) toast(error.message, true);
+    render();
+  };
+  window.outreachProfileName = function (id, value) {
+    const p = state.profiles.find((x) => x.id === id);
+    if (p) p.name = value;
+  };
+  window.outreachProfileTags = function (id, value) {
+    const p = state.profiles.find((x) => x.id === id);
+    if (!p) return;
+    p.tags = String(value || '').split(/[\s,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    p._tagsChanged = true;
+  };
+  window.outreachProfileAdd = function () {
+    state.profiles.push({ id: 'neu-' + Date.now(), name: 'Neue Branche', tags: [], enabled: true, sort: state.profiles.length });
+    render();
+  };
+  window.outreachProfileRemove = function (id) {
+    state.profiles = state.profiles.filter((p) => p.id !== id);
+    if (!String(id).startsWith('neu-')) state.removedProfiles.push(id);
+    render();
+  };
+  window.outreachProfileRestore = function () {
+    const have = new Set(state.profiles.map((p) => p.name));
+    DEFAULT_PROFILES.forEach((p) => {
+      if (have.has(p.name)) return;
+      state.profiles.push({ id: 'neu-' + p.name, name: p.name, tags: p.tags.slice(), enabled: true, sort: state.profiles.length });
+    });
+    render();
+    toast('Fehlende Standards stehen in der Liste. Sichern schreibt sie.');
+  };
+  window.outreachNightRun = async function () {
+    if (state.demo) { toast('Demo: es wird nichts gesucht und nichts geschrieben.'); return; }
+    if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+    const sb = await getSupabase();
+    const { data, error } = await sb.functions.invoke('outreach-night', { body: { op: 'run' } });
+    if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
+    if (data && data.skipped) toast(data.skipped);
+    else toast((data && data.drafted ? data.drafted + ' Entwürfe. ' : '') + ((data && data.profile) ? data.profile + ' · ' + (data.area || '') : 'Suchlauf fertig.'));
+    state.loaded = false;
+    await loadLive();
+    render();
   };
   window.outreachPick = function (id, on) { state.picked[id] = !!on; };
   window.outreachEdit = function (id) { state.editorId = id; state.tab = 'freigabe'; render(); };
@@ -642,10 +785,41 @@
     const weekdays = (state.settings.weekdays || []).map(Number).filter((n) => n >= 1 && n <= 7);
     state.settings.daily_limit = daily;
     state.settings.gap_minutes = gap;
+    let prepFrom = Math.min(23, Math.max(0, Number(state.settings.prep_from)));
+    let prepUntil = Math.min(24, Math.max(1, Number(state.settings.prep_until)));
+    if (!Number.isFinite(prepFrom)) prepFrom = 1;
+    if (!Number.isFinite(prepUntil)) prepUntil = 7;
+    if (prepFrom >= prepUntil) { toast('Start ab muss vor Fertig bis liegen.', true); return; }
+    const prepTarget = Math.min(200, Math.max(1, Number(state.settings.prep_target) || 50));
+    const prepBatch = Math.min(4, Math.max(1, Number(state.settings.prep_batch) || 3));
     state.settings.hour_from = hourFrom;
     state.settings.hour_to = hourTo;
     state.settings.weekdays = weekdays.length ? weekdays : [1, 2, 3, 4, 5];
-    if (state.demo) { toast(state.settings.paused ? 'Demo: Versand pausiert, nichts gespeichert.' : 'Demo: Einstellung gemerkt, nichts gespeichert.'); render(); return; }
+    state.settings.prep_from = prepFrom;
+    state.settings.prep_until = prepUntil;
+    state.settings.prep_target = prepTarget;
+    state.settings.prep_batch = prepBatch;
+    const tagOk = /^[a-z][a-z0-9_:-]{0,40}=[a-z0-9_:+-]{1,48}$/i;
+    const bannedTag = /carpenter|joiner|cabinet|furniture|kitchen|parquet|schreiner|tischler|möbel|moebel/i;
+    let droppedWood = false;
+    state.profiles.forEach((p, sort) => {
+      const tags = [];
+      (p.tags || []).forEach((raw) => {
+        const tag = String(raw || '').trim().toLowerCase();
+        if (!tag) return;
+        if (bannedTag.test(tag)) { droppedWood = true; return; }
+        if (!tagOk.test(tag) || tags.includes(tag) || tags.length >= 8) return;
+        tags.push(tag);
+      });
+      p.tags = tags;
+      p.sort = sort;
+      p.name = String(p.name || '').trim().slice(0, 80) || 'Branche';
+    });
+    if (state.demo) {
+      toast(droppedWood ? 'Schreinerei und Möbel bleiben draußen.' : 'Demo: Einstellung gemerkt, nichts gespeichert.', droppedWood);
+      render();
+      return;
+    }
     if (!signedIn()) { toast('Bitte anmelden.', true); return; }
     const sb = await getSupabase();
     const { error } = await sb.from('outreach_settings').upsert({
@@ -657,10 +831,47 @@
       hour_from: hourFrom,
       hour_to: hourTo,
       weekdays: state.settings.weekdays,
+      prep_from: prepFrom,
+      prep_until: prepUntil,
+      prep_target: prepTarget,
+      prep_batch: prepBatch,
+      prep_on: state.settings.prep_on !== false,
       updated_at: new Date().toISOString(),
     });
-    if (error) toast(error.message, true);
-    else toast(state.settings.paused ? 'Versand pausiert.' : 'Versand-Einstellungen gesichert.');
+    if (error) { toast(error.message, true); return; }
+    if (state.removedProfiles.length) {
+      const gone = await sb.from('outreach_profiles').delete().in('id', state.removedProfiles);
+      if (gone.error) { toast(gone.error.message, true); return; }
+      state.removedProfiles = [];
+    }
+    for (const p of state.profiles) {
+      if (String(p.id).startsWith('neu-')) {
+        const ins = await sb.from('outreach_profiles').insert({
+          workspace_id: workspaceId(),
+          name: p.name,
+          tags: p.tags,
+          enabled: p.enabled !== false,
+          sort: p.sort,
+        }).select('id').single();
+        if (ins.error) { toast(ins.error.message, true); return; }
+        p.id = ins.data.id;
+      } else {
+        const upd = await sb.from('outreach_profiles').update({
+          name: p.name,
+          tags: p.tags,
+          enabled: p.enabled !== false,
+          sort: p.sort,
+          updated_at: new Date().toISOString(),
+        }).eq('id', p.id);
+        if (upd.error) { toast(upd.error.message, true); return; }
+        if (p._tagsChanged) {
+          await sb.from('outreach_coverage').delete().eq('profile_id', p.id);
+          p._tagsChanged = false;
+        }
+      }
+    }
+    const saved = state.settings.paused ? 'Versand pausiert.' : 'Einstellungen gesichert.';
+    toast(droppedWood ? 'Schreinerei und Möbel bleiben draußen. ' + saved : saved, droppedWood);
     render();
   };
 

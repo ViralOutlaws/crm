@@ -206,9 +206,9 @@ Deno.test("Die Seite liefert konkrete Beobachtungen mit Quelle, eine dünne Seit
     year: 2026,
   });
   assertEquals(notes.length >= 2 && notes.length <= 3, true);
-  assertEquals(notes.some((n) => n.text.includes("2019") && n.source.includes("impressum")), true);
   assertEquals(notes.some((n) => n.kind === "mobil" && n.source === "https://musterwerk.example.test/"), true);
-  assertEquals(notes.every((n) => n.tip.length > 10 && n.source.startsWith("https://")), true);
+  assertEquals(notes.some((n) => n.kind === "kontakt" || n.kind === "buchung"), true);
+  assertEquals(notes.every((n) => n.tip.length > 10 && n.impact.length > 10 && n.wert.length > 10 && n.source.startsWith("https://")), true);
   const thin = observeSite({ pageHtml: THIN, pageUrl: "https://duenn.example.test/", year: 2026 });
   assertEquals(thin.length < 2, true);
 });
@@ -231,18 +231,27 @@ Deno.test("Die Mail gibt umsetzbare Tipps, eine Referenz nur wenn sie passt", ()
   if (!plain) throw new Error("keine Mail");
   assertEquals(reviewMail(plain.body, { observations: notes, references: refs }).join(","), "");
   assertEquals(plain.body.includes("Werkstatt Berg"), false);
-  assertEquals(/Soll ich Ihnen das kurz zeigen\?/.test(plain.body), true);
+  assertEquals(/\?/.test(plain.body), true);
   assertEquals(/Bitte abmelden/.test(plain.body), true);
   assertEquals(/!/.test(plain.body), false);
   assertEquals(wordCount(plain.body) <= MAIL_WORD_MAX, true);
-  const fit = composePeerMail({ person: "Mara Holm", firma: "Holzform e.K.", observations: notes, references: refs, branche: "Schreinerei" });
-  if (!fit) throw new Error("keine Referenzmail");
-  assertEquals(fit.body.includes("Werkstatt Berg"), true);
-  assertEquals(reviewMail(fit.body, { observations: notes, references: refs }).join(","), "");
+  const wagner = [{
+    firma: "Schreinerei Wagner",
+    branche: "Schreinerei",
+    ort: "Kempten",
+    note: "Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.",
+  }];
+  assertEquals(matchingReference(refs, "Schreinerei"), null);
+  assertEquals(matchingReference(wagner, "Schreinerei")?.firma, "Schreinerei Wagner");
+  assertEquals(matchingReference(wagner, "Physiotherapie"), null);
+  const wood = composePeerMail({ person: "Mara Holm", firma: "Beispielbetrieb", observations: notes, references: wagner, branche: "Schreinerei" });
+  if (!wood) throw new Error("keine Referenzmail");
+  assertEquals(wood.body.includes("Schreinerei Wagner"), true);
+  assertEquals(reviewMail(wood.body, { observations: notes, references: wagner }).join(","), "");
   assertEquals(matchingReference(refs, "Bäckerei"), null);
   const fluffy = "Guten Tag Lena,\n\nich hoffe, diese Mail erreicht Sie gut! Unsere innovative Lösung ist maßgeschneidert.\n\nSoll ich Ihnen das kurz zeigen?\n\nViele Grüße\nKim\nViral Outlaws\n\nBitte abmelden.";
   assertEquals(reviewMail(fluffy, { observations: notes, references: refs }).includes(SUBSTANCE_LABEL), true);
-  const invented = plain.body.replace("Soll ich", "Bei Fantasie GmbH war das schon so.\n\nSoll ich");
+  const invented = `Bei Fantasie GmbH war das schon so.\n\n${plain.body}`;
   assertEquals(reviewMail(invented, { observations: notes, references: refs }).includes("Referenz nicht belegt"), true);
   const kept = finalizeMail({
     person: "Lena Muster",

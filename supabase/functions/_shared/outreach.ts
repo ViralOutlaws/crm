@@ -527,6 +527,19 @@ export type Observation = {
   text: string;
   source: string;
   tip: string;
+  impact: string;
+  wert: string;
+};
+
+const IMPACT_RANK: Record<Observation["kind"], number> = {
+  kontakt: 0,
+  buchung: 1,
+  mobil: 2,
+  tempo: 3,
+  social: 4,
+  seo: 5,
+  auftritt: 6,
+  aktualitaet: 8,
 };
 
 export type PortfolioRef = {
@@ -538,15 +551,18 @@ export type PortfolioRef = {
 };
 
 const KIND_MARK: Record<Observation["kind"], RegExp> = {
-  aktualitaet: /jahreszahl|copyright|stand|impressum/i,
-  mobil: /viewport/i,
-  tempo: /defer|skript|srcset|bild/i,
-  kontakt: /formular|telefon/i,
-  buchung: /termin|buchen|abholung|reserv/i,
-  seo: /meta description|h1|überschrift/i,
-  social: /instagram|facebook|linkedin|profil/i,
-  auftritt: /schrift|marquee|font-tag/i,
+  aktualitaet: /gepflegt|impressum/i,
+  mobil: /handy|winzig|bildschirm/i,
+  tempo: /warten|lädt|langsam/i,
+  kontakt: /anfrag|telefon|formular|abends/i,
+  buchung: /termin|buchen/i,
+  seo: /suche|google|überschrift/i,
+  social: /bewertung|profil|vertrauen/i,
+  auftritt: /eindruck|lesen/i,
 };
+
+const JARGON = /viewport|\bdefer\b|\basync\b|\bh1\b|meta description|srcset/i;
+const TEMPLATE_LINE = /das lässt sich ändern, ohne die seite neu zu bauen/i;
 
 const BANNED = /innovativ|maßgeschneidert|massgeschneidert|revolutionär|revolutionaer|ich hoffe, diese mail|einmalig|state of the art|nicht zögern|nicht zoeegern|letzte chance|garantiert|unschlagbar|weltklasse/i;
 
@@ -570,9 +586,14 @@ export function findContactUrl(html: string, base: string): string | null {
 }
 
 function pushObs(out: Observation[], item: Observation) {
-  if (out.some((o) => o.kind === item.kind && o.text === item.text)) return;
-  if (out.length >= 3) return;
+  if (out.some((o) => o.kind === item.kind)) return;
   out.push(item);
+}
+
+export function rankObservations(list: Observation[]): Observation[] {
+  const ranked = [...list].sort((a, b) => (IMPACT_RANK[a.kind] ?? 9) - (IMPACT_RANK[b.kind] ?? 9));
+  const strong = ranked.filter((o) => o.kind !== "aktualitaet");
+  return (strong.length >= MIN_OBSERVATIONS ? strong : ranked).slice(0, 3);
 }
 
 export function observeSite(input: {
@@ -603,6 +624,8 @@ export function observeSite(input: {
         text: `Im Impressum steht als Stand das Jahr ${found}.`,
         source: impText ? impUrl : startUrl,
         tip: `Die Jahreszahl auf ${year} setzen, sobald der Text dazu stimmt.`,
+        impact: "Die Seite wirkt nicht gepflegt.",
+        wert: "Den Stand im Impressum anfassen, wenn der Rest der Seite stimmt.",
       });
     }
   }
@@ -613,6 +636,8 @@ export function observeSite(input: {
       text: "Die Startseite hat kein viewport-Meta.",
       source: startUrl,
       tip: "Im Kopf ein viewport-Meta setzen, damit das Handy die Seite nicht auf Desktop-Breite verkleinert.",
+      impact: "Auf dem Handy wird die Seite winzig dargestellt. Viele Besucher springen da ab.",
+      wert: "Die Seite auf die Breite des Handys einstellen, damit der erste Blick lesbar ist.",
     });
   }
 
@@ -624,6 +649,8 @@ export function observeSite(input: {
       text: `Im Kopf der Startseite liegen ${blocking.length} Skripte ohne defer oder async.`,
       source: startUrl,
       tip: "Diese Skripte mit defer laden, damit der Text vor den Skripten da ist.",
+      impact: "Besucher warten, bevor der Text auf der Seite da ist.",
+      wert: "Die schweren Dateien nach hinten schieben, damit der Text sofort lesbar ist.",
     });
   }
 
@@ -634,6 +661,8 @@ export function observeSite(input: {
       text: `${photos.length} Bilder auf der Startseite haben kein srcset.`,
       source: startUrl,
       tip: "Für die großen Bilder eine kleinere Variante fürs Handy hinterlegen.",
+      impact: "Auf dem Handy werden große Fotos geladen. Das dauert, und Leute warten nicht.",
+      wert: "Fürs Handy kleinere Fotos ausliefern, damit die Seite nicht hängt.",
     });
   }
 
@@ -647,6 +676,8 @@ export function observeSite(input: {
       text: "Ein Formular liegt erst auf der Kontaktseite, nicht im ersten Blick der Startseite.",
       source: contactUrl,
       tip: "Den Link zum Formular neben die Telefonnummer in den ersten Bildschirm auf dem Handy setzen.",
+      impact: "Wer anfragen will, muss die Kontaktseite erst suchen.",
+      wert: "Telefon und den Weg zur Anfrage in den ersten Blick auf dem Handy legen.",
     });
   } else if (!formOnStart && !formElsewhere && hasTel) {
     pushObs(out, {
@@ -654,6 +685,8 @@ export function observeSite(input: {
       text: "Auf den gelesenen Seiten gibt es eine Telefonnummer und kein Formular.",
       source: startUrl,
       tip: "Unter die Telefonnummer ein Formular mit Name, Rückruf und Anliegen setzen, das eine Mail schickt.",
+      impact: "Wer abends anfragen will, findet nur eine Telefonnummer.",
+      wert: "Ein kurzes Formular mit Name und Anliegen fängt die Anfrage auf, auch wenn niemand rangeht.",
     });
   }
 
@@ -663,7 +696,9 @@ export function observeSite(input: {
       kind: "buchung",
       text: "Auf den gelesenen Seiten steht kein Link mit Termin, Buchen oder Reservierung.",
       source: startUrl,
-      tip: "Wenn Termine vorkommen, auf die Startseite einen Link Termin anfragen setzen, der das Formular öffnet.",
+      tip: "Wenn Termine vorkommen, auf die Startseite einen Weg Termin anfragen setzen.",
+      impact: "Einen Termin kann man auf der Seite nicht hinterlegen.",
+      wert: "Einen sichtbaren Weg 'Termin anfragen' auf die Startseite setzen.",
     });
   }
 
@@ -673,13 +708,17 @@ export function observeSite(input: {
       text: "Die Startseite hat keine meta description.",
       source: startUrl,
       tip: "Eine meta description mit einem Satz schreiben: was der Betrieb macht und wo er sitzt.",
+      impact: "In der Google-Suche fehlt ein Satz, was der Betrieb macht und wo er sitzt.",
+      wert: "Diesen einen Satz hinterlegen, damit die Suche nicht nur den Seitentitel zeigt.",
     });
   } else if (!/<h1\b/i.test(input.pageHtml || "")) {
     pushObs(out, {
       kind: "seo",
       text: "Die Startseite hat kein h1.",
       source: startUrl,
-      tip: "Genau eine Überschrift h1 mit dem Gewerk und dem Ort setzen.",
+      tip: "Genau eine Überschrift mit dem Gewerk und dem Ort setzen.",
+      impact: "Auf der Startseite fehlt eine klare Überschrift, was Sie anbieten.",
+      wert: "Eine Überschrift mit Gewerk und Ort, damit Besucher in wenigen Sekunden wissen, wo sie sind.",
     });
   }
 
@@ -689,6 +728,8 @@ export function observeSite(input: {
       text: "Die Startseite nutzt noch font- oder marquee-Tags.",
       source: startUrl,
       tip: "Diese Tags entfernen und die gleiche Aussage als normalen Text lassen.",
+      impact: "Der erste Eindruck der Seite wirkt aus einer anderen Zeit.",
+      wert: "Den laufenden Text als normalen Absatz setzen, ohne Laufschrift.",
     });
   }
 
@@ -697,11 +738,13 @@ export function observeSite(input: {
       kind: "social",
       text: "Auf den gelesenen Seiten liegt kein Link zu Instagram, Facebook oder LinkedIn.",
       source: startUrl,
-      tip: "Falls ein Profil existiert, den Link in den Footer setzen. Sonst den Punkt lassen.",
+      tip: "Falls Bewertungen oder ein Profil existieren, den Link in den Fuß der Seite setzen.",
+      impact: "Vor dem Anruf sieht man keine Bewertungen und keinen Weg zu einem Profil.",
+      wert: "Einen Link zu den Bewertungen in den Fuß der Seite setzen, falls es welche gibt.",
     });
   }
 
-  return out.slice(0, 3);
+  return rankObservations(out);
 }
 
 export function wordCount(text: string): number {
@@ -716,29 +759,58 @@ function tokens(s: string): string[] {
     .filter((w) => w.length >= 5);
 }
 
+function carpentryName(value: string): boolean {
+  return /schrein|tischler|möbel|moebel/.test(value.toLowerCase());
+}
+
 export function matchingReference(refs: PortfolioRef[], branche?: string | null): PortfolioRef | null {
   const want = tokens(String(branche || ""));
   if (!want.length) return null;
   const hit = (refs || []).find((r) => {
     const note = String(r.note || "").trim();
     if (note.length < 12 || !r.firma) return false;
-    const bag = tokens(`${r.branche || ""} ${note}`);
-    return want.some((w) => bag.includes(w));
+    const bag = tokens(`${r.branche || ""} ${note} ${r.firma}`);
+    if (!want.some((w) => bag.includes(w))) return false;
+    const blob = `${r.firma} ${r.branche || ""} ${branche || ""}`;
+    if (carpentryName(blob) && !/schreinerei wagner/i.test(r.firma)) return false;
+    return true;
   });
   return hit || null;
+}
+
+export function mailGreeting(person: string, rolle?: string | null): string {
+  const parts = String(person || "").split(/\s+/).filter((p) => p && !/^(von|van|de|der|und)$/i.test(p));
+  const last = parts[parts.length - 1] || "";
+  const full = parts.join(" ");
+  const role = String(rolle || "").toLowerCase();
+  const female = /führerin|fuehrerin|inhaberin|vorsitzende/.test(role);
+  const male = !female && /führer|fuhrer|inhaber|vorsitzender/.test(role);
+  if (female && last) return `Guten Tag Frau ${last},`;
+  if (male && last) return `Guten Tag Herr ${last},`;
+  if (parts.length >= 2) return `Guten Tag ${full},`;
+  return "Guten Tag,";
+}
+
+function greetingOk(text: string): boolean {
+  const line = String(text || "").split("\n").map((s) => s.trim()).find(Boolean) || "";
+  if (/^Guten Tag Frau [\p{L}'’\-]+,/u.test(line)) return true;
+  if (/^Guten Tag Herr [\p{L}'’\-]+,/u.test(line)) return true;
+  if (/^Guten Tag [\p{L}'’\-]+ [\p{L}'’\-]+,/u.test(line)) return true;
+  if (line === "Guten Tag,") return true;
+  return false;
 }
 
 export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[] }): string[] {
   const issues: string[] = [];
   const text = String(body || "");
-  const used = (input.observations || []).slice(0, 3);
-  const bullets = text.split("\n").map((l) => l.trim()).filter((l) => /^[-–]/.test(l));
-  const covered = used.filter((o) => KIND_MARK[o.kind]?.test(bullets.join("\n") || text));
-  const actions = text.match(/setzen|ergänzen|laden|geben|öffnen|schickt|schreiben|entfernen|hinterlegen/gi) || [];
-  const value = (bullets.length >= 2 && covered.length >= 2) || (covered.length >= 2 && actions.length >= 2);
-  if (used.length < MIN_OBSERVATIONS || !value) issues.push(SUBSTANCE_LABEL);
+  const used = rankObservations(input.observations || []);
+  const covered = used.filter((o) => KIND_MARK[o.kind]?.test(text));
+  const value = /formular|anfrage|telefon|handy|termin|suche|bewertung|warten|lesbar|zurückrufen|zurueckrufen/i.test(text);
+  if (used.length < MIN_OBSERVATIONS || covered.length < 1 || !value) issues.push(SUBSTANCE_LABEL);
   if (/!/.test(text)) issues.push("Ausrufezeichen");
   if (BANNED.test(text)) issues.push("Werbesprache");
+  if (JARGON.test(text) || TEMPLATE_LINE.test(text)) issues.push("Fachsprache");
+  if (!greetingOk(text)) issues.push("Anrede");
   if (wordCount(text) > MAIL_WORD_MAX) issues.push("Länge");
   if (/\b(du|dein(?:e|en|em|er)?|dir|dich|euch|euer|eure)\b/i.test(text)) issues.push("Sie");
   if (!/\?/.test(text)) issues.push("Frage fehlt");
@@ -756,37 +828,60 @@ export function reviewMail(body: string, input: { observations: Observation[]; r
   return issues;
 }
 
+const SUBJECT_FOR: Record<Observation["kind"], string> = {
+  kontakt: "Anfragen am Abend",
+  buchung: "Termine auf Ihrer Seite",
+  mobil: "Ihre Seite auf dem Handy",
+  tempo: "Besucher, die nicht warten",
+  social: "Vor dem ersten Anruf",
+  seo: "Wie Sie in der Suche dastehen",
+  auftritt: "Der erste Eindruck",
+  aktualitaet: "Ein Blick auf Ihre Seite",
+};
+
+function shapeOf(firma: string): number {
+  let n = 0;
+  for (const c of firma) n = (n + c.charCodeAt(0)) % 3;
+  return n;
+}
+
 export function composePeerMail(input: {
   person: string;
   firma: string;
+  rolle?: string | null;
   observations: Observation[];
   references?: PortfolioRef[];
   branche?: string | null;
 }): { subject: string; body: string; observations: Observation[] } | null {
-  const used = (input.observations || []).slice(0, 3);
+  const used = rankObservations(input.observations || []).slice(0, 2);
   if (used.length < MIN_OBSERVATIONS) return null;
-  const first = String(input.person || "").split(/\s+/).filter(Boolean)[0] || "";
-  const anrede = first ? `Guten Tag ${first},` : "Guten Tag,";
-  const firma = input.firma || "der Website";
-  const opening = used.slice(0, 2).map((o, i) => {
-    const sentence = o.text.replace(/\.$/, "");
-    return i === 0 ? sentence : sentence.charAt(0).toLowerCase() + sentence.slice(1);
-  }).join(", und ");
-  const bullets = used.map((o) => `- ${o.tip.replace(/\.$/, "")}.`);
-  const ref = matchingReference(input.references || [], input.branche);
-  const refLine = ref
-    ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} lag derselbe Punkt: ${String(ref.note).trim()}`
+  const lead = used[0];
+  const second = used[1];
+  const anrede = mailGreeting(input.person, input.rolle);
+  const firma = input.firma || "Ihrem Betrieb";
+  const shape = shapeOf(firma);
+  const question = [
+    "Soll ich Ihnen das kurz aufschreiben?",
+    "Soll ich den Ablauf in ein paar Sätzen skizzieren?",
+    "Darf ich Ihnen dazu eine knappe Skizze schicken?",
+  ][shape];
+  const ai = (lead.kind === "kontakt" || lead.kind === "buchung") && shape !== 1
+    ? "Was Zeit kostet, sind die Rückrufe. Wenn das Formular Anliegen und Wunschzeit schon abfragt, rufen Sie nur die passenden Leute an."
     : "";
+  const ref = matchingReference(input.references || [], input.branche);
+  const refLine = ref ? `Bei ${ref.firma}${ref.ort ? ` in ${ref.ort}` : ""} war es ähnlich: ${String(ref.note).trim()}` : "";
+  const middle = shape === 0
+    ? [lead.impact, "", [lead.wert, second?.wert, ai].filter(Boolean).join(" ")]
+    : shape === 1
+    ? [lead.wert, "", `Der Anlass: ${lead.impact.charAt(0).toLowerCase()}${lead.impact.slice(1)} ${second?.impact || ""}`.trim()]
+    : [`ich habe mir ${firma} angesehen. ${lead.impact}`, "", [lead.wert, ai].filter(Boolean).join(" ")];
   let body = [
     anrede,
     "",
-    `auf der Seite von ${firma}: ${opening}.`,
-    "",
-    "Das lässt sich ändern, ohne die Seite neu zu bauen:",
-    ...bullets,
+    ...middle,
     ...(refLine ? ["", refLine] : []),
     "",
-    "Soll ich Ihnen das kurz zeigen?",
+    question,
     "",
     "Wenn Sie keine weiteren Nachrichten möchten, antworten Sie kurz mit „Bitte abmelden“.",
     "",
@@ -794,11 +889,8 @@ export function composePeerMail(input: {
     "Kim",
     "Viral Outlaws",
   ].join("\n");
-  if (refLine && wordCount(body) > MAIL_WORD_MAX) {
-    body = body.replace(`\n\n${refLine}`, "");
-  }
-  const subject = `${firma}: ${used[0].text.replace(/\.$/, "")}`.slice(0, 140);
-  return { subject, body, observations: used };
+  if (refLine && wordCount(body) > MAIL_WORD_MAX) body = body.replace(`\n\n${refLine}`, "");
+  return { subject: SUBJECT_FOR[lead.kind], body, observations: used };
 }
 
 export function parseMailJson(raw: string | null): { subject: string; body: string } | null {
@@ -871,13 +963,14 @@ export function fallbackMail(input: { person: string; firma: string; web: string
 
 export function draftInstructions(): string {
   return [
-    "Schreibe eine kurze Mail auf Deutsch, als Fachkollege, nicht als Verkäufer.",
-    "Siezen. Anrede: Guten Tag und der Vorname, wenn er bekannt ist.",
-    "Höchstens 120 Wörter.",
-    "Anfang: ein sachlicher Satz zu einer Beobachtung aus der Liste, mit der Seite.",
-    "Dann zwei oder drei konkrete Punkte, die der Betrieb selbst umsetzen kann. Jeder Punkt nennt die Änderung. Die Mail muss auch ohne Antwort nützlich sein.",
-    "Eine Referenz nur, wenn sie in der Liste steht und zum Gewerk passt. Sonst weglassen. Nichts erfinden, keine Zahlen, die nicht in den Beobachtungen stehen.",
-    "Schlussfrage ohne Druck, zum Beispiel: Soll ich Ihnen das kurz zeigen?",
+    "Schreibe eine kurze Mail auf Deutsch, als Fachkollege, nicht als Verkäufer. Sie soll sich lesen, als wäre sie einzeln geschrieben.",
+    "Anrede: Guten Tag Frau Nachname oder Guten Tag Herr Nachname. Ist das Geschlecht unklar, den vollen Namen: Guten Tag Vorname Nachname. Nie nur den Vornamen, wenn du siezt.",
+    "Höchstens 120 Wörter. Keine Aufzählung und kein fester Satz wie 'Das lässt sich ändern, ohne die Seite neu zu bauen'.",
+    "Der Einstieg ist der Punkt mit dem größten Hebel für den Betrieb: verlorene Anfragen, fehlende Terminbuchung, schlechte Handy-Ansicht, fehlende Bewertungen. Nicht das Jahr im Impressum.",
+    "Sprich in der Sprache der Inhaberin. Kein viewport, kein defer, kein h1, keine meta description. Diese Technik bleibt draußen.",
+    "Gib einen konkreten Hinweis, den der Betrieb auch ohne Antwort nutzen kann. Optional ein Satz, was ein kleines Formular an Rückrufen spart.",
+    "Eine Referenz nur, wenn sie unten wörtlich genannt ist. Nichts erfinden. Schreinerei oder Möbel nur, wenn die Referenz genau Schreinerei Wagner heißt.",
+    "Betreff kurz und neugierig, kein Technikbefund.",
     "Keine Wörter wie innovativ, maßgeschneidert, revolutionär. Kein 'Ich hoffe, diese Mail erreicht Sie gut'. Keine Ausrufezeichen.",
     "Abschluss: Viele Grüße, Kim, Viral Outlaws, und der Satz mit „Bitte abmelden“.",
     "Antworte nur als JSON: {\"subject\":\"...\",\"body\":\"...\"}",
@@ -899,16 +992,18 @@ export function draftUserPrompt(input: {
   const refs = fit
     ? `Nur diese Referenz darf vorkommen, und nur wenn sie in den Satz passt: ${fit.firma}, ${fit.branche || ""}, ${fit.ort || ""}. Punkt: ${fit.note}`
     : "Keine passende Referenz. Keinen Kundennamen nennen.";
-  const notes = input.observations.map((o, i) => `${i + 1}. ${o.text} Quelle: ${o.source}. Tipp: ${o.tip}`).join("\n");
+  const ranked = rankObservations(input.observations);
+  const notes = ranked.map((o, i) => `${i + 1}. So in der Mail: ${o.impact} Nutzen: ${o.wert}. Intern, nicht in die Mail schreiben: ${o.text}`).join("\n");
   return [
     draftInstructions(),
     "Wissensbasis:",
     rules,
     refs,
+    `Anrede genau so: ${mailGreeting(input.person, input.rolle)}`,
     `Firma: ${input.firma}`,
     `Person: ${input.person} (${input.rolle})`,
     `Website: ${input.web}`,
-    "Beobachtungen, nur diese:",
+    "Beobachtungen, der erste Punkt ist der Hebel:",
     notes,
   ].join("\n\n");
 }

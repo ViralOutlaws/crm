@@ -47,6 +47,10 @@ verify_jwt = false
 [functions.outreach-reply]
 verify_jwt = false
 
+# Nachtlauf für Suche und Entwürfe. Prüft das Nutzer-JWT selbst, der Cron den Header x-outreach-cron.
+[functions.outreach-night]
+verify_jwt = false
+
 [functions.deal-estimate]
 verify_jwt = false
 
