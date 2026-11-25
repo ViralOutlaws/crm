@@ -64,3 +64,5 @@ Migrationen angewendet, Funktionen ausgerollt, `OUTREACH_CRON_SECRET` als Functi
 Neue Migration ausrollen: Datei unter `supabase/migrations` anwenden, dann die betroffenen Funktionen mit `supabase functions deploy <name> --use-api` neu ausrollen.
 
 Die Demo unter `/?demo=outreach` zeigt erfundene Firmen auf `.example.test` und verschickt nichts.
+
+Hinweis Pages-Deploy: Die Läufe vom 25.11. sind am bekannten Artefakt-Race gescheitert (actions/deploy-pages#451, Upload und Deploy im selben Job). Abhilfe: in `.github/workflows/deploy.yml` Upload und Deploy in zwei Jobs trennen (`deploy` mit `needs: build`). Das braucht ein Token mit `workflow`-Scope.
