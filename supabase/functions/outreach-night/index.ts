@@ -72,13 +72,13 @@ async function overpass(query: string): Promise<{ ok: true; urls: { url: string;
     if (Date.now() - started > 45000) break;
     const host = new URL(endpoint).host;
     try {
+      // Kein "accept"-Header: overpass-api.de antwortet darauf mit 406 Not Acceptable.
       const res = await fetch(endpoint, {
         method: "POST",
         signal: AbortSignal.timeout(15000),
         headers: {
-          "user-agent": "ViralOutlawsCRM/outreach (+https://www.viraloutlaws.de)",
+          "user-agent": "ViralOutlawsCRM/1.0 (+https://www.viraloutlaws.de; info@viraloutlaws.de)",
           "content-type": "application/x-www-form-urlencoded",
-          "accept": "application/json",
         },
         body: `data=${encodeURIComponent(query)}`,
       });
