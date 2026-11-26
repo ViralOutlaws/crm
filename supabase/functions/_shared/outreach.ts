@@ -645,6 +645,16 @@ export function referencedIds(header: string): string[] {
   return (blob.match(/<?[^\s<>]+@[^>\s]+>?/g) || []).map(normalizeMessageId);
 }
 
+export function senderMatchesDraft(fromEmail: string, draftEmail: string): boolean {
+  const from = String(fromEmail || "").trim().toLowerCase();
+  const to = String(draftEmail || "").trim().toLowerCase();
+  if (!from || !to || !from.includes("@")) return false;
+  if (from === to) return true;
+  const a = from.split("@")[1].replace(/^www\./, "");
+  const b = (to.split("@")[1] || "").replace(/^www\./, "");
+  return !!a && a === b && !FREEMAIL.test(a);
+}
+
 export function replyPlan(input: {
   fromEmail: string;
   subject: string;
@@ -662,6 +672,8 @@ export function replyPlan(input: {
     hit = open.find((d) => d.email.toLowerCase() === from && key.length > 0 && threadKey(d.subject) === key);
   }
   if (!hit) return null;
+  // Nur Mails von der angeschriebenen Adresse (oder derselben Firmen-Domain) landen im CRM.
+  if (!senderMatchesDraft(input.fromEmail, hit.email)) return null;
   if (input.auto) {
     // Abwesenheitsnotiz: sichtbar, aber keine echte Antwort und nie eine Sperre.
     return { draftId: hit.id, contactId: hit.contactId || null, nextStatus: hit.status as "antwort" | "abgemeldet" | "gesendet", blockEmail: null, unread: true, auto: true };

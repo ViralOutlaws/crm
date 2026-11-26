@@ -106,7 +106,7 @@ Pages-Deploy für PR #31 (vo-crm-v18) neu angestoßen.
 - Frühere Auto-Kontakte (KD-10062 bis KD-10086) tragen `meta.outreach_auto = true`; sie wurden nicht gelöscht.
 
 ### Antworten abholen (26.11.2026)
-- Cron `outreach-replies` ruft alle 2 Minuten `mail-sync` mit `{"op":"outreach"}` auf (Header `x-outreach-cron`). Gelesen werden Posteingang, Spam und Papierkorb ab einem eigenen Zeiger (`outreach_mail_cursor`). Gespeichert werden nur Antworten auf Outreach-Mails (Message-ID oder Absender plus Betreff), in `outreach_messages`. Keine anderen Mails, kein Kontakt, keine Auto-Antwort.
+- Cron `outreach-replies` ruft alle 2 Minuten `mail-sync` mit `{"op":"outreach"}` auf (Header `x-outreach-cron`). Gelesen werden Posteingang, Spam und Papierkorb ab einem eigenen Zeiger (`outreach_mail_cursor`). Gespeichert werden nur Antworten auf Outreach-Mails (Message-ID oder Absender plus Betreff), in `outreach_messages`. Der Absender muss die angeschriebene Adresse sein oder dieselbe Firmen-Domain haben (bei Freemail nur die exakte Adresse). Auch der alte Sync (`op: sync`) speichert nichts anderes mehr. Keine anderen Mails, kein Kontakt, keine Auto-Antwort.
 - Abwesenheitsnotizen (Auto-Submitted, X-Autoreply, Precedence, Betreff) bekommen `auto = true`: im Postfach mit Filter „Automatisch“, Status bleibt „Gesendet“, keine Sperre.
 - Öffnen des Postfach-Tabs holt sofort ab (höchstens einmal pro Minute).
 - Nachholen: `{"op":"outreach","sinceDays":3,"allFolders":true}` liest alle Ordner außer Gesendet/Entwürfe.

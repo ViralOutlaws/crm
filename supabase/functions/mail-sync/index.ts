@@ -180,6 +180,9 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
   const email = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
   const readable = mailBodyText(mail.header, mail.text);
   const plan = replyPlan({ fromEmail: email, subject, text: readable, header: mail.header, drafts: outreachThreads, auto: isAutoReply(mail.header, subject) });
+  // Kims Vorgabe: Im CRM landen nur Antworten von angeschriebenen Adressen. Alles andere bleibt nur im Postfach.
+  if (!plan) return false;
+  void outreachParties;
   const match = await matchContact(sb, workspaceId, [email, to, cc].join(" "), mail.text);
   const klass = classifyHeuristic(`${subject}\n${mail.text}`, match.certain || !!plan?.contactId);
   const { data: conv } = await sb.from("conversations").insert({
@@ -211,27 +214,14 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
     imap_uid: mail.uid,
     imap_folder: folder,
   });
-  if (plan) {
+  {
     try {
       await recordReply(sb, workspaceId, plan, { from, to, subject, text: readable, header: mail.header, uid: mail.uid, folder }, conv.id);
       const linked = outreachThreads.find((t) => t.id === plan.draftId);
       if (linked) linked.status = plan.nextStatus;
     } catch { /* Zuordnung darf den Sync nicht stoppen */ }
   }
-  const senderDomain = (email.split("@")[1] || "").replace(/^www\./, "");
-  const fromOutreach = outreachParties.emails.has(email) || (!!senderDomain && outreachParties.domains.has(senderDomain));
-  // Antworten auf Outreach legen keinen Kontakt an. Den legt Kim im Outreach-Modul per „Als Kontakt übernehmen“ an.
-  if (!plan && !fromOutreach && klass === "anfrage" && !match.id) {
-    const created = await sb.from("contacts").insert({
-      workspace_id: workspaceId,
-      firma: email || subject.slice(0, 80),
-      email,
-      status: "lead",
-      quelle: "email",
-      status_seit: new Date().toISOString(),
-    }).select("id").single();
-    if (created.data?.id) await sb.from("conversations").update({ contact_id: created.data.id }).eq("id", conv.id);
-  }
+  // Kein automatischer Kontakt: den legt Kim im Outreach-Modul per „Als Kontakt übernehmen“ an.
   return true;
 }
 
