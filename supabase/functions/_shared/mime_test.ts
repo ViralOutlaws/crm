@@ -40,7 +40,7 @@ Deno.test("replyPlan: Autoreply bleibt gesendet und sperrt nie", () => {
   assertEquals(plan?.auto, true);
   assertEquals(plan?.nextStatus, "gesendet");
   assertEquals(plan?.blockEmail, null);
-  const real = replyPlan({ fromEmail: "x@y.de", subject: "Re: egal", text: "Gern, Dienstag passt.", header: "In-Reply-To: <outreach.d1.1@viraloutlaws.de>\r\n", drafts });
+  const real = replyPlan({ fromEmail: "chef@schalander-kempten.de", subject: "Re: egal", text: "Gern, Dienstag passt.", header: "In-Reply-To: <outreach.d1.1@viraloutlaws.de>\r\n", drafts });
   assertEquals(real?.nextStatus, "antwort");
   assertEquals(real?.auto, false);
 });
