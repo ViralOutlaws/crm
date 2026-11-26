@@ -505,6 +505,14 @@
     </article>`;
   }
 
+  // Ohne Auswahl gibt der Knopf alle Entwürfe frei (nach Rückfrage). Vorher passierte dann still nichts.
+  function approveLabel() {
+    const picked = Object.keys(state.picked).filter((id) => state.picked[id] && draftOf(id)?.status === 'entwurf').length;
+    if (picked) return `Ausgewählte freigeben (${picked})`;
+    const all = state.drafts.filter((d) => d.status === 'entwurf').length;
+    return all ? `Alle Entwürfe freigeben (${all})` : 'Ausgewählte freigeben';
+  }
+
   function queueHtml() {
     const rows = state.drafts.filter((d) => {
       if (state.queue === 'alle') return true;
@@ -514,7 +522,7 @@
     const waiting = state.drafts.filter((d) => d.status === 'freigegeben').length;
     return `<div class="outreach-row" style="margin-bottom:8px">
       <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.queue === id ? 'on' : ''}" onclick="outreachQueue('${id}')">${label}</button>`).join('')}</div>
-      <button type="button" class="btn-ghost" onclick="outreachApproveMany()">${ico('check', 14)} Ausgewählte freigeben</button>
+      <button type="button" class="btn-ghost" id="outreach-approve-many" onclick="outreachApproveMany()">${ico('check', 14)} <span>${approveLabel()}</span></button>
       <button type="button" class="btn-yellow" id="outreach-send-all" onclick="outreachSendNowAll()" ${state.sending || !waiting ? 'disabled' : ''}>${state.sending ? '<span class="outreach-spin" aria-hidden="true"></span>Sendet …' : ico('mail', 14) + ' Alle freigegebenen jetzt senden (' + waiting + ')'}</button>
       <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.paused ? 'checked' : ''} onchange="outreachPause(this.checked)"> Versand pausieren</label>
     </div>
@@ -792,7 +800,11 @@
     } catch (_) { /* Liste lädt beim nächsten Öffnen */ }
     render();
   };
-  window.outreachPick = function (id, on) { state.picked[id] = !!on; };
+  window.outreachPick = function (id, on) {
+    state.picked[id] = !!on;
+    const label = document.querySelector('#outreach-approve-many span');
+    if (label) label.textContent = approveLabel();
+  };
   window.outreachEdit = function (id) { state.editorId = id; state.tab = 'freigabe'; render(); };
   // Schließen per X, Escape oder Klick auf den Hintergrund. Ungespeicherte Änderungen werden vorher gespeichert.
   window.outreachCloseEdit = async function () {
@@ -879,33 +891,46 @@
     const d = draftOf(id);
     if (!d) return;
     if (d.email_art === 'vermutet' && !d.guess_ok) { toast('Vermutete Adresse zuerst im Entwurf ankreuzen.', true); return; }
-    d.status = 'freigegeben';
-    d.approved_at = new Date().toISOString();
-    if (!state.demo && signedIn()) {
+    const at = new Date().toISOString();
+    if (!state.demo) {
+      if (!signedIn()) { toast('Bitte anmelden.', true); return; }
       const sb = await getSupabase();
-      const { error } = await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: d.approved_at, subject: d.subject, body: d.body, guess_ok: !!d.guess_ok, updated_at: d.approved_at }).eq('id', id);
-      if (error) { toast(error.message, true); return; }
+      const { data, error } = await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: at, subject: d.subject, body: d.body, guess_ok: !!d.guess_ok, updated_at: at }).eq('id', id).select('id');
+      if (error || !data || !data.length) { toast('Nicht freigegeben: ' + (error ? error.message : 'Entwurf wurde nicht gespeichert.'), true); return; }
     }
-    toast('Freigegeben. Noch nicht gesendet.');
+    d.status = 'freigegeben';
+    d.approved_at = at;
+    d._dirty = false;
+    toast(state.settings.paused ? 'Freigegeben. Versand ist pausiert.' : 'Freigegeben. Geht im Versandfenster automatisch raus.');
     state.editorId = null;
     render();
   };
   window.outreachApproveMany = async function () {
-    const ids = Object.keys(state.picked).filter((id) => state.picked[id]);
-    let n = 0;
-    for (const id of ids) {
-      const d = draftOf(id);
-      if (!d || d.status !== 'entwurf') continue;
-      if (d.email_art === 'vermutet' && !d.guess_ok) continue;
-      d.status = 'freigegeben';
-      d.approved_at = new Date().toISOString();
-      n += 1;
-      if (!state.demo && signedIn()) {
-        const sb = await getSupabase();
-        await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: d.approved_at, guess_ok: !!d.guess_ok }).eq('id', id);
-      }
+    let ids = Object.keys(state.picked).filter((id) => state.picked[id] && draftOf(id)?.status === 'entwurf');
+    if (!ids.length) {
+      const all = state.drafts.filter((d) => d.status === 'entwurf').map((d) => d.id);
+      if (!all.length) { toast('Keine Entwürfe zum Freigeben.', true); return; }
+      if (!window.confirm(`Keine Entwürfe ausgewählt. Alle ${all.length} Entwürfe freigeben?`)) return;
+      ids = all;
     }
-    toast(n ? n + ' freigegeben.' : 'Nichts freigegeben. Vermutungen brauchen ein eigenes Häkchen.');
+    const skipped = ids.filter((id) => { const d = draftOf(id); return d.email_art === 'vermutet' && !d.guess_ok; });
+    ids = ids.filter((id) => !skipped.includes(id));
+    if (!ids.length) { toast('Nichts freigegeben. Vermutete Adressen brauchen ein eigenes Häkchen im Entwurf.', true); return; }
+    const at = new Date().toISOString();
+    let done = ids;
+    if (!state.demo) {
+      if (!signedIn()) { toast('Bitte anmelden.', true); return; }
+      const sb = await getSupabase();
+      const { data, error } = await sb.from('outreach_drafts').update({ status: 'freigegeben', approved_at: at, updated_at: at }).in('id', ids).eq('status', 'entwurf').select('id');
+      if (error) { toast('Nicht freigegeben: ' + error.message, true); return; }
+      done = (data || []).map((r) => r.id);
+    }
+    for (const id of done) { const d = draftOf(id); if (d) { d.status = 'freigegeben'; d.approved_at = at; d._dirty = false; } state.picked[id] = false; }
+    const miss = ids.length - done.length;
+    const parts = [done.length + ' freigegeben'];
+    if (miss) parts.push(miss + ' nicht gespeichert');
+    if (skipped.length) parts.push(skipped.length + ' vermutete Adresse übersprungen');
+    toast(parts.join(', ') + (state.settings.paused ? '. Versand ist pausiert.' : '. Gehen im Versandfenster automatisch raus.'), !!miss || !done.length);
     render();
   };
   window.outreachReject = async function (id) {
@@ -950,6 +975,10 @@
   window.outreachPause = async function (on) {
     state.settings.paused = !!on;
     await window.outreachSaveSettings();
+    // Pause aus heißt nicht freigegeben: Hinweis, wenn noch nichts zum Versand bereitliegt.
+    const ready = state.drafts.filter((d) => d.status === 'freigegeben').length;
+    const open = state.drafts.filter((d) => d.status === 'entwurf').length;
+    if (!on && !ready && open) toast(`Versand ist an, aber noch nichts freigegeben. ${open} Entwürfe warten auf „Freigeben“.`, true);
   };
   // "Jetzt senden": nur freigegebene Entwürfe, nach Bestätigung, ohne Versandfenster und Abstand.
   window.outreachSendNow = function (ids) {
