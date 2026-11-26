@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
         });
         const best = preferredPerson(read.people) || read.people[0];
         let skip = best
-          ? outreachSkip({ email: best.email, domain: read.domain, ...known })
+          ? outreachSkip({ email: best.email, domain: read.domain, ...known, firma: read.firma })
           : "Kein Ansprechpartner und keine Adresse gefunden";
         let status = skip ? (best ? "uebersprungen" : "fehler") : "recherchiert";
         if (!skip && observations.length < MIN_OBSERVATIONS) {

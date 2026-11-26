@@ -20,6 +20,17 @@ import {
   readCompany,
   replyPlan,
   reviewMail,
+  placeIssues,
+  emailFitsSite,
+  plausibleName,
+  extractPeople,
+  extractCompany,
+  verifyBranche,
+  brancheFromKind,
+  firmKey,
+  emptyContacted,
+  addContacted,
+  mailGreeting,
   sendDecision,
   splitUrls,
   withinSendWindow,
@@ -233,12 +244,12 @@ Deno.test("Die Mail: Anlass, Szene, Vorstellung, Terminfrage, Opt-out, P.S. und 
     ort: "Immenstadt",
     note: "Anfragen kamen per Telefon, ein Formular nimmt Maß und Terminwunsch auf.",
   }];
-  const ctx = { person: "Lena Muster", rolle: "Geschäftsführerin", firma: "Musterwerk GmbH", web: "https://musterwerk.example.test/", observations: notes, references: refs, branche: "Maschinenbau und Industrie", query: "Maschinenbau und Industrie · Ulm" };
+  const ctx = { person: "Lena Muster", rolle: "Geschäftsführerin", firma: "Musterwerk GmbH", web: "https://musterwerk.example.test/", observations: notes, references: refs, branche: "Maschinenbau und Industrie", query: "Maschinenbau und Industrie · Berlin-Mitte", ort: "Ulm", plz: "89073" };
   const plain = composePeerMail(ctx);
   if (!plain) throw new Error("keine Mail");
   const anlass = anlassSatz(ctx);
   assertEquals(anlass, "bei einer Recherche nach Maschinenbau-Unternehmen in Ulm bin ich auf Ihre Website gestoßen.");
-  assertEquals(reviewMail(plain.body, { observations: notes, references: refs, anlass }).join(","), "");
+  assertEquals(reviewMail(plain.body, { observations: notes, references: refs, anlass, ort: "Ulm", plz: "89073" }).join(","), "");
   assertEquals(plain.body.startsWith("Guten Tag Frau Muster,"), true);
   assertEquals(plain.body.includes("Werkstatt Berg"), false);
   assertEquals(plain.body.includes("Kim Lukas Tobler von Viral Outlaws"), true);
@@ -270,7 +281,7 @@ Deno.test("Die Mail: Anlass, Szene, Vorstellung, Terminfrage, Opt-out, P.S. und 
   const wood = composePeerMail({ ...ctx, person: "Mara Holm", rolle: "Inhaberin", references: wagner, branche: "Schreinerei", query: "" });
   if (!wood) throw new Error("keine Referenzmail");
   assertEquals(wood.body.includes("Schreinerei Wagner"), true);
-  assertEquals(reviewMail(wood.body, { observations: notes, references: wagner }).filter((i) => i !== "Länge").join(","), "");
+  assertEquals(reviewMail(wood.body, { observations: notes, references: wagner, ort: "Ulm" }).filter((i) => i !== "Länge").join(","), "");
   assertEquals(matchingReference(refs, "Bäckerei"), null);
   const fluffy = "Guten Tag Lena,\n\nich hoffe, diese Mail erreicht Sie gut! Unsere innovative Lösung ist maßgeschneidert.\n\nSoll ich Ihnen das kurz zeigen?\n\nViele Grüße\nKim\nViral Outlaws";
   assertEquals(reviewMail(fluffy, { observations: notes, references: refs }).includes(SUBSTANCE_LABEL), true);
@@ -298,4 +309,58 @@ Deno.test("Signatur: Adresse und Impressum, zählt nicht zur Wortzahl", () => {
   assertEquals(mailWords(out), mailWords(body));
   assertEquals(withSignature(out, sig), out);
   assertEquals(stripSignature(out), body);
+});
+
+Deno.test("Gate: Ort im Text muss zum Impressum passen (be-fo.de-Fall)", () => {
+  const body = "Guten Tag,\n\nbei einer Recherche nach Kanzleien in Berlin-Mitte bin ich auf Ihre Website gestoßen.\n\nText.\n\nViele Grüße\nKim";
+  assertEquals(placeIssues(body, "Kahl am Main", "63796").length > 0, true);
+  assertEquals(placeIssues(body, "Berlin", "10115").length > 0, true);
+  assertEquals(placeIssues(body, "", "").length > 0, true);
+  const ok = "Guten Tag,\n\nbei einer Recherche nach Betrieben in Memmingen bin ich auf Ihre Website gestoßen.\n\nViele Grüße\nKim";
+  assertEquals(placeIssues(ok, "Memmingen", "87700"), []);
+  assertEquals(placeIssues(ok, "Kempten", "87435").length > 0, true);
+  assertEquals(placeIssues("Guten Tag,\n\nIhre Gäste aus München suchen.\n", "Füssen", "87629").length > 0, true);
+  assertEquals(placeIssues("Guten Tag,\n\nim Allgäu.\n", "Füssen", "87629"), []);
+});
+
+Deno.test("Gate: Mail-Domain muss zur Website passen", () => {
+  assertEquals(emailFitsSite("info@kottident.de", "kottident.de"), true);
+  assertEquals(emailFitsSite("praxis@mail.kottident.de", "www.kottident.de"), true);
+  assertEquals(emailFitsSite("info@rak-brb.de", "plueschke.de"), false);
+  assertEquals(emailFitsSite("atenschutz@uub-schwan.de", "gebrueder-geisler.com"), false);
+  assertEquals(emailFitsSite("glaserei-bm@web.de", "glaserei-bm.de"), true);
+  assertEquals(emailFitsSite("argus.schellenberg@gmx.de", "argus-metallbau.de"), true);
+  assertEquals(emailFitsSite("max.muster@gmail.com", "zahnarzt-sonne.de"), false);
+});
+
+Deno.test("Gate: keine unsinnigen Anreden und keine Versicherer als Firma", () => {
+  assertEquals(plausibleName("Herr angegebenen"), false);
+  assertEquals(plausibleName("Klaus Bacherle"), true);
+  assertEquals(plausibleName("Dr. Birgit Klee"), true);
+  assertEquals(mailGreeting("Inhaber angegebenen", "Inhaber"), "Guten Tag,");
+  assertEquals(extractPeople("Inhaber: der oben angegebenen Adresse").length, 0);
+  const firm = extractCompany("<title>Glaserei</title>", "Berufshaftpflichtversicherung: HDI Versicherung AG, Hannover\nGlaserei Müller GmbH\nHauptstr. 1", "glaserei-mueller.de");
+  assertEquals(firm, "Glaserei Müller GmbH");
+  assertEquals(/Versicherung/.test(extractCompany("<title>Impressum - Kolarski</title>", "Ergo Versicherung AG", "kolarski-re.com")), false);
+});
+
+Deno.test("Gate: Branche nur, wenn die Seite sie bestätigt", () => {
+  assertEquals(brancheFromKind("office=estate_agent"), "Immobilienmakler");
+  assertEquals(verifyBranche("Kanzleien und Beratung", "Wir begleiten Familien bei Vermögensfragen."), "");
+  assertEquals(verifyBranche("Steuerkanzlei", "Ihre Steuerberatung in Kempten"), "Steuerkanzlei");
+});
+
+Deno.test("Anti-Doppel: Mail, Domain, Firma und OSM-ID", () => {
+  const idx = emptyContacted();
+  addContacted(idx, { email: "fo@be-fo.de", domain: "be-fo.de", firma: "Bach & Erle Family Office GmbH", osm_id: "node/1", sent_at: "2026-11-26T07:39:38Z" });
+  addContacted(idx, { email: "x@gmail.com", domain: "gmail.com", firma: "Zahnarztpraxis", sent_at: "2026-11-25" });
+  const base = { blocklist: [], crm: [], priorEmails: [], priorDomains: [], rejectedEmails: [], contacted: idx };
+  assertEquals(outreachSkip({ ...base, email: "fo@be-fo.de", domain: "" }), "Schon angeschrieben (am 26.11.2026)");
+  assertEquals(outreachSkip({ ...base, email: "info@be-fo.de", domain: "be-fo.de" }), "Schon angeschrieben (am 26.11.2026)");
+  assertEquals(outreachSkip({ ...base, email: "neu@other.de", domain: "other.de", osm: "node/1" }), "Schon angeschrieben (am 26.11.2026)");
+  assertEquals(outreachSkip({ ...base, email: "neu@other.de", domain: "other.de", firma: "Bach und Erle Family Office" }), "Schon angeschrieben (am 26.11.2026)");
+  assertEquals(outreachSkip({ ...base, email: "y@gmail.com", domain: "zahn.de", firma: "Zahnarztpraxis" }), null);
+  assertEquals(firmKey("Zahnarztpraxis"), "");
+  assertEquals(outreachSkip({ ...base, email: "a@b-fo.de", domain: "b-fo.de", blockedDomains: ["be-fo.de"] }), null);
+  assertEquals(outreachSkip({ ...base, contacted: emptyContacted(), email: "a@be-fo.de", domain: "x.de", blockedDomains: ["be-fo.de"] }), "Abgemeldet");
 });

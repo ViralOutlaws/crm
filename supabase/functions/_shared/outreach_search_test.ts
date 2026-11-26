@@ -10,6 +10,8 @@ import {
   nextSearchCell,
   overpassQuery,
   readOverpass,
+  activeAreas,
+  plzInRegions,
   withinPrepWindow,
   type SearchArea,
   type SearchProfile,
@@ -45,7 +47,7 @@ Deno.test("Gebiete bleiben klein und decken die Länder ab, ohne ganz Deutschlan
 Deno.test("Overpass-Abfrage ist ein Bezirk, mit Timeout und Website-Filter", () => {
   const area = SEARCH_AREAS.find((a) => a.id === "berlin-mitte")!;
   const query = overpassQuery(["amenity=doctors", "craft=carpenter", "amenity=dentist"], area);
-  assertEquals(query.includes("[timeout:18]"), true);
+  assertEquals(query.includes("[timeout:30]"), true);
   assertEquals(query.includes(`(${area.south},${area.west},${area.north},${area.east})`), true);
   assertEquals(query.includes('["website"]'), true);
   assertEquals(query.includes("amenity"), true);
@@ -129,6 +131,31 @@ Deno.test("Nachtlauf ist 01:00 bis 07:00 Berlin, das Ziel ist 50", () => {
   assertEquals(prep.prep_from, 1);
   assertEquals(prep.prep_until, 7);
   assertEquals(prep.prep_target, 50);
-  assertEquals(prep.prep_batch, 4);
+  assertEquals(prep.prep_batch, 6);
   assertEquals(clampPrep({ prep_from: 2, prep_until: 6, prep_target: 40, prep_batch: 2, prep_on: false }).prep_on, false);
+});
+
+Deno.test("Nur das Allgäu ist aktiv, Berlin bleibt gespeichert", () => {
+  const allg = activeAreas(SEARCH_AREAS, ["allgaeu"]);
+  const ids = allg.map((a) => a.id);
+  for (const id of ["memmingen", "kempten", "kaufbeuren", "fuessen", "sonthofen", "lindau", "mindelheim", "marktoberdorf", "immenstadt", "lindenberg"]) {
+    assertEquals(ids.includes(id), true, id);
+  }
+  assertEquals(ids.includes("berlin-mitte"), false);
+  assertEquals(SEARCH_AREAS.some((a) => a.id === "berlin-mitte"), true);
+  assertEquals(activeAreas(SEARCH_AREAS, []).length, SEARCH_AREAS.length);
+  assertEquals(plzInRegions("87700", ["allgaeu"]), true);
+  assertEquals(plzInRegions("88131", ["allgaeu"]), true);
+  assertEquals(plzInRegions("86825", ["allgaeu"]), true);
+  assertEquals(plzInRegions("10117", ["allgaeu"]), false);
+  assertEquals(plzInRegions("63796", ["allgaeu"]), false);
+  assertEquals(plzInRegions("88250", ["allgaeu"]), false);
+  assertEquals(plzInRegions("", ["allgaeu"]), false);
+});
+
+Deno.test("Overpass liefert OSM-ID, Merkmal und PLZ", () => {
+  const rows = readOverpass({ elements: [{ type: "node", id: 42, tags: { name: "Praxis", amenity: "dentist", website: "praxis.example.test", "addr:postcode": "87700" } }] });
+  assertEquals(rows[0].osm, "node/42");
+  assertEquals(rows[0].kind, "amenity=dentist");
+  assertEquals(rows[0].plz, "87700");
 });
