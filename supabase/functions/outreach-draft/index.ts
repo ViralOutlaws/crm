@@ -10,6 +10,7 @@ import {
   reviewMail,
   SUBSTANCE_LABEL,
   websiteDomain,
+  emailFitsSite,
   type EmailArt,
   type Observation,
   type PortfolioRef,
@@ -51,7 +52,7 @@ Deno.serve(async (req) => {
         skipped.push({ id: person.id, reason: "Vermutete Adresse wird nicht automatisch entworfen." });
         continue;
       }
-      const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, page_excerpt").eq("id", person.target_id).maybeSingle();
+      const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, plz, osm_id, page_excerpt").eq("id", person.target_id).maybeSingle();
       const row = target.data;
       if (!row) {
         skipped.push({ id: person.id, reason: "Ziel fehlt" });
@@ -82,9 +83,17 @@ Deno.serve(async (req) => {
         priorEmails: known.priorEmails,
         priorDomains: known.priorDomains.filter((d) => websiteDomain(d) !== websiteDomain(String(row.domain || ""))),
         rejectedEmails: known.rejectedEmails,
+        blockedDomains: known.blockedDomains,
+        contacted: known.contacted,
+        firma: row.firma,
+        osm: row.osm_id,
       });
       if (skip) {
         skipped.push({ id: person.id, reason: skip });
+        continue;
+      }
+      if (row.domain && !emailFitsSite(String(person.email || ""), String(row.domain))) {
+        skipped.push({ id: person.id, reason: "Mail-Domain passt nicht zur Website" });
         continue;
       }
       const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
@@ -97,6 +106,7 @@ Deno.serve(async (req) => {
         branche: row.branche,
         query: row.query,
         ort: row.ort,
+        plz: row.plz,
         pageText: row.page_excerpt,
         observations,
         references,
@@ -105,7 +115,7 @@ Deno.serve(async (req) => {
       const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 1000));
       let mail = finalizeMail({ ...ctx, attempts: first ? [first] : [] });
       if (mail.ok && mail.source !== "ki" && first) {
-        const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText });
+        const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText, ort: ctx.ort, plz: ctx.plz });
         const second = parseMailJson(await anthropicText(
           "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
           `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu und halte den Aufbau genau ein.`,

@@ -14,8 +14,10 @@
     people: [],
     drafts: [],
     messages: [],
-    settings: { daily_limit: 50, gap_minutes: 2, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5], prep_from: 1, prep_until: 7, prep_target: 50, prep_batch: 3, prep_on: true },
+    settings: { daily_limit: 50, gap_minutes: 2, guess_emails: false, paused: false, hour_from: 8, hour_to: 18, weekdays: [1, 2, 3, 4, 5], prep_from: 1, prep_until: 7, prep_target: 50, prep_batch: 4, prep_on: true, active_regions: ['allgaeu'] },
     profiles: [],
+    contacted: [],
+    contactedQ: '',
     areas: [],
     coverage: [],
     pool: 0,
@@ -86,11 +88,17 @@
       { id: 'ps', name: 'Salon und Fitness', region: 'Deutschland', tags: ['shop=hairdresser', 'shop=beauty', 'leisure=fitness_centre'], enabled: true, sort: 5 },
     ];
     state.areas = [
-      { id: 'berlin-mitte', name: 'Berlin-Mitte', sort: 0 },
-      { id: 'berlin-kreuzberg', name: 'Berlin-Kreuzberg', sort: 1 },
-      { id: 'hh-altona', name: 'Hamburg-Altona', sort: 2 },
+      { id: 'berlin-mitte', name: 'Berlin-Mitte', region: 'be', sort: 0 },
+      { id: 'kempten', name: 'Kempten', region: 'allgaeu', sort: 1 },
+      { id: 'memmingen', name: 'Memmingen', region: 'allgaeu', sort: 2 },
+      { id: 'kaufbeuren', name: 'Kaufbeuren', region: 'allgaeu', sort: 3 },
     ];
-    state.coverage = state.profiles.filter((p) => p.id !== 'pg').map((p) => ({ profile_id: p.id, area_id: 'berlin-mitte', searched_at: '2026-11-25T00:15:00.000Z' }));
+    state.coverage = state.profiles.filter((p) => p.id !== 'pg').map((p) => ({ profile_id: p.id, area_id: 'kempten', searched_at: '2026-11-25T00:15:00.000Z' }));
+    state.contacted = [
+      { firma: 'Musterwerk GmbH', email: 'info@musterwerk.example.test', domain: 'musterwerk.example.test', ort: 'Kempten', sent_at: '2026-11-26T07:39:00.000Z', subject: 'Anfragen nach Feierabend auf musterwerk.example.test', source: 'crm' },
+      { firma: 'Praxis Beispiel', email: 'praxis@beispiel.example.test', domain: 'beispiel.example.test', ort: 'Memmingen', sent_at: '2026-11-25T00:00:00+01:00', subject: 'Ihre Website – ein Beispiel', source: 'saley-arztpraxen-memmingen', note: 'Saleys Liste, Uhrzeit unbekannt' },
+      { firma: 'Elektro Muster', email: 'info@elektro-muster.example.test', domain: 'elektro-muster.example.test', ort: 'Kaufbeuren', sent_at: '2026-11-09T00:00:00+01:00', subject: 'Wenn das Telefon klingelt', source: 'kaltakquise-2026-11-09', note: 'Liste 09.11., Versand nicht belegt' },
+    ];
     state.pool = 6;
     const obs1 = [
       { kind: 'mobil', text: 'Auf dem Handy wird die Seite winzig dargestellt.', source: 'https://musterwerk.example.test/', tip: 'Die Seite auf die Breite des Handys einstellen.', impact: 'Auf dem Handy wird die Seite winzig dargestellt. Viele Besucher springen da ab.', wert: 'Die Seite auf die Breite des Handys einstellen, damit der erste Blick lesbar ist.' },
@@ -204,6 +212,10 @@
   .outreach-sig-box textarea{min-height:130px;font-size:13px}
   .outreach-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:outreach-spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes outreach-spin{to{transform:rotate(360deg)}}
+  .outreach-contacted-list{display:flex;flex-direction:column;gap:0;margin-top:6px}
+  .outreach-contacted-row{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:start;padding:10px 0;border-top:1px solid var(--border)}
+  .outreach-contacted-when{font-variant-numeric:tabular-nums;color:var(--gold,#d4af37);font-size:13px;padding-top:2px}
+  @media (max-width:560px){.outreach-contacted-row{grid-template-columns:1fr auto}.outreach-contacted-when{grid-column:1 / -1;padding-top:0}}
   .outreach-run-result{margin:8px 0 0;font-size:13px}
   .outreach-run-result.bad{color:#ff8a80}
   #outreach-editor .modal{max-width:960px}
@@ -308,10 +320,12 @@
       sb.from('outreach_drafts').select('*').order('updated_at', { ascending: false }).limit(160),
       sb.from('outreach_messages').select('*').order('created_at', { ascending: true }).limit(400),
       sb.from('outreach_profiles').select('*').order('sort'),
-      sb.from('outreach_areas').select('id, name, state, sort').order('sort'),
+      sb.from('outreach_areas').select('id, name, state, sort, region').order('sort'),
       sb.from('outreach_coverage').select('profile_id, area_id, searched_at').limit(5000),
       sb.from('outreach_pool').select('id', { count: 'exact', head: true }),
     ]);
+    const contacted = await sb.from('outreach_contacted').select('firma, email, domain, ort, sent_at, subject, source, note').order('sent_at', { ascending: false }).limit(3000);
+    state.contacted = contacted.error ? [] : (contacted.data || []);
     const err = targets.error || drafts.error || profiles.error || areas.error || coverage.error || pool.error;
     if (err && /outreach_|schema cache|does not exist|PGRST205/i.test(err.message || '')) {
       state.note = 'Die Outreach-Tabellen sind noch nicht migriert. Live-Daten gibt es erst nach der Migration.';
@@ -373,9 +387,20 @@
     return String(area.name || '').toLowerCase().includes(raw) || String(area.id || '').includes(raw.replace(/\s+/g, '-'));
   }
 
+  const REGION_LABEL = { allgaeu: 'Allgäu' };
+  function activeRegions() {
+    const list = Array.isArray(state.settings.active_regions) ? state.settings.active_regions : ['allgaeu'];
+    return list.map((r) => String(r || '').toLowerCase()).filter(Boolean);
+  }
+  function activeAreaList() {
+    const want = activeRegions();
+    if (!want.length) return state.areas.slice();
+    return state.areas.filter((a) => want.includes(String(a.region || a.state || '').toLowerCase()));
+  }
+
   function nextPrepCell() {
     const profiles = state.profiles.filter((p) => p.enabled && (p.tags || []).length).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
-    const areas = state.areas.slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
+    const areas = activeAreaList().sort((a, b) => (a.sort || 0) - (b.sort || 0));
     if (!profiles.length || !areas.length) return null;
     const seen = new Map(state.coverage.map((c) => [c.profile_id + '|' + c.area_id, c.searched_at]));
     let oldest = null;
@@ -393,7 +418,10 @@
 
   function nightHtml() {
     const cell = nextPrepCell();
-    const visited = new Set(state.coverage.map((c) => c.area_id)).size;
+    const activeIds = new Set(activeAreaList().map((a) => a.id));
+    const visited = new Set(state.coverage.map((c) => c.area_id).filter((id) => activeIds.has(id))).size;
+    const regionNames = activeRegions().map((r) => REGION_LABEL[r] || r).join(', ') || 'alle Regionen';
+    const pausedAreas = state.areas.length - activeIds.size;
     const waiting = state.drafts.filter((d) => d.status === 'entwurf').length;
     const next = cell ? `${cell.profile.name} · ${cell.area.name}` : (state.profiles.some((p) => p.enabled) ? 'Gebiete fehlen noch. Der erste Lauf legt sie an.' : 'Kein Profil ist eingeschaltet.');
     const gap = [1, 2, 3, 5].includes(Number(state.settings.gap_minutes)) ? Number(state.settings.gap_minutes) : 2;
@@ -406,6 +434,7 @@
         <div class="outreach-field" style="width:120px"><label>Ziel Entwürfe</label><input id="outreach-prep-target" type="number" min="1" max="200" value="${esc(state.settings.prep_target)}" oninput="outreachSetting('prep_target', this.value)"></div>
         <label class="outreach-check" style="margin:0"><input type="checkbox" ${state.settings.prep_on !== false ? 'checked' : ''} onchange="outreachPrepOn(this.checked)"> Nachtlauf an</label>
       </div>
+      <p class="outreach-help" id="outreach-region-status"><b>Aktive Region: ${esc(regionNames)}</b> (${esc(activeIds.size)} ${activeIds.size === 1 ? 'Gebiet' : 'Gebiete'}).${pausedAreas > 0 ? ' ' + esc(pausedAreas) + ' weitere Gebiete, z. B. Berlin, sind pausiert und bleiben für später gespeichert.' : ''} Angeschrieben wird nur, wenn die Impressum-Adresse in der Region liegt.</p>
       <p class="outreach-help" id="outreach-night-status">Entwürfe ${esc(waiting)} von ${esc(state.settings.prep_target)}. Nächste Suche: ${esc(next)}. ${esc(visited)} ${visited === 1 ? 'Gebiet' : 'Gebiete'} schon besucht${state.pool ? ', ' + esc(state.pool) + ' Websites warten noch' : ''}.</p>
       <h3>Suchprofile</h3>
       <div class="profile-head"><span></span><span>Branche</span><span>Ort</span><span>Merkmale</span><span></span></div>
@@ -481,7 +510,7 @@
       if (state.queue === 'alle') return true;
       return d.status === state.queue;
     });
-    const chips = [['entwurf', 'Entwurf'], ['freigegeben', 'Freigegeben'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet'], ['alle', 'Alle']];
+    const chips = [['entwurf', 'Entwurf'], ['freigegeben', 'Freigegeben'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet'], ['alle', 'Alle'], ['angeschrieben', 'Bereits angeschrieben (' + state.contacted.length + ')']];
     const waiting = state.drafts.filter((d) => d.status === 'freigegeben').length;
     return `<div class="outreach-row" style="margin-bottom:8px">
       <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.queue === id ? 'on' : ''}" onclick="outreachQueue('${id}')">${label}</button>`).join('')}</div>
@@ -491,7 +520,41 @@
     </div>
     <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist, oder sofort per „Jetzt senden“ (ohne Wartezeit, nach Bestätigung). Montag bis Freitag, 8 bis 18 Uhr Berlin, Abstand ' + esc(state.settings.gap_minutes) + ' Minuten, höchstens ' + esc(state.settings.daily_limit) + ' am Tag. Vermutete Adressen nur mit Häkchen. Ohne Freigabe geht nichts raus.'}</p>
     ${state.sendResult ? `<p class="outreach-help outreach-run-result ${state.sendResult.bad ? 'bad' : ''}" role="status">${esc(state.sendResult.text)}</p>` : ''}
-    <div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`;
+    ${state.queue === 'angeschrieben' ? contactedHtml() : `<div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`}`;
+  }
+
+  const SOURCE_LABEL = {
+    crm: 'CRM-Versand',
+    'saley-arztpraxen-memmingen': 'Liste Saley (Praxen)',
+    'saley-betriebe-memmingen': 'Liste Saley (Betriebe)',
+    'kaltakquise-2026-11-09': 'Liste 09.11.',
+    'kaltakquise-website-2026-11-09': 'Liste 09.11. Website',
+    'kaltakquise-website2-2026-11-09': 'Liste 09.11. Website 2',
+    'kaltakquise-einzelmail': 'Einzelmail',
+  };
+
+  function contactedWhen(c) {
+    const d = new Date(c.sent_at);
+    if (!c.sent_at || Number.isNaN(d.getTime())) return '–';
+    const day = d.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' });
+    if (c.source !== 'crm') return day;
+    return day + ', ' + d.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+  }
+
+  function contactedHtml() {
+    const q = String(state.contactedQ || '').trim().toLowerCase();
+    const list = state.contacted.filter((c) => !q || [c.firma, c.email, c.domain, c.ort, c.subject].some((v) => String(v || '').toLowerCase().includes(q)));
+    return `<div class="dash-card outreach-card" id="outreach-contacted">
+      <h3>Bereits angeschrieben</h3>
+      <p class="outreach-help">Dauerhaftes Gedächtnis: Jede gesendete Outreach-Mail landet hier automatisch, dazu Saleys und die älteren Listen. Recherche, Entwurf und Versand überspringen jeden Betrieb, der hier schon steht, abgeglichen über E-Mail, Domain, Firmenname und OSM-ID.</p>
+      <div class="outreach-field"><label>Suchen</label><input id="outreach-contacted-q" value="${esc(state.contactedQ)}" placeholder="Firma, Mail, Domain, Ort" oninput="outreachContactedSearch(this.value)"></div>
+      <p class="outreach-help">${esc(list.length)} von ${esc(state.contacted.length)} Einträgen</p>
+      <div class="outreach-contacted-list">${list.slice(0, 400).map((c) => `<div class="outreach-contacted-row">
+        <div class="outreach-contacted-when">${esc(contactedWhen(c))}</div>
+        <div><b>${esc(c.firma || c.domain || c.email || 'Unbekannt')}</b><div class="outreach-meta">${esc([c.email, c.domain && !(c.email || '').endsWith('@' + c.domain) ? c.domain : '', c.ort].filter(Boolean).join(' · '))}</div>${c.subject ? `<div class="outreach-meta">Betreff: ${esc(c.subject)}</div>` : ''}</div>
+        <span class="pill ${c.source === 'crm' ? 'ok' : ''}">${esc(SOURCE_LABEL[c.source] || c.source || 'Liste')}</span>
+      </div>`).join('') || '<p class="outreach-help">Noch niemand angeschrieben.</p>'}</div>
+    </div>`;
   }
 
   function draftRow(d) {
@@ -611,6 +674,15 @@
 
   window.outreachTab = function (id) { state.tab = id; render(); };
   window.outreachQueue = function (id) { state.queue = id; render(); };
+  window.outreachContactedSearch = function (value) {
+    state.contactedQ = String(value || '').slice(0, 80);
+    const box = document.getElementById('outreach-contacted');
+    if (!box) { render(); return; }
+    const pos = document.getElementById('outreach-contacted-q')?.selectionStart || 0;
+    box.outerHTML = contactedHtml();
+    const input = document.getElementById('outreach-contacted-q');
+    if (input) { input.focus(); input.setSelectionRange(pos, pos); }
+  };
   window.outreachMailFilter = function (id) { state.mailFilter = id; render(); };
   window.outreachField = function (key, value) { state[key] = value; };
   window.outreachSearch = function (value) { state.q = value; const list = document.getElementById('outreach-mail-list'); if (!list) { render(); return; } render(); };
@@ -984,7 +1056,7 @@
     if (!Number.isFinite(prepUntil)) prepUntil = 7;
     if (prepFrom >= prepUntil) { toast('Start ab muss vor Fertig bis liegen.', true); return; }
     const prepTarget = Math.min(200, Math.max(1, Number(state.settings.prep_target) || 50));
-    const prepBatch = Math.min(4, Math.max(1, Number(state.settings.prep_batch) || 3));
+    const prepBatch = Math.min(6, Math.max(1, Number(state.settings.prep_batch) || 4));
     state.settings.hour_from = hourFrom;
     state.settings.hour_to = hourTo;
     state.settings.weekdays = weekdays.length ? weekdays : [1, 2, 3, 4, 5];

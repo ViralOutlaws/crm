@@ -30,6 +30,97 @@ export type FoundPerson = {
 
 export type KnownParty = { email: string; domain: string; customer: boolean };
 
+/** Dauerhaftes Gedächtnis: wer schon eine Mail bekommen hat (CRM-Versand und alte Listen). */
+export type ContactedIndex = {
+  emails: Record<string, string>;
+  domains: Record<string, string>;
+  firms: Record<string, string>;
+  osm: Record<string, string>;
+};
+
+const FIRM_NOISE = /\b(gmbh|co|kg|ag|ug|haftungsbeschrankt|ohg|gbr|ek|mbb|partg|partgmbb|und|der|die|das|praxis|dr|med|inhaber|inh|e|k)\b/g;
+
+const FIRM_GENERIC = /zahnarzt|zahnaerzte|aerzte|arzt|hausarzt|gemeinschafts|praxis|physiotherapie|therapie|friseur|salon|restaurant|cafe|gasthof|gasthaus|kanzlei|steuerberatung|steuerberater|rechtsanwaelte|rechtsanwalt|anwalt|kosmetik|studio|fitness|kfz|auto|werkstatt|elektro|sanitaer|heizung|maler|glaserei|dach|fliesen|metallbau|ingenieurbuero|immobilien|makler|mvz|zentrum|team|service|technik|bau|haus|meister|betrieb|impressum|kontakt|startseite|home/g;
+
+/** Firmenname zum Vergleichen: klein, ohne Rechtsform und Füllwörter. Leer, wenn zu kurz. */
+export function firmKey(raw?: string | null): string {
+  const s = String(raw || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/&/g, " ").replace(/[^a-z0-9 ]+/g, " ")
+    .replace(FIRM_NOISE, " ")
+    .replace(/\s+/g, "");
+  // Reine Branchenwörter ("Zahnarztpraxis", "Kfz-Werkstatt") sind kein Name.
+  const rest = s.replace(FIRM_GENERIC, "");
+  return s.length >= 6 && rest.length >= 4 ? s : "";
+}
+
+export function emptyContacted(): ContactedIndex {
+  return { emails: {}, domains: {}, firms: {}, osm: {} };
+}
+
+export function addContacted(index: ContactedIndex, row: { email?: string | null; domain?: string | null; firma?: string | null; osm_id?: string | null; sent_at?: string | null }) {
+  const day = String(row.sent_at || "").slice(0, 10);
+  const email = String(row.email || "").trim().toLowerCase();
+  const domain = websiteDomain(String(row.domain || ""));
+  const firm = firmKey(row.firma);
+  const osm = String(row.osm_id || "").trim();
+  if (email && !index.emails[email]) index.emails[email] = day;
+  if (domain && !FREEMAIL.test(domain) && !index.domains[domain]) index.domains[domain] = day;
+  if (firm && !index.firms[firm]) index.firms[firm] = day;
+  if (osm && !index.osm[osm]) index.osm[osm] = day;
+}
+
+function dayLabel(day: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  return m ? ` (am ${m[3]}.${m[2]}.${m[1]})` : "";
+}
+
+/** Treffer über Mail, Domain, OSM-ID oder Firmenname. null heißt: noch nie angeschrieben. Sonst " (am TT.MM.JJJJ)" oder "". */
+export function contactedHit(index: ContactedIndex | undefined, q: { email?: string; domain?: string; firma?: string | null; osm?: string | null }): string | null {
+  if (!index) return null;
+  const email = String(q.email || "").toLowerCase();
+  const domain = websiteDomain(String(q.domain || ""));
+  const emailHost = email.includes("@") ? websiteDomain(email.split("@")[1]) : "";
+  const checks: [Record<string, string>, string][] = [
+    [index.emails, email],
+    [index.domains, domain],
+    [index.domains, emailHost && !FREEMAIL.test(emailHost) ? emailHost : ""],
+    [index.osm, String(q.osm || "")],
+    [index.firms, firmKey(q.firma)],
+  ];
+  for (const [map, key] of checks) {
+    if (key && Object.prototype.hasOwnProperty.call(map, key)) return dayLabel(map[key]);
+  }
+  return null;
+}
+
+export const FREEMAIL = /(^|\.)(gmail\.com|googlemail\.com|web\.de|gmx\.(de|net|at|ch)|t-online\.de|outlook\.(de|com)|hotmail\.(de|com)|live\.(de|com)|yahoo\.(de|com)|icloud\.com|me\.com|posteo\.de|freenet\.de|aol\.(de|com)|mail\.de|arcor\.de|online\.de|kabelmail\.de|vodafonemail\.de|ewe\.net|mnet-online\.de)$/i;
+
+function baseHost(host: string): string {
+  const parts = websiteDomain(host).split(".").filter(Boolean);
+  return parts.slice(-2).join(".");
+}
+
+/**
+ * Passt die Adresse zur Website? Gleiche Domain (auch Subdomain) ja.
+ * Freemail nur, wenn der Name vor dem @ deutlich zur Website passt (glaserei-bm@web.de zu glaserei-bm.de).
+ */
+export function emailFitsSite(email: string, site: string): boolean {
+  const mail = String(email || "").toLowerCase().trim();
+  const at = mail.lastIndexOf("@");
+  if (at < 1) return false;
+  const host = websiteDomain(mail.slice(at + 1));
+  const domain = websiteDomain(site);
+  if (!host || !domain) return false;
+  if (baseHost(host) === baseHost(domain)) return true;
+  if (!FREEMAIL.test(host)) return false;
+  const local = fold(mail.slice(0, at));
+  const label = baseHost(domain).split(".")[0] || "";
+  const parts = label.split(/[-_]+/).map(fold).filter((w) => w.length >= 5);
+  const whole = fold(label);
+  return (whole.length >= 5 && local.includes(whole)) || parts.some((w) => local.includes(w));
+}
+
 export type OutreachThread = {
   id: string;
   email: string;
@@ -259,12 +350,23 @@ function cleanName(raw: string): string {
     .trim();
 }
 
+const NAME_STOP = /^(angegeben\w*|genannt\w*|gem(ä|ae)(ß|ss)|verantwortlich\w*|inhalt\w*|information\w*|gesellschaft\w*|gesch(ä|ae)ftsf(ü|ue)hr\w*|gmbh|ag|kg|ug|e\.?k\.?|stra(ß|ss)e|str|kontakt|impressum|telefon|tel|fax|e-?mail|datenschutz|haftung\w*|rechtsanw\w*|steuerber\w*|register\w*|amtsgericht|handelsregister|umsatzsteuer\w*|ust|sitz|vertret\w*|herr|frau|dr|prof|dipl|ing|med|dent|team|praxis|kanzlei|firma|unternehmen|website|webseite|seite|hier|oben|unten|folgend\w*|siehe|bitte|und|oder|mit|von|bei|f(ü|ue)r|alle|keine?|versicherung\w*|berufshaftpflicht\w*|aufsichtsbeh(ö|oe)rde|kammer|zust(ä|ae)ndig\w*)$/i;
+
+/** Ein echter Personenname: 2 bis 4 Teile, jeder groß geschrieben, keine Füllwörter wie "angegebenen". */
+export function plausibleName(name: string): boolean {
+  const parts = String(name || "").replace(/\b(Dr|Prof|Dipl)\.?(-\w+\.?)?\s+/g, "").split(/\s+/).filter(Boolean);
+  const core = parts.filter((p) => !/^(von|van|de|der|zu|und)$/i.test(p));
+  if (core.length < 2 || core.length > 4) return false;
+  return core.every((p) => /^\p{Lu}[\p{L}'’\-]{1,30}$/u.test(p) && !NAME_STOP.test(p.replace(/[.,]/g, "")));
+}
+
 export function extractPeople(text: string): { person: string; rolle: string }[] {
   const out: { person: string; rolle: string }[] = [];
   const seen = new Set<string>();
   const push = (person: string, rolle: string) => {
     const name = cleanName(person);
     if (!name || name.split(/\s+/).length < 2 || name.length > 80) return;
+    if (!plausibleName(name)) return;
     const key = fold(name);
     if (seen.has(key)) return;
     seen.add(key);
@@ -294,15 +396,40 @@ export function extractAddress(text: string): { str: string; plz: string; ort: s
   return null;
 }
 
+/** Firmen, die in fremden Impressen stehen: Versicherer, Kammern, Gerichte, Webagenturen. Nie der Betrieb selbst. */
+export const FOREIGN_FIRM = /versicherung|haftpflicht|assekuranz|allianz|\bhdi\b|\bergo\b|r\+v|axa\b|generali|signal iduna|gothaer|huk|bank\b|sparkasse|volksbank|raiffeisen|kammer|amtsgericht|registergericht|finanzamt|aufsicht|webdesign|web-?agentur|werbeagentur|kommunikation gmbh|media gmbh|medien gmbh|hosting|strato|ionos|1&1|jimdo|wix|google|facebook|meta platforms|e-masters|webvisitenkarte|kassenärztliche|kassenzahnärztliche|landesärztekammer/i;
+
+function cleanFirm(raw: string): string {
+  return String(raw || "")
+    .replace(/^\s*(impressum|kontakt|startseite|home|willkommen)\s*[-–—|:]\s*/i, "")
+    .replace(/^\s*(webseite|website|homepage) der\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function extractCompany(html: string, text: string, host: string): string {
   const title = htmlToText(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] || "");
   const og = /property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i.exec(html)?.[1]
     || /content=["']([^"']+)["'][^>]*property=["']og:site_name["']/i.exec(html)?.[1]
     || "";
-  const legal = /([A-ZÄÖÜ0-9][\p{L}0-9&'’.\- ]{1,70}?\s(?:GmbH\s*&\s*Co\.\s*KG|GmbH|UG(?:\s*\(haftungsbeschränkt\))?|AG|e\.\s?K\.|KG|OHG|GbR))/u.exec(text);
-  const fromTitle = title.split(/\s[\|\-–—]\s/).map((s) => s.trim()).find((s) => s && !/^(impressum|kontakt|home|startseite)$/i.test(s)) || "";
-  const name = (legal?.[1] || og || fromTitle || host).replace(/\s+/g, " ").trim();
-  return name.slice(0, 160);
+  const legalRe = /([A-ZÄÖÜ0-9][\p{L}0-9&'’.\- ]{1,70}?\s(?:GmbH\s*&\s*Co\.\s*KG|GmbH|UG(?:\s*\(haftungsbeschränkt\))?|AG|e\.\s?K\.|KG|OHG|GbR|PartG(?:\s*mbB)?))/gu;
+  const label = fold(host.split(".")[0] || "");
+  const legal: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = legalRe.exec(text)) && legal.length < 12) {
+    const name = cleanFirm(m[1]);
+    if (name.split(/\s+/).length > 8 || FOREIGN_FIRM.test(name)) continue;
+    legal.push(name);
+  }
+  const tokens = (label.match(/[a-z]{4,}/g) || []);
+  const fits = (name: string) => {
+    const f = fold(name);
+    return !!label && (f.includes(label) || label.includes(f.slice(0, 6)) || tokens.some((t) => f.includes(t)));
+  };
+  const fromTitle = title.split(/\s[\|\-–—]\s/).map((s) => cleanFirm(s)).find((s) => s && !/^(impressum|kontakt|home|startseite)$/i.test(s) && !FOREIGN_FIRM.test(s)) || "";
+  const ogName = og && !FOREIGN_FIRM.test(og) ? cleanFirm(og) : "";
+  const name = legal.find(fits) || (ogName && fits(ogName) ? ogName : "") || (fromTitle && fits(fromTitle) ? fromTitle : "") || ogName || fromTitle || legal[0] || host;
+  return cleanFirm(name).slice(0, 160);
 }
 
 export function readCompany(input: {
@@ -327,7 +454,8 @@ export function readCompany(input: {
   const domain = websiteDomain(input.pageUrl);
   const address = extractAddress(text);
   const people = extractPeople(text);
-  const emails = extractEmails(text);
+  // Nur Adressen, die zur Website gehören. Fremde Adressen (Kammer, Webagentur, Datenschutz-Dienstleister) fallen weg.
+  const emails = extractEmails(text).filter((e) => emailFitsSite(e, domain));
   const primary = people[0] || { person: "", rolle: "" };
   const adresse = address?.line || "";
   const found: FoundPerson[] = [];
@@ -427,10 +555,19 @@ export function outreachSkip(input: {
   priorEmails: string[];
   priorDomains: string[];
   rejectedEmails: string[];
+  blockedDomains?: string[];
+  contacted?: ContactedIndex;
+  firma?: string | null;
+  osm?: string | null;
 }): string | null {
   const email = String(input.email || "").toLowerCase();
   const domain = websiteDomain(input.domain);
   if (email && input.blocklist.some((e) => e.toLowerCase() === email)) return "Abgemeldet";
+  const emailHost = email.includes("@") ? websiteDomain(email.split("@")[1]) : "";
+  const blockedDomains = (input.blockedDomains || []).map((d) => websiteDomain(d)).filter(Boolean);
+  if ((domain && blockedDomains.includes(domain)) || (emailHost && blockedDomains.includes(emailHost))) return "Abgemeldet";
+  const hit = contactedHit(input.contacted, { email, domain, firma: input.firma, osm: input.osm });
+  if (hit !== null) return `Schon angeschrieben${hit}`;
   if (email && input.rejectedEmails.some((e) => e.toLowerCase() === email)) return "Bewusst abgelehnt";
   const byEmail = email ? input.crm.find((c) => c.email.toLowerCase() === email) : undefined;
   if (byEmail?.customer) return "Bestandskunde";
@@ -799,6 +936,7 @@ export function matchingReference(refs: PortfolioRef[], branche?: string | null)
 }
 
 export function mailGreeting(person: string, rolle?: string | null): string {
+  if (!plausibleName(person)) return "Guten Tag,";
   const parts = String(person || "").split(/\s+/).filter((p) => p && !/^(von|van|de|der|und)$/i.test(p));
   const last = parts[parts.length - 1] || "";
   const full = parts.join(" ");
@@ -813,9 +951,11 @@ export function mailGreeting(person: string, rolle?: string | null): string {
 
 function greetingOk(text: string): boolean {
   const line = String(text || "").split("\n").map((s) => s.trim()).find(Boolean) || "";
-  if (/^Guten Tag Frau [\p{L}'’\-]+,/u.test(line)) return true;
-  if (/^Guten Tag Herr [\p{L}'’\-]+,/u.test(line)) return true;
-  if (/^Guten Tag [\p{L}'’\-]+ [\p{L}'’\-]+,/u.test(line)) return true;
+  const name = /^Guten Tag (?:Frau |Herr )?([^,]+),/u.exec(line)?.[1] || "";
+  if (name && NAME_STOP.test(name.split(/\s+/).pop() || "")) return false;
+  if (/^Guten Tag Frau \p{Lu}[\p{L}'’\-]+,/u.test(line)) return true;
+  if (/^Guten Tag Herr \p{Lu}[\p{L}'’\-]+,/u.test(line)) return true;
+  if (/^Guten Tag \p{Lu}[\p{L}'’\-]+ \p{Lu}[\p{L}'’\-]+,/u.test(line)) return true;
   if (line === "Guten Tag,") return true;
   return false;
 }
@@ -855,6 +995,7 @@ export function branchVoice(branche?: string | null, query?: string | null): Bra
   if (/zahn|dentist/.test(s)) return { key: "praxis", label: "Zahnarztpraxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
   if (/physio/.test(s)) return { key: "praxis", label: "Physiotherapie-Praxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
   if (/ärzt|aerzt|arzt|praxis|praxen|klinik|doctor|clinic|heilprakt/.test(s)) return { key: "praxis", label: "Arztpraxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
+  if (/ingenieur/.test(s)) return { key: "industrie", label: "Ingenieurbüros", kunden: "Auftraggeber", ziel: "Projektanfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Büro", wegZu: "zur Projektanfrage", wir: "Ingenieurbüros moderne Websites und KI-Lösungen", betriebNom: "Ihr Büro", betriebAkk: "Ihr Büro" };
   if (/maschinen|industrie|metall|engineer|fertigung|anlagenbau|man_made=works/.test(s)) return { key: "industrie", label: "Maschinenbau-Unternehmen", kunden: "Einkäufer", ziel: "Projektanfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Anbieter", wegZu: "zur Projektanfrage", wir: "Industriebetrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Unternehmen", betriebAkk: "Ihr Unternehmen" };
   if (/gastro|restaurant|café|cafe|gasthof|gasthaus|bistro|wirtshaus/.test(s)) return { key: "gastro", label: "Restaurants", kunden: "Gäste", ziel: "Reservierungen", akt: "einen Tisch reservieren", woanders: "reservieren beim nächsten Restaurant", wegZu: "zur Reservierung", wir: "Restaurants moderne Websites", betriebNom: "Ihr Restaurant", betriebAkk: "Ihr Restaurant" };
   if (/immobil|makler|estate/.test(s)) return { key: "immobilien", label: "Immobilienbüros", kunden: "Interessenten", ziel: "Anfragen", akt: "eine Anfrage stellen", woanders: "melden sich beim nächsten Makler", wegZu: "zur Anfrage", wir: "Immobilienbüros moderne Websites und KI-Lösungen", betriebNom: "Ihr Büro", betriebAkk: "Ihr Büro" };
@@ -864,17 +1005,107 @@ export function branchVoice(branche?: string | null, query?: string | null): Bra
   return { key: "allgemein", label: "Betrieben", kunden: "Kunden", ziel: "Anfragen", akt: "etwas anfragen", woanders: "fragen beim nächsten Anbieter an", wegZu: "zur Anfrage", wir: "kleinen und mittleren Betrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Betrieb", betriebAkk: "Ihren Betrieb" };
 }
 
-/** Wo gesucht wurde: Gebiet aus dem Nachtlauf ("Profil · Gebiet"), sonst der Ort aus dem Impressum. */
-export function anlassOrt(query?: string | null, ort?: string | null): string {
-  const q = String(query || "");
-  const area = q.includes("·") ? q.split("·").pop()!.trim() : "";
-  const place = (area && !/^deutschland$/i.test(area) ? area : "") || String(ort || "").trim();
-  return place.replace(/\s+/g, " ").slice(0, 60);
+/**
+ * Ort im Anlass-Satz: NUR der Ort aus dem geprüften Impressum. Das Suchgebiet des Nachtlaufs
+ * (z. B. "Berlin-Mitte") kommt nie in den Text, weil es nicht zum echten Firmensitz passen muss.
+ */
+export function anlassOrt(_query?: string | null, ort?: string | null): string {
+  return String(ort || "").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+/** OSM-Merkmal zu einer Branche, die zur echten Firma passt (statt Profilname wie "Kanzleien und Beratung"). */
+export function brancheFromKind(kind?: string | null): string {
+  const k = String(kind || "").toLowerCase();
+  const map: Record<string, string> = {
+    "amenity=doctors": "Arztpraxis", "amenity=dentist": "Zahnarztpraxis", "healthcare=physiotherapist": "Physiotherapie",
+    "amenity=clinic": "Arztpraxis", "healthcare=doctor": "Arztpraxis", "healthcare=dentist": "Zahnarztpraxis",
+    "craft=metal_construction": "Metallbau", "office=engineer": "Ingenieurbüro", "man_made=works": "Industrie",
+    "craft=electrician": "Handwerk Elektro", "craft=plumber": "Handwerk Sanitär", "craft=painter": "Handwerk Maler",
+    "craft=roofer": "Handwerk Dach", "craft=hvac": "Handwerk Heizung", "shop=car_repair": "Kfz-Werkstatt",
+    "craft=tiler": "Handwerk Fliesen", "craft=glaziery": "Handwerk Glas",
+    "amenity=restaurant": "Restaurant", "amenity=cafe": "Café",
+    "office=tax_advisor": "Steuerkanzlei", "office=lawyer": "Rechtsanwaltskanzlei", "office=estate_agent": "Immobilienmakler",
+    "shop=hairdresser": "Friseursalon", "shop=beauty": "Kosmetikstudio", "leisure=fitness_centre": "Fitnessstudio",
+  };
+  return map[k] || "";
+}
+
+const BRANCH_PROOF: Record<string, RegExp> = {
+  praxis: /praxis|arzt|ärzt|aerzt|zahn|patient|sprechstunde|sprechzeit|therapie|physio|klinik|medizin/i,
+  kanzlei: /kanzlei|rechtsanw|anwält|anwaelt|anwalt|steuerber|steuerkanzlei|mandant|notar/i,
+  immobilien: /immobilie|makler|wohnung|exposé|expose|grundstück|vermiet|verkauf(en)? ihr(e|es)? (haus|wohnung|immobilie)/i,
+  gastro: /restaurant|speisekarte|küche|kueche|reservier|café|cafe|gasthof|gasthaus|menü|menue|mittagstisch|biergarten|bistro/i,
+  salon: /friseur|salon|kosmetik|beauty|fitness|studio|nagel|haar|training/i,
+  handwerk: /meister|handwerk|elektr|sanitär|sanitaer|heizung|maler|dach|werkstatt|kfz|auto|fliese|glas|montage|reparatur|installation/i,
+  industrie: /metall|maschin|fertigung|industrie|stahl|cnc|anlagen|produktion|ingenieur|planung|konstruktion|gutacht|vermessung|statik/i,
+};
+
+/**
+ * Branche nur übernehmen, wenn die Startseite sie bestätigt. Sonst leer: die Mail spricht dann neutral von "Betrieben",
+ * statt einem Family Office "Mandanten" und "Kanzlei" zu unterstellen.
+ */
+export function verifyBranche(branche: string, pageText?: string | null): string {
+  const v = branchVoice(branche);
+  if (v.key === "allgemein") return "";
+  const proof = BRANCH_PROOF[v.key];
+  return proof && proof.test(String(pageText || "")) ? branche : "";
+}
+
+/** Städte, die nie in einer Mail stehen dürfen, wenn der Betrieb nicht dort sitzt. Dazu kommen die Suchgebiete. */
+export const KNOWN_PLACES = [
+  "Berlin", "Hamburg", "München", "Köln", "Frankfurt", "Stuttgart", "Düsseldorf", "Leipzig", "Dortmund", "Essen", "Bremen",
+  "Dresden", "Hannover", "Nürnberg", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster", "Mannheim", "Karlsruhe",
+  "Augsburg", "Wiesbaden", "Mainz", "Freiburg", "Regensburg", "Würzburg", "Ingolstadt", "Erlangen", "Bamberg", "Bayreuth",
+  "Landshut", "Passau", "Rosenheim", "Aschaffenburg", "Offenbach", "Kassel", "Saarbrücken", "Trier", "Koblenz", "Ulm",
+  "Allgäu", "Memmingen", "Kempten", "Kaufbeuren", "Füssen", "Sonthofen", "Lindau", "Mindelheim", "Marktoberdorf",
+  "Immenstadt", "Oberstdorf", "Bad Wörishofen", "Ottobeuren", "Buchloe", "Pfronten", "Lindenberg", "Wangen", "Isny", "Leutkirch",
+  "Unterallgäu", "Ostallgäu", "Oberallgäu", "Westallgäu", "Bad Grönenbach", "Babenhausen", "Türkheim", "Obergünzburg",
+];
+
+function placeRe(place: string): RegExp {
+  const esc = place.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}])${esc}(?![\\p{L}])`, "u");
+}
+
+/**
+ * Ortsangaben im Text müssen zur echten Firmenadresse aus dem Impressum passen.
+ * Gibt Fehler zurück, z. B. "Ort passt nicht: Berlin-Mitte (Impressum: Kahl am Main)".
+ */
+export function placeIssues(text: string, ort?: string | null, plz?: string | null, extraPlaces: string[] = [], allowed: string[] = []): string[] {
+  const issues: string[] = [];
+  const ok = allowed.map((a) => fold(a)).filter(Boolean);
+  const core = mailCore(String(text || ""));
+  const real = fold(String(ort || ""));
+  const fitsReal = (name: string) => {
+    const f = fold(name);
+    if (!real || !f) return false;
+    // "Berlin-Mitte" passt nicht zu "Berlin" allein: das Viertel muss genau stimmen.
+    return real === f || real.includes(f) || (f.includes(real) && !/[-\s]/.test(name));
+  };
+  const anlass = /Recherche nach [^.\n]*? in ([^.\n]+?) bin ich/i.exec(core)?.[1];
+  if (anlass && !fitsReal(anlass)) issues.push(`Ort passt nicht: ${anlass}${ort ? ` (Impressum: ${ort})` : " (kein Ort im Impressum)"}`);
+  const places = [...new Set([...extraPlaces, ...KNOWN_PLACES].map((p) => String(p || "").trim()).filter((p) => p.length >= 4))]
+    .sort((a, b) => b.length - a.length);
+  const seen = new Set<string>();
+  for (const place of places) {
+    if (!placeRe(place).test(core)) continue;
+    if (/^(Allgäu|Unterallgäu|Ostallgäu|Oberallgäu|Westallgäu)$/.test(place) && plz && /^(87|88|86)/.test(plz)) continue;
+    if (fitsReal(place)) continue;
+    // Ort einer genannten Referenz (z. B. "Schreinerei Wagner in Kempten") ist erlaubt.
+    if (ok.some((a) => a === fold(place) || a.includes(fold(place)))) continue;
+    // "Berlin" ist Teil von "Berlin-Mitte": nur einmal melden.
+    if ([...seen].some((s) => s.includes(place))) continue;
+    seen.add(place);
+    issues.push(`Ort passt nicht: ${place}${ort ? ` (Impressum: ${ort})` : " (kein Ort im Impressum)"}`);
+  }
+  const plzInText = [...core.matchAll(/(?<!\d)(\d{5})\s+\p{Lu}/gu)].map((m) => m[1]);
+  for (const code of plzInText) if (code !== String(plz || "")) issues.push(`PLZ passt nicht: ${code}`);
+  return [...new Set(issues)];
 }
 
 /** Der ehrliche Anlass. Kein "zufällig". */
 export function anlassSatz(input: { branche?: string | null; query?: string | null; ort?: string | null }): string {
-  const voice = branchVoice(input.branche, input.query);
+  const voice = branchVoice(input.branche);
   const ort = anlassOrt(input.query, input.ort);
   return `bei einer Recherche nach ${voice.label}${ort ? ` in ${ort}` : ""} bin ich auf Ihre Website gestoßen.`;
 }
@@ -1070,13 +1301,16 @@ export type MailContext = {
   branche?: string | null;
   query?: string | null;
   ort?: string | null;
+  plz?: string | null;
+  places?: string[];
   pageText?: string | null;
   observations: Observation[];
   references?: PortfolioRef[];
 };
 
-export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[]; anlass?: string; beleg?: string; pageText?: string | null }): string[] {
+export function reviewMail(body: string, input: { observations: Observation[]; references?: PortfolioRef[]; anlass?: string; beleg?: string; pageText?: string | null; ort?: string | null; plz?: string | null; places?: string[] }): string[] {
   const issues: string[] = [];
+  issues.push(...placeIssues(body, input.ort, input.plz, input.places || [], (input.references || []).map((r) => String(r.ort || ""))));
   const text = String(body || "");
   const core = mailCore(text);
   const used = rankObservations(input.observations || []);
@@ -1129,7 +1363,7 @@ function overlaps(a: Observation, b: Observation): boolean {
 export function composePeerMail(input: MailContext): { subject: string; body: string; observations: Observation[] } | null {
   const ranked = rankObservations(input.observations || []);
   if (ranked.length < MIN_OBSERVATIONS) return null;
-  const v = branchVoice(input.branche, input.query);
+  const v = branchVoice(input.branche);
   const site = siteName(input.web, input.domain);
   const lead = ranked[0];
   const rest = ranked.slice(1);
@@ -1184,11 +1418,11 @@ export function finalizeMail(input: MailContext & {
   const anlass = anlassSatz(input);
   for (const attempt of input.attempts || []) {
     if (!attempt?.body) continue;
-    const issues = reviewMail(attempt.body, { observations: used, references: input.references || [], anlass, beleg: attempt.beleg || "", pageText: input.pageText });
+    const issues = reviewMail(attempt.body, { observations: used, references: input.references || [], anlass, beleg: attempt.beleg || "", pageText: input.pageText, ort: input.ort, plz: input.plz, places: input.places });
     if (issues.length === 0) return { ok: true, subject: attempt.subject, body: attempt.body, observations: used, source: "ki" };
   }
   const composed = composePeerMail(input);
-  if (!composed || reviewMail(composed.body, { observations: used, references: input.references || [], anlass }).length) return { ok: false, reason: SUBSTANCE_LABEL };
+  if (!composed || reviewMail(composed.body, { observations: used, references: input.references || [], anlass, ort: input.ort, plz: input.plz, places: input.places }).length) return { ok: false, reason: SUBSTANCE_LABEL };
   return { ok: true, subject: composed.subject, body: composed.body, observations: composed.observations, source: "vorlage" };
 }
 
@@ -1257,7 +1491,7 @@ export function draftUserPrompt(input: {
   observations: Observation[];
 }): string {
   const rules = input.wissen.map((w) => `${w.section}: ${w.content}`).join("\n").slice(0, 3000);
-  const v = branchVoice(input.branche, input.query);
+  const v = branchVoice(input.branche);
   const fit = matchingReference(input.references, input.branche);
   const refs = fit
     ? `Erlaubte Referenz, nur diese: ${fit.firma}${fit.ort ? ` in ${fit.ort}` : ""}. Punkt: ${fit.note}`
@@ -1272,6 +1506,7 @@ export function draftUserPrompt(input: {
     refs,
     `Anrede genau so: ${mailGreeting(input.person, input.rolle)}`,
     `Anlass-Satz wörtlich: ${anlassSatz(input)}`,
+    `Ort: ${input.ort ? `Der Betrieb sitzt laut Impressum in ${input.ort}. Kein anderer Ort, keine andere Stadt, kein Stadtteil im Text.` : "Kein Ort bekannt. Nenne keinen Ort, keine Stadt und keinen Stadtteil."}`,
     `Branche für die Vorstellung: ${v.wir}. Ziel: ${v.ziel}. Kunden des Betriebs: ${v.kunden}. Betrieb in der Terminfrage: ${v.betriebAkk}.`,
     `Firma: ${input.firma}`,
     `Person: ${input.person} (${input.rolle})`,

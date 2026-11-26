@@ -4,8 +4,12 @@ import { berlinClock } from "./outreach.ts";
 export const PREP_FROM = 1;
 export const PREP_UNTIL = 7;
 export const PREP_TARGET = 50;
-export const PREP_BATCH = 3;
-export const OVERPASS_OUT = 12;
+export const PREP_BATCH = 4;
+export const PREP_BATCH_MAX = 6;
+/** Treffer pro Abfrage. Eine geglückte Abfrage füllt den Vorrat für viele Läufe, falls Overpass später hakt. */
+export const OVERPASS_OUT = 40;
+/** Standard: nur das Allgäu. Weitere Regionen später über outreach_settings.active_regions. */
+export const DEFAULT_REGIONS = ["allgaeu"];
 
 export type SearchProfile = {
   id: string;
@@ -25,6 +29,8 @@ export type SearchArea = {
   north: number;
   east: number;
   sort: number;
+  /** Regionsschlüssel, z. B. "allgaeu". Sonst das Bundesland klein ("be", "by"). */
+  region?: string;
 };
 
 export type CoverageMark = { profileId: string; areaId: string; searchedAt: string };
@@ -94,7 +100,7 @@ export function clampPrep(input: {
     prep_from: from,
     prep_until: until,
     prep_target: Math.min(200, Math.max(1, Number.isFinite(target) && target > 0 ? Math.round(target) : PREP_TARGET)),
-    prep_batch: Math.min(4, Math.max(1, Number.isFinite(batch) && batch > 0 ? Math.round(batch) : PREP_BATCH)),
+    prep_batch: Math.min(PREP_BATCH_MAX, Math.max(1, Number.isFinite(batch) && batch > 0 ? Math.round(batch) : PREP_BATCH)),
     prep_on: input.prep_on !== false,
   };
 }
@@ -158,18 +164,22 @@ export function overpassQuery(tags: string[], area: Pick<SearchArea, "south" | "
     lines.push(`  way["${key}"="${value}"]["website"](${box});`);
     lines.push(`  way["${key}"="${value}"]["contact:website"](${box});`);
   }
-  return `[out:json][timeout:18];\n(\n${lines.join("\n")}\n);\nout center tags ${OVERPASS_OUT};`;
+  return `[out:json][timeout:30];\n(\n${lines.join("\n")}\n);\nout center tags ${OVERPASS_OUT + 20};`;
 }
 
 const WOOD_NAME = /schreinerei|tischlerei|\bschreiner\b|\btischler\b|möbel|moebel|küchenstudio|kuechenstudio/i;
 const WOOD_TAG = /carpenter|joiner|cabinet_maker|furniture|shop=kitchen|craft=parquet/i;
 const SKIP_HOST = /(^|\.)(facebook|instagram|fb|linktr\.ee|google|yelp|tripadvisor|booking|lieferando|thefork|jameda|doctolib|tiktok|youtube)\./i;
 
-export function readOverpass(payload: unknown, limit = OVERPASS_OUT): { url: string; name: string }[] {
+export type OverpassHit = { url: string; name: string; osm: string; kind: string; plz: string };
+
+const KIND_KEYS = ["healthcare", "amenity", "craft", "office", "shop", "leisure", "man_made"];
+
+export function readOverpass(payload: unknown, limit = OVERPASS_OUT): OverpassHit[] {
   const elements = (payload && typeof payload === "object" && Array.isArray((payload as { elements?: unknown }).elements))
-    ? (payload as { elements: { tags?: Record<string, string> }[] }).elements
+    ? (payload as { elements: { type?: string; id?: number; tags?: Record<string, string> }[] }).elements
     : [];
-  const out: { url: string; name: string }[] = [];
+  const out: OverpassHit[] = [];
   const seen = new Set<string>();
   for (const el of elements) {
     const tags = el?.tags || {};
@@ -190,21 +200,28 @@ export function readOverpass(payload: unknown, limit = OVERPASS_OUT): { url: str
     const key = url.hostname.toLowerCase().replace(/^www\./, "");
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ url: url.toString(), name });
+    const kindKey = KIND_KEYS.find((k) => tags[k]);
+    out.push({
+      url: url.toString(),
+      name,
+      osm: el?.type && el?.id ? `${el.type}/${el.id}` : "",
+      kind: kindKey ? `${kindKey}=${tags[kindKey]}` : "",
+      plz: String(tags["addr:postcode"] || "").trim(),
+    });
     if (out.length >= limit) break;
   }
   return out;
 }
 
-function box(id: string, name: string, state: string, lat: number, lon: number, km: number, sort: number): SearchArea {
+function box(id: string, name: string, state: string, lat: number, lon: number, km: number, sort: number, region?: string): SearchArea {
   const dLat = km / 111;
   const dLon = km / (111 * Math.cos((lat * Math.PI) / 180));
   const r = (n: number) => Math.round(n * 10000) / 10000;
-  return { id, name, state, south: r(lat - dLat), west: r(lon - dLon), north: r(lat + dLat), east: r(lon + dLon), sort };
+  return { id, name, state, south: r(lat - dLat), west: r(lon - dLon), north: r(lat + dLat), east: r(lon + dLon), sort, region: region || state.toLowerCase() };
 }
 
 /** id, Name, Land, Breite, Länge, Kantenlänge in km. Großstädte in Bezirke geteilt, sonst ein Kasten um die Innenstadt. */
-const PLACES: [string, string, string, number, number, number][] = [
+const PLACES: [string, string, string, number, number, number, string?][] = [
   ["berlin-mitte", "Berlin-Mitte", "BE", 52.52, 13.405, 3.5],
   ["berlin-friedrichshain", "Berlin-Friedrichshain", "BE", 52.515, 13.454, 3],
   ["berlin-kreuzberg", "Berlin-Kreuzberg", "BE", 52.499, 13.403, 3],
@@ -241,8 +258,8 @@ const PLACES: [string, string, string, number, number, number][] = [
   ["landshut", "Landshut", "BY", 48.5371, 12.1516, 5],
   ["passau", "Passau", "BY", 48.5665, 13.4319, 5],
   ["rosenheim", "Rosenheim", "BY", 47.8564, 12.1289, 5],
-  ["kempten", "Kempten", "BY", 47.7267, 10.3139, 5],
-  ["memmingen", "Memmingen", "BY", 47.9874, 10.1813, 5],
+  ["kempten", "Kempten", "BY", 47.7267, 10.3139, 5, "allgaeu"],
+  ["memmingen", "Memmingen", "BY", 47.9874, 10.1813, 5, "allgaeu"],
   ["aschaffenburg", "Aschaffenburg", "BY", 49.977, 9.1521, 5],
   ["stuttgart", "Stuttgart", "BW", 48.7758, 9.1829, 5],
   ["karlsruhe", "Karlsruhe", "BW", 49.0069, 8.4037, 5],
@@ -327,9 +344,58 @@ const PLACES: [string, string, string, number, number, number][] = [
   ["neunkirchen-saar", "Neunkirchen", "SL", 49.3447, 7.1806, 4.5],
   ["homburg", "Homburg", "SL", 49.3264, 7.3387, 4.5],
   ["voelklingen", "Völklingen", "SL", 49.2516, 6.8589, 4.5],
+  // Allgäu: Städte und die vier Landkreise Unter-, Ost-, Ober- und Westallgäu.
+  ["kaufbeuren", "Kaufbeuren", "BY", 47.88, 10.6225, 5, "allgaeu"],
+  ["fuessen", "Füssen", "BY", 47.5713, 10.7011, 5, "allgaeu"],
+  ["sonthofen", "Sonthofen", "BY", 47.515, 10.2817, 5, "allgaeu"],
+  ["lindau", "Lindau (Bodensee)", "BY", 47.546, 9.684, 5, "allgaeu"],
+  ["mindelheim", "Mindelheim", "BY", 48.0458, 10.49, 5, "allgaeu"],
+  ["bad-woerishofen", "Bad Wörishofen", "BY", 48.0058, 10.5967, 4, "allgaeu"],
+  ["ottobeuren", "Ottobeuren", "BY", 47.9414, 10.2994, 4, "allgaeu"],
+  ["bad-groenenbach", "Bad Grönenbach", "BY", 47.874, 10.223, 4, "allgaeu"],
+  ["babenhausen-schwaben", "Babenhausen", "BY", 48.144, 10.253, 4, "allgaeu"],
+  ["tuerkheim", "Türkheim", "BY", 48.0636, 10.6411, 4, "allgaeu"],
+  ["marktoberdorf", "Marktoberdorf", "BY", 47.7786, 10.6172, 5, "allgaeu"],
+  ["buchloe", "Buchloe", "BY", 48.0333, 10.7167, 4, "allgaeu"],
+  ["pfronten", "Pfronten", "BY", 47.5833, 10.55, 4, "allgaeu"],
+  ["oberguenzburg", "Obergünzburg", "BY", 47.8453, 10.4183, 4, "allgaeu"],
+  ["immenstadt", "Immenstadt im Allgäu", "BY", 47.56, 10.22, 4, "allgaeu"],
+  ["oberstdorf", "Oberstdorf", "BY", 47.4097, 10.2792, 4, "allgaeu"],
+  ["kempten-land", "Waltenhofen und Dietmannsried", "BY", 47.73, 10.27, 7, "allgaeu"],
+  ["sulzberg-durach", "Durach und Sulzberg", "BY", 47.69, 10.35, 4, "allgaeu"],
+  ["lindenberg", "Lindenberg im Allgäu", "BY", 47.603, 9.89, 4, "allgaeu"],
+  ["lindau-land", "Wasserburg und Bodolz", "BY", 47.57, 9.63, 4, "allgaeu"],
+  ["wangen-allgaeu", "Wangen im Allgäu", "BW", 47.6858, 9.8336, 5, "allgaeu"],
+  ["isny", "Isny im Allgäu", "BW", 47.693, 10.04, 4, "allgaeu"],
+  ["leutkirch", "Leutkirch im Allgäu", "BW", 47.826, 10.022, 4, "allgaeu"],
 ];
 
-export const SEARCH_AREAS: SearchArea[] = PLACES.map((p, sort) => box(p[0], p[1], p[2], p[3], p[4], p[5], sort));
+export const SEARCH_AREAS: SearchArea[] = PLACES.map((p, sort) => box(p[0], p[1], p[2], p[3], p[4], p[5], sort, p[6]));
+
+/** Nur Gebiete der aktiven Regionen. Leere Liste heißt: alle Gebiete (für später, bundesweit). */
+export function activeAreas<T extends { region?: string | null; state?: string }>(areas: T[], regions?: string[] | null): T[] {
+  const want = (regions || []).map((r) => String(r || "").trim().toLowerCase()).filter(Boolean);
+  if (!want.length) return areas;
+  return areas.filter((a) => want.includes(String(a.region || a.state || "").toLowerCase()));
+}
+
+/** PLZ-Bereiche je Region. Eine Firma, deren Impressum woanders liegt, wird nicht angeschrieben. */
+export const REGION_PLZ: Record<string, RegExp> = {
+  allgaeu: /^(87\d{3}|881[3-9]\d|882(3\d|[6-9]\d)|883[01]\d|8680\d|8682\d|86833|8684\d)$/,
+};
+
+export const REGION_LABEL: Record<string, string> = { allgaeu: "Allgäu" };
+
+/** true, wenn die PLZ in einer der aktiven Regionen liegt. Ohne bekannte PLZ-Regel: true. */
+export function plzInRegions(plz: string | null | undefined, regions?: string[] | null): boolean {
+  const want = (regions || []).map((r) => String(r || "").toLowerCase()).filter(Boolean);
+  if (!want.length) return true;
+  const rules = want.map((r) => REGION_PLZ[r]).filter(Boolean);
+  if (!rules.length) return true;
+  const code = String(plz || "").trim();
+  if (!/^\d{5}$/.test(code)) return false;
+  return rules.some((re) => re.test(code));
+}
 
 export function areaIsSmall(area: Pick<SearchArea, "south" | "west" | "north" | "east">): boolean {
   return area.north > area.south && area.east > area.west && area.north - area.south < 0.2 && area.east - area.west < 0.25;

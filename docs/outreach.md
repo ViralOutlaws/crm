@@ -86,3 +86,15 @@ Mails gehen jetzt mit `Date`-Header, RFC-2047-kodiertem Betreff und nur CRLF rau
 Der Filter „Offen“ in der Freigabe ist entfallen. Er war kein eigener Status, nur die Sicht „Entwurf + Freigegeben“; in der Datenbank gab es nie den Status „offen“.
 
 Pages-Deploy für PR #31 (vo-crm-v18) neu angestoßen.
+
+## Stand 26.11.2026: Allgäu, Quality-Gate, Anti-Doppel
+
+- **Aktive Region:** `outreach_settings.active_regions` (Standard `{allgaeu}`). Gebiete haben `outreach_areas.region`. Andere Gebiete (Berlin usw.) bleiben gespeichert, werden aber nicht gesucht. Ausweiten: Region in `active_regions` ergänzen.
+- **Region per Impressum:** Ein Betrieb wird nur angeschrieben, wenn die PLZ im Impressum in der Region liegt (Allgäu: 87xxx, Teile von 86xxx/88xxx). Ohne Adresse im Impressum: übersprungen.
+- **Ort im Text:** Der Anlass-Satz nennt nur den Ort aus dem Impressum, nie das Suchgebiet. `placeIssues` verwirft jede Mail, deren Orts- oder PLZ-Angaben nicht zum Impressum passen. `outreach-send` prüft das vor dem Versand noch einmal und schiebt die Mail sonst zurück in die Entwürfe.
+- **Adresse:** Nur Adressen, deren Domain zur Website passt (`emailFitsSite`); Freemail nur, wenn der Name vor dem @ zur Website passt.
+- **Anrede und Firma:** `plausibleName` blockiert Anreden wie „Herr angegebenen“; `extractCompany` überspringt Versicherer, Kammern, Agenturen aus dem Impressum.
+- **Branche:** Aus dem echten OSM-Merkmal (`brancheFromKind`), bestätigt durch die Startseite (`verifyBranche`), sonst neutral „Betrieben“.
+- **Bereits angeschrieben:** Tabelle `outreach_contacted` (Firma, Domain, E-Mail, OSM-ID, Ort, Datum, Betreff, Quelle). Ein Trigger trägt jede gesendete Mail automatisch ein. Alte Listen (Saley 25.11., Kaltakquise 09./10.11.) sind importiert (`/workspace/outreach-import/import_lists.py`). Recherche, Entwurf und Versand überspringen Treffer über E-Mail, Domain, Firmenname oder OSM-ID. UI: Freigabe → „Bereits angeschrieben“.
+- **Blockliste:** Einträge vom Typ `domain` sperren jetzt die ganze Domain.
+- **Durchsatz:** Cron alle 5 Minuten, 4 Websites pro Lauf (max. 6), bis zu 40 Treffer pro Overpass-Abfrage, maps.mail.ru zuerst (overpass-api.de antwortet aus der Cloud oft 406).

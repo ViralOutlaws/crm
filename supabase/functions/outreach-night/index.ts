@@ -21,11 +21,19 @@ import {
   type Observation,
   type PortfolioRef,
   anlassSatz,
+  brancheFromKind,
+  contactedHit,
+  emailFitsSite,
   reviewMail,
+  verifyBranche,
 } from "../_shared/outreach.ts";
 import {
   DEFAULT_PROFILES,
+  DEFAULT_REGIONS,
   OVERPASS_OUT,
+  PREP_BATCH,
+  activeAreas,
+  plzInRegions,
   SEARCH_AREAS,
   clampPrep,
   cleanTags,
@@ -56,40 +64,52 @@ function cronAuthorized(req: Request) {
   return !!secret && !!given && safeEqual(given, secret);
 }
 
-// overpass-api.de lehnt Anfragen aus der Supabase-Cloud oft sofort ab oder ist überlastet.
-// Deshalb der Reihe nach mehrere öffentliche Overpass-Server, jeder mit eigenem Zeitlimit.
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
+// overpass-api.de antwortet aus der Supabase-Cloud oft mit 406 (Nacht 26.11.: 5 von 25 Läufen ohne Suche).
+// Darum zuerst maps.mail.ru (zuverlässig, aber langsam), dann overpass-api.de per GET, dann die übrigen Spiegel.
+// Jeder Server hat ein eigenes Zeitlimit, alles zusammen bleibt unter 100 s.
+const OVERPASS_ENDPOINTS: { url: string; method: "POST" | "GET"; ms: number }[] = [
+  { url: "https://maps.mail.ru/osm/tools/overpass/api/interpreter", method: "POST", ms: 40000 },
+  { url: "https://overpass-api.de/api/interpreter", method: "GET", ms: 20000 },
+  { url: "https://overpass.private.coffee/api/interpreter", method: "POST", ms: 20000 },
+  { url: "https://overpass.kumi.systems/api/interpreter", method: "POST", ms: 20000 },
 ];
+const OVERPASS_BUDGET_MS = 95000;
+const UA = "ViralOutlawsCRM/1.0 (+https://www.viraloutlaws.de; info@viraloutlaws.de)";
 
-async function overpass(query: string): Promise<{ ok: true; urls: { url: string; name: string }[]; server: string } | { ok: false; error: string }> {
+type Hit = { url: string; name: string; osm: string; kind: string; plz: string };
+
+async function overpass(query: string): Promise<{ ok: true; urls: Hit[]; server: string } | { ok: false; error: string }> {
   const tried: string[] = [];
   const started = Date.now();
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    if (Date.now() - started > 45000) break;
-    const host = new URL(endpoint).host;
+  for (const ep of OVERPASS_ENDPOINTS) {
+    const left = OVERPASS_BUDGET_MS - (Date.now() - started);
+    if (left < 8000) break;
+    const host = new URL(ep.url).host;
     try {
-      // Kein "accept"-Header: overpass-api.de antwortet darauf mit 406 Not Acceptable.
-      const res = await fetch(endpoint, {
-        method: "POST",
-        signal: AbortSignal.timeout(15000),
-        headers: {
-          "user-agent": "ViralOutlawsCRM/1.0 (+https://www.viraloutlaws.de; info@viraloutlaws.de)",
-          "content-type": "application/x-www-form-urlencoded",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-      });
+      const res = ep.method === "GET"
+        ? await fetch(`${ep.url}?data=${encodeURIComponent(query)}`, {
+          signal: AbortSignal.timeout(Math.min(ep.ms, left)),
+          headers: { "user-agent": UA, accept: "application/json, text/plain, */*" },
+        })
+        : await fetch(ep.url, {
+          method: "POST",
+          signal: AbortSignal.timeout(Math.min(ep.ms, left)),
+          headers: { "user-agent": UA, "content-type": "application/x-www-form-urlencoded" },
+          body: `data=${encodeURIComponent(query)}`,
+        });
       if (!res.ok) {
         tried.push(`${host} ${res.status}`);
         await res.body?.cancel();
         continue;
       }
-      const payload = await res.json().catch(() => null);
-      if (!payload || !Array.isArray((payload as { elements?: unknown[] }).elements)) {
+      const payload = await res.json().catch(() => null) as { elements?: unknown[]; remark?: string } | null;
+      if (!payload || !Array.isArray(payload.elements)) {
         tried.push(`${host} ohne Daten`);
+        continue;
+      }
+      // Zeitüberschreitung auf dem Server kommt als 200 mit "remark" und leerer Liste.
+      if (!payload.elements.length && /timeout|runtime error|out of memory/i.test(String(payload.remark || ""))) {
+        tried.push(`${host} Server-Zeitlimit`);
         continue;
       }
       return { ok: true, urls: readOverpass(payload), server: host };
@@ -124,7 +144,7 @@ async function ensureProfiles(sb: Sb, workspaceId: string) {
   if (ins.error) throw new Error(ins.error.message || "Profile nicht angelegt");
 }
 
-async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branche: string; query: string; guess: boolean }) {
+async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branche: string; query: string; guess: boolean; osm?: string; kind?: string; regions: string[] }) {
   const pub = assertPublicHttpUrl(raw);
   if (!pub.ok) return { ok: false as const, error: pub.error };
   const page = await researchPage(pub.url);
@@ -146,10 +166,21 @@ async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branc
   });
   const known = await loadGuard(sb, workspaceId);
   const best = preferredPerson(read.people) || read.people[0];
+  const pageText = htmlToText(page.pageHtml || "");
+  // Branche aus dem echten OSM-Merkmal, bestätigt durch die Startseite. Sonst neutral.
+  const branche = verifyBranche(brancheFromKind(meta.kind) || meta.branche, pageText);
   let skip = best
-    ? outreachSkip({ email: best.email, domain: read.domain, ...known })
+    ? outreachSkip({ email: best.email, domain: read.domain, ...known, firma: read.firma, osm: meta.osm })
     : "Kein Ansprechpartner und keine Adresse gefunden";
   let status = skip ? (best ? "uebersprungen" : "fehler") : "recherchiert";
+  // Nur Betriebe mit geprüfter Impressum-Adresse in der aktiven Region (Allgäu).
+  if (!skip && !read.plz) {
+    skip = "Keine Adresse im Impressum";
+    status = "uebersprungen";
+  } else if (!skip && !plzInRegions(read.plz, meta.regions)) {
+    skip = `Außerhalb der Region (${read.plz} ${read.ort})`.slice(0, 120);
+    status = "uebersprungen";
+  }
   if (!skip && observations.length < MIN_OBSERVATIONS) {
     skip = SUBSTANCE_LABEL;
     status = "duenn";
@@ -167,8 +198,9 @@ async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branc
     ort: read.ort || null,
     impressum_url: read.impressumUrl || null,
     excerpt: read.excerpt || null,
-    page_excerpt: htmlToText(page.pageHtml || "").slice(0, 2000) || null,
-    branche: meta.branche || null,
+    page_excerpt: pageText.slice(0, 2000) || null,
+    branche: branche || null,
+    osm_id: meta.osm || null,
     observations,
     status,
     skip_reason: skip,
@@ -190,7 +222,7 @@ async function ingestOne(sb: Sb, workspaceId: string, raw: string, meta: { branc
   return { ok: true as const, targetId: String(inserted.data.id), status };
 }
 
-async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
+async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[], places: string[] = []) {
   if (!targetIds.length) return [];
   const people = await sb.from("outreach_people").select("id, target_id, person, rolle, email, email_art").eq("workspace_id", workspaceId).in("target_id", targetIds).limit(20);
   if (people.error) throw new Error(people.error.message || "Personen nicht lesbar");
@@ -213,7 +245,7 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
   for (const person of list) {
     const art = String(person.email_art || "generisch") as EmailArt;
     if (art === "vermutet" || drafted.has(String(person.target_id))) continue;
-    const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, page_excerpt").eq("id", person.target_id).maybeSingle();
+    const target = await sb.from("outreach_targets").select("id, firma, web, domain, status, skip_reason, observations, branche, query, ort, plz, osm_id, page_excerpt").eq("id", person.target_id).maybeSingle();
     const row = target.data;
     if (!row || row.status !== "recherchiert" || row.skip_reason) continue;
     const existing = await sb.from("outreach_drafts").select("id").eq("workspace_id", workspaceId).eq("target_id", row.id).limit(1);
@@ -226,8 +258,13 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
       priorEmails: known.priorEmails,
       priorDomains: known.priorDomains.filter((d) => websiteDomain(d) !== websiteDomain(String(row.domain || ""))),
       rejectedEmails: known.rejectedEmails,
+      blockedDomains: known.blockedDomains,
+      contacted: known.contacted,
+      firma: row.firma,
+      osm: row.osm_id,
     });
     if (skip) continue;
+    if (!emailFitsSite(String(person.email || ""), String(row.domain || row.web || ""))) continue;
     const observations = (Array.isArray(row.observations) ? row.observations : []) as Observation[];
     if (observations.length < MIN_OBSERVATIONS) continue;
     const ctx = {
@@ -239,6 +276,8 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
       branche: row.branche,
       query: row.query,
       ort: row.ort,
+      plz: row.plz,
+      places,
       pageText: row.page_excerpt,
       observations,
       references,
@@ -247,7 +286,7 @@ async function draftTargets(sb: Sb, workspaceId: string, targetIds: string[]) {
     const first = parseMailJson(await anthropicText("Du schreibst nur den JSON-Entwurf. Du versendest nichts.", prompt, 1000));
     let mail = finalizeMail({ ...ctx, attempts: first ? [first] : [] });
     if (mail.ok && mail.source !== "ki" && first) {
-      const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText });
+      const issues = reviewMail(first.body, { observations, references, anlass: anlassSatz(ctx), beleg: first.beleg, pageText: ctx.pageText, ort: ctx.ort, plz: ctx.plz, places });
       const second = parseMailJson(await anthropicText(
         "Du korrigierst nur den JSON-Entwurf. Du versendest nichts.",
         `${prompt}\n\nDer Entwurf ist durchgefallen: ${issues.join(", ")}. Schreibe ihn neu und halte den Aufbau genau ein.`,
@@ -290,10 +329,10 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
     prep_from: 1,
     prep_until: 7,
     prep_target: 50,
-    prep_batch: 3,
+    prep_batch: PREP_BATCH,
     prep_on: true,
   }, { onConflict: "workspace_id", ignoreDuplicates: true });
-  const settings = await sb.from("outreach_settings").select("prep_from, prep_until, prep_target, prep_batch, prep_on, guess_emails").eq("workspace_id", workspaceId).maybeSingle();
+  const settings = await sb.from("outreach_settings").select("prep_from, prep_until, prep_target, prep_batch, prep_on, guess_emails, active_regions").eq("workspace_id", workspaceId).maybeSingle();
   if (settings.error) return { error: settings.error.message || "Einstellungen nicht lesbar" };
   const prep = clampPrep(settings.data || {});
   if (!manual) {
@@ -317,14 +356,22 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
     await ensureProfiles(sb, workspaceId);
     const [profilesRes, areasRes] = await Promise.all([
       sb.from("outreach_profiles").select("id, name, tags, region, enabled, sort").eq("workspace_id", workspaceId).order("sort"),
-      sb.from("outreach_areas").select("id, name, state, south, west, north, east, sort").order("sort"),
+      sb.from("outreach_areas").select("id, name, state, south, west, north, east, sort, region").order("sort"),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);
     if (areasRes.error) throw new Error(areasRes.error.message);
     const profiles = (profilesRes.data || []) as SearchProfile[];
-    const areas = (areasRes.data || []) as SearchArea[];
+    const regions: string[] = Array.isArray(settings.data?.active_regions) ? settings.data.active_regions : DEFAULT_REGIONS;
+    const allAreas = (areasRes.data || []) as SearchArea[];
+    // Nur aktive Regionen (Standard: Allgäu). Die anderen Gebiete bleiben gespeichert, für später.
+    const areas = activeAreas(allAreas, regions);
+    const activeIds = new Set(areas.map((a) => a.id));
+    const places = allAreas.map((a) => a.name);
+    // Alte Vorräte aus abgeschalteten Gebieten (z. B. Berlin-Mitte) nicht mehr abarbeiten.
+    const stale = allAreas.filter((a) => !activeIds.has(a.id)).map((a) => a.id);
+    if (stale.length) await sb.from("outreach_pool").delete().eq("workspace_id", workspaceId).in("area_id", stale);
 
-    let pool = await sb.from("outreach_pool").select("id, url, profile_id, area_id").eq("workspace_id", workspaceId).order("created_at").limit(prep.prep_batch);
+    let pool = await sb.from("outreach_pool").select("id, url, profile_id, area_id, osm_id, kind").eq("workspace_id", workspaceId).order("created_at").limit(prep.prep_batch);
     if (pool.error) throw new Error(pool.error.message);
     let profileName = "";
     let areaName = "";
@@ -369,7 +416,11 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
       ].filter(Boolean));
       const fresh = found.urls.filter((u) => {
         const domain = websiteDomain(u.url);
-        return domain && !taken.has(domain);
+        if (!domain || taken.has(domain)) return false;
+        if (contactedHit(known.contacted, { domain, osm: u.osm, firma: u.name }) !== null) return false;
+        // OSM kennt die PLZ oft schon: Treffer außerhalb der Region gar nicht erst lesen.
+        if (u.plz && !plzInRegions(u.plz, regions)) return false;
+        return true;
       }).slice(0, OVERPASS_OUT);
       freshCount = fresh.length;
       if (fresh.length) {
@@ -377,12 +428,14 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
           workspace_id: workspaceId,
           url: u.url,
           name: u.name || null,
+          osm_id: u.osm || null,
+          kind: u.kind || null,
           profile_id: cell.profile.id,
           area_id: cell.area.id,
         })), { onConflict: "workspace_id,url", ignoreDuplicates: true });
         if (saved.error) throw new Error(saved.error.message);
       }
-      pool = await sb.from("outreach_pool").select("id, url, profile_id, area_id").eq("workspace_id", workspaceId).order("created_at").limit(prep.prep_batch);
+      pool = await sb.from("outreach_pool").select("id, url, profile_id, area_id, osm_id, kind").eq("workspace_id", workspaceId).order("created_at").limit(prep.prep_batch);
       if (pool.error) throw new Error(pool.error.message);
     }
 
@@ -390,7 +443,10 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
     const researched: string[] = [];
     const errors: string[] = [];
     const guess = settings.data?.guess_emails === true;
+    const startedAt = Date.now();
     for (const item of batch) {
+      // Zeitbudget: lieber den Rest im Vorrat lassen als in das Limit der Edge Function zu laufen.
+      if (Date.now() - startedAt > 75000) break;
       const profile = profiles.find((p) => p.id === item.profile_id);
       const area = areas.find((a) => a.id === item.area_id);
       if (!profileName) profileName = profile?.name || "";
@@ -400,6 +456,9 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
           branche: profile?.name || profileName,
           query: [profile?.name || profileName, area?.name || areaName].filter(Boolean).join(" · "),
           guess,
+          osm: String(item.osm_id || ""),
+          kind: String(item.kind || ""),
+          regions,
         });
         if (stored.ok && stored.status === "recherchiert") researched.push(stored.targetId);
         else if (!stored.ok) errors.push(stored.error);
@@ -408,7 +467,7 @@ async function runPrep(sb: Sb, workspaceId: string, manual: boolean) {
       }
       await sb.from("outreach_pool").delete().eq("id", item.id);
     }
-    const created = await draftTargets(sb, workspaceId, researched);
+    const created = await draftTargets(sb, workspaceId, researched, places);
     const after = await sb.from("outreach_drafts").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("status", "entwurf");
     return {
       ok: true,

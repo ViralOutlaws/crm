@@ -4,7 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json, userClient } from "../_shared/edge_auth.ts";
 import { loadGuard, loadSignature } from "../_shared/outreach_db.ts";
 import { mailConfig, sendAndFile, threadKey } from "../_shared/mail.ts";
-import { contactSeed, outreachMessageId, outreachSkip, websiteDomain, withSignature } from "../_shared/outreach.ts";
+import { contactSeed, emailFitsSite, outreachMessageId, outreachSkip, placeIssues, websiteDomain, withSignature } from "../_shared/outreach.ts";
 
 const WORKSPACE_ID = Deno.env.get("CRM_WORKSPACE_ID") || "566f2d4d-5b66-4ba8-b6a1-1edf413a1689";
 const PERMANENT = new Set(["Abgemeldet", "Bestandskunde", "Schon im CRM", "Schon angeschrieben", "Bewusst abgelehnt"]);
@@ -26,7 +26,7 @@ function cronAuthorized(req: Request) {
   return !!secret && !!given && safeEqual(given, secret);
 }
 
-async function release(sb: Sb, id: string, token: string, reason: string, reject: boolean) {
+async function release(sb: Sb, id: string, token: string, reason: string, reject: boolean, backToDraft = false) {
   const patch: Record<string, unknown> = {
     sending_at: null,
     sending_token: null,
@@ -34,6 +34,7 @@ async function release(sb: Sb, id: string, token: string, reason: string, reject
     updated_at: new Date().toISOString(),
   };
   if (reject) patch.status = "abgelehnt";
+  else if (backToDraft) patch.status = "entwurf";
   await sb.from("outreach_drafts").update(patch).eq("id", id).eq("sending_token", token);
 }
 
@@ -61,7 +62,7 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
   if (!draftId || !token) return { ok: false, sent: false, reason: "Keine Mail übernommen." };
 
   const target = draft.target_id
-    ? await sb.from("outreach_targets").select("firma, domain, str, plz, ort, web, skip_reason").eq("id", draft.target_id).maybeSingle()
+    ? await sb.from("outreach_targets").select("firma, domain, str, plz, ort, web, skip_reason, osm_id").eq("id", draft.target_id).maybeSingle()
     : { data: null };
   const person = draft.person_id
     ? await sb.from("outreach_people").select("person").eq("id", draft.person_id).maybeSingle()
@@ -71,6 +72,9 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
   const email = String(draft.email || "").toLowerCase();
   const siblings = await sb.from("outreach_drafts").select("id, status").eq("workspace_id", workspaceId).eq("target_id", draft.target_id).neq("id", draftId).limit(20);
   const already = (siblings.data || []).some((s: { status?: string }) => ["gesendet", "antwort", "abgemeldet"].includes(String(s.status)));
+  // Letzte Sperre vor dem Versand: Ortsangaben müssen zum Impressum passen, die Adresse zur Website.
+  const places = placeIssues(String(draft.body || ""), target.data?.ort, target.data?.plz);
+  const fits = !domain || emailFitsSite(email, domain);
   const skip = already
     ? "Schon angeschrieben"
     : (target.data?.skip_reason || outreachSkip({
@@ -81,9 +85,16 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
       priorEmails: [],
       priorDomains: [],
       rejectedEmails: known.rejectedEmails,
-    }));
+      blockedDomains: known.blockedDomains,
+      contacted: known.contacted,
+      firma: target.data?.firma,
+      osm: target.data?.osm_id,
+    }) || (places.length ? places[0] : null) || (fits ? null : "Mail-Domain passt nicht zur Website"));
   if (skip) {
-    await release(sb, draftId, token, skip, PERMANENT.has(skip));
+    const permanent = [...PERMANENT].some((p) => skip === p || skip.startsWith(`${p} (`));
+    // Ort oder Adresse passt nicht: zurück in die Entwürfe, damit es nicht jede Minute wieder versucht wird.
+    const gateFail = !permanent && (/^(Ort|PLZ) passt nicht|^Mail-Domain passt nicht/.test(skip));
+    await release(sb, draftId, token, skip, permanent, gateFail);
     return { ok: false, sent: false, reason: skip, draftId };
   }
 
