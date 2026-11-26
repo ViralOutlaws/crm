@@ -38,8 +38,6 @@ async function release(sb: Sb, id: string, token: string, reason: string, reject
   await sb.from("outreach_drafts").update(patch).eq("id", id).eq("sending_token", token);
 }
 
-// Eigene Adressen (Testmails) bekommen keinen CRM-Kontakt und verbrauchen keine Kundennummer.
-const OWN_DOMAINS = new Set(["viraloutlaws.de"]);
 const NOW_MAX = 10;
 const NOW_GAP_MS = 4000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -118,18 +116,15 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
   }
 
   const now = new Date().toISOString();
-  let contact: { id: string; kundennummer: string | null } | null = null;
-  const own = OWN_DOMAINS.has(email.split("@")[1] || "");
-  if (!own) try {
-    contact = await ensureContact(sb, workspaceId, { ...draft, person: person.data?.person || "" }, target.data);
-  } catch (e) {
-    warning = [warning, e instanceof Error ? e.message : "Kontakt nicht angelegt"].filter(Boolean).join(" ");
-  }
+  // Kein automatischer CRM-Kontakt mehr (Wunsch Kim, 26.11.): Empfänger bleiben im Outreach-Modul
+  // (Entwurf, outreach_contacted, Outreach-Postfach). Kontakt erst per „Als Kontakt übernehmen“.
+  // War der Entwurf schon bewusst mit einem Kontakt verknüpft, bleibt diese Verknüpfung.
+  const contactId: string | null = draft.contact_id ? String(draft.contact_id) : null;
   const conv = await sb.from("conversations").insert({
     workspace_id: workspaceId,
     channel: "email",
     subject,
-    contact_id: contact?.id || null,
+    contact_id: contactId,
     status: "beantwortet",
     klassifikation: "sonstiges",
     folder_role: "sent",
@@ -166,7 +161,7 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
     status: "gesendet",
     sent_at: now,
     message_id: messageId,
-    contact_id: contact?.id || draft.contact_id || null,
+    contact_id: contactId,
     conversation_id: conv.data?.id || null,
     unread: false,
     last_error: warning || null,
@@ -177,29 +172,69 @@ async function sendApproved(sb: Sb, workspaceId: string, onlyDraftId?: string) {
   if (!finished.data?.length) {
     return { ok: false, sent: true, warning: "Die Mail ist raus, der Status wurde inzwischen von einem anderen Lauf gesetzt." };
   }
-  return { ok: true, sent: true, draftId, contactId: contact?.id || null, kundennummer: contact?.kundennummer || null, warning };
+  return { ok: true, sent: true, draftId, contactId, warning };
 }
 
+/**
+ * „Als Kontakt übernehmen“ (nur auf Kims Klick): legt den CRM-Kontakt an oder nimmt den vorhandenen,
+ * mit Firma, Ansprechpartner, Mail, Website, Adresse, Branche, Quelle Outreach und dem Verlauf als Notizen.
+ * Verknüpft Entwurf und Gespräche mit dem Kontakt. Erst hier entsteht eine Kundennummer.
+ */
 async function ensureContact(sb: Sb, workspaceId: string, draft: Record<string, unknown>, target: Record<string, unknown> | null) {
+  let contact: { id: string; kundennummer: string | null; notizen?: unknown } | null = null;
   if (draft.contact_id) {
-    const existing = await sb.from("contacts").select("id, kundennummer").eq("id", draft.contact_id).maybeSingle();
-    if (existing.data?.id) return existing.data as { id: string; kundennummer: string | null };
+    const existing = await sb.from("contacts").select("id, kundennummer, notizen").eq("id", draft.contact_id).maybeSingle();
+    if (existing.data?.id) contact = existing.data;
   }
   const email = String(draft.email || "");
-  const found = await sb.from("contacts").select("id, kundennummer").eq("workspace_id", workspaceId).ilike("email", email).limit(1);
-  if (found.data?.[0]) return found.data[0] as { id: string; kundennummer: string | null };
-  const seed = contactSeed({
-    firma: String(target?.firma || ""),
-    person: String(draft.person || ""),
-    email,
-    str: String(target?.str || ""),
-    plz: String(target?.plz || ""),
-    ort: String(target?.ort || ""),
-    web: String(target?.web || ""),
-  });
-  const inserted = await sb.from("contacts").insert({ ...seed, workspace_id: workspaceId }).select("id, kundennummer").single();
-  if (inserted.error || !inserted.data) throw new Error(inserted.error?.message || "Kontakt nicht angelegt");
-  return inserted.data as { id: string; kundennummer: string | null };
+  if (!contact && email) {
+    const found = await sb.from("contacts").select("id, kundennummer, notizen").eq("workspace_id", workspaceId).ilike("email", email).limit(1);
+    if (found.data?.[0]) contact = found.data[0];
+  }
+  const draftId = String(draft.id || "");
+  const msgs = draftId
+    ? await sb.from("outreach_messages").select("direction, subject, body_text, created_at").eq("draft_id", draftId).order("created_at", { ascending: true }).limit(20)
+    : { data: [] };
+  const verlauf = (msgs.data || []).map((m: { direction?: string; subject?: string; body_text?: string; created_at?: string }) => ({
+    id: crypto.randomUUID(),
+    typ: "email",
+    text: `${m.direction === "in" ? "Outreach-Antwort" : "Outreach-Mail gesendet"}: "${String(m.subject || "").slice(0, 160)}"\n\n${String(m.body_text || "").split(/\n-- \n/)[0].slice(0, 1500)}`,
+    datum: String(m.created_at || "").slice(0, 10),
+    createdAt: m.created_at || new Date().toISOString(),
+  }));
+  if (!contact) {
+    const seed = contactSeed({
+      firma: String(target?.firma || ""),
+      person: String(draft.person || ""),
+      email,
+      str: String(target?.str || ""),
+      plz: String(target?.plz || ""),
+      ort: String(target?.ort || ""),
+      web: String(target?.web || ""),
+    });
+    const inserted = await sb.from("contacts").insert({
+      ...seed,
+      workspace_id: workspaceId,
+      quelle: "outreach",
+      branche: target?.branche ? String(target.branche).slice(0, 80) : null,
+      notizen: verlauf,
+      meta: { outreach: { draft_id: draftId || null, uebernommen_am: new Date().toISOString(), automatisch: false } },
+    }).select("id, kundennummer").single();
+    if (inserted.error || !inserted.data) throw new Error(inserted.error?.message || "Kontakt nicht angelegt");
+    contact = inserted.data;
+  } else if (verlauf.length) {
+    const have = Array.isArray(contact.notizen) ? contact.notizen as { text?: string }[] : [];
+    const fresh = verlauf.filter((v: { text: string }) => !have.some((h) => String(h.text || "").slice(0, 120) === v.text.slice(0, 120)));
+    if (fresh.length) await sb.from("contacts").update({ notizen: [...have, ...fresh] }).eq("id", contact.id);
+  }
+  const id = contact!.id;
+  if (draftId) {
+    await sb.from("outreach_drafts").update({ contact_id: id, updated_at: new Date().toISOString() }).eq("id", draftId);
+    const convIds = [draft.conversation_id].filter(Boolean);
+    await sb.from("conversations").update({ contact_id: id }).eq("workspace_id", workspaceId).eq("external_id", `outreach:${draftId}`);
+    if (convIds.length) await sb.from("conversations").update({ contact_id: id }).in("id", convIds);
+  }
+  return { id, kundennummer: contact!.kundennummer || null };
 }
 
 /**
@@ -270,16 +305,15 @@ Deno.serve(async (req) => {
     const op = String(body.op || "send");
     if (op === "contact") {
       const draftId = String(body.draftId || "");
-      const draft = await sb.from("outreach_drafts").select("id, contact_id, email, target_id, person_id").eq("id", draftId).eq("workspace_id", workspaceId).maybeSingle();
+      const draft = await sb.from("outreach_drafts").select("id, contact_id, email, target_id, person_id, conversation_id").eq("id", draftId).eq("workspace_id", workspaceId).maybeSingle();
       if (!draft.data) return json({ error: "Entwurf fehlt" }, 404);
       const person = draft.data.person_id
         ? await sb.from("outreach_people").select("person").eq("id", draft.data.person_id).maybeSingle()
         : { data: null };
       const target = draft.data.target_id
-        ? await sb.from("outreach_targets").select("firma, str, plz, ort, web").eq("id", draft.data.target_id).maybeSingle()
+        ? await sb.from("outreach_targets").select("firma, str, plz, ort, web, branche").eq("id", draft.data.target_id).maybeSingle()
         : { data: null };
       const contact = await ensureContact(sb, workspaceId, { ...draft.data, person: person.data?.person || "" }, target.data);
-      await sb.from("outreach_drafts").update({ contact_id: contact.id, updated_at: new Date().toISOString() }).eq("id", draftId);
       return json({ ok: true, contactId: contact.id, kundennummer: contact.kundennummer, sent: false });
     }
     if (op === "now") {
