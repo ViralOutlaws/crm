@@ -1,5 +1,7 @@
 // Holt IMAP, spiegelt Ordner, verschiebt und legt Ordner an. Prüft das Nutzer-JWT selbst.
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json, userClient } from "../_shared/edge_auth.ts";
+import { isAutoReply, mailBodyText, mimeHeader } from "../_shared/mime.ts";
 import {
   classifyHeuristic,
   headerValue,
@@ -17,14 +19,40 @@ import {
 } from "../_shared/mail.ts";
 import { referencedIds, replyPlan, type OutreachThread } from "../_shared/outreach.ts";
 
+const WORKSPACE_ID = Deno.env.get("CRM_WORKSPACE_ID") || "566f2d4d-5b66-4ba8-b6a1-1edf413a1689";
+
+function safeEqual(a: string, b: string) {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  if (!ea.length || ea.length !== eb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ea.length; i++) diff |= ea[i] ^ eb[i];
+  return diff === 0;
+}
+
+// Cron: Header x-outreach-cron == OUTREACH_CRON_SECRET. Darf nur Outreach-Antworten abholen.
+function cronAuthorized(req: Request) {
+  const secret = Deno.env.get("OUTREACH_CRON_SECRET") || "";
+  const given = req.headers.get("x-outreach-cron") || "";
+  return !!secret && !!given && safeEqual(given, secret);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json({ error: "Nur POST" }, 405);
   try {
+    if (cronAuthorized(req)) {
+      const body = await req.json().catch(() => ({}));
+      if (String(body.op || "outreach") !== "outreach") return json({ error: "Der Cron holt nur Outreach-Antworten" }, 400);
+      if (!mailConfig()) return json({ connected: false, message: "E-Mail noch nicht verbunden" });
+      const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+      return json(await syncOutreachReplies(sb, WORKSPACE_ID, Number(body.sinceDays) || 0, body.allFolders === true));
+    }
     const { sb, workspaceId } = await userClient(req);
     const body = await req.json().catch(() => ({}));
     const op = String(body.op || "sync");
     if (!mailConfig()) return json({ connected: false, message: "E-Mail noch nicht verbunden" });
+    if (op === "outreach") return json(await syncOutreachReplies(sb, workspaceId, 0));
 
     if (op === "mkdir") {
       await imapCreate(String(body.path || ""));
@@ -147,10 +175,11 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
   const from = headerValue(mail.header, "from");
   const to = headerValue(mail.header, "to");
   const cc = headerValue(mail.header, "cc");
-  const subject = headerValue(mail.header, "subject") || "(ohne Betreff)";
+  const subject = mimeHeader(mail.header, "subject") || "(ohne Betreff)";
   if (suppressed.has(mailFingerprint(from, subject, mail.text))) return false;
   const email = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
-  const plan = replyPlan({ fromEmail: email, subject, text: mail.text, header: mail.header, drafts: outreachThreads });
+  const readable = mailBodyText(mail.header, mail.text);
+  const plan = replyPlan({ fromEmail: email, subject, text: readable, header: mail.header, drafts: outreachThreads, auto: isAutoReply(mail.header, subject) });
   const match = await matchContact(sb, workspaceId, [email, to, cc].join(" "), mail.text);
   const klass = classifyHeuristic(`${subject}\n${mail.text}`, match.certain || !!plan?.contactId);
   const { data: conv } = await sb.from("conversations").insert({
@@ -184,30 +213,7 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
   });
   if (plan) {
     try {
-      await sb.from("outreach_messages").insert({
-        workspace_id: workspaceId,
-        draft_id: plan.draftId,
-        direction: "in",
-        from_addr: from,
-        to_addrs: to,
-        subject,
-        body_text: mail.text.slice(0, 8000),
-        in_reply_to: referencedIds(mail.header)[0] || null,
-      });
-      await sb.from("outreach_drafts").update({
-        status: plan.nextStatus,
-        unread: true,
-        conversation_id: conv.id,
-        updated_at: new Date().toISOString(),
-      }).eq("id", plan.draftId).eq("workspace_id", workspaceId);
-      if (plan.blockEmail) {
-        await sb.from("outreach_blocklist").upsert({
-          workspace_id: workspaceId,
-          kind: "email",
-          value: plan.blockEmail,
-          reason: "abgemeldet",
-        }, { onConflict: "workspace_id,kind,value" });
-      }
+      await recordReply(sb, workspaceId, plan, { from, to, subject, text: readable, header: mail.header, uid: mail.uid, folder }, conv.id);
       const linked = outreachThreads.find((t) => t.id === plan.draftId);
       if (linked) linked.status = plan.nextStatus;
     } catch { /* Zuordnung darf den Sync nicht stoppen */ }
@@ -250,4 +256,119 @@ async function matchContact(sb: { from: (table: string) => any }, workspaceId: s
     if (offer.data?.[0]?.kunde_id) return { id: offer.data[0].kunde_id, certain: false };
   }
   return { id: null as string | null, certain: false };
+}
+
+type ReplyPlan = NonNullable<ReturnType<typeof replyPlan>>;
+type Db = { from: (table: string) => any };
+
+/** Antwort im Outreach-Postfach ablegen. Doppelt (gleicher Ordner + UID) wird übersprungen. Legt keinen Kontakt an. */
+async function recordReply(sb: Db, workspaceId: string, plan: ReplyPlan, mail: { from: string; to: string; subject: string; text: string; header: string; uid: number; folder: string }, conversationId: string | null = null) {
+  const dup = await sb.from("outreach_messages").select("id").eq("workspace_id", workspaceId).eq("imap_folder", mail.folder).eq("imap_uid", mail.uid).limit(1);
+  if (dup.data?.length) return false;
+  // Dieselbe Mail nach dem Verschieben (z. B. in den Papierkorb) hat eine neue UID: über die Message-ID erkennen.
+  const msgId = mimeHeader(mail.header, "message-id");
+  if (msgId) {
+    const same = await sb.from("outreach_messages").select("id").eq("workspace_id", workspaceId).eq("message_id", msgId).limit(1);
+    if (same.data?.length) return false;
+  }
+  const dateRaw = mimeHeader(mail.header, "date");
+  const date = dateRaw ? new Date(dateRaw) : new Date();
+  const at = Number.isNaN(date.getTime()) || date.getTime() > Date.now() + 3600000 ? new Date() : date;
+  const ins = await sb.from("outreach_messages").insert({
+    workspace_id: workspaceId,
+    draft_id: plan.draftId,
+    direction: "in",
+    from_addr: mail.from,
+    to_addrs: mail.to,
+    subject: mail.subject,
+    body_text: mail.text.slice(0, 8000),
+    message_id: mimeHeader(mail.header, "message-id") || null,
+    in_reply_to: referencedIds(mail.header)[0] || null,
+    auto: plan.auto,
+    imap_uid: mail.uid,
+    imap_folder: mail.folder,
+    created_at: at.toISOString(),
+  });
+  if (ins.error) throw new Error(ins.error.message);
+  const patch: Record<string, unknown> = { unread: true, updated_at: new Date().toISOString() };
+  if (!plan.auto) patch.status = plan.nextStatus;
+  if (conversationId) patch.conversation_id = conversationId;
+  await sb.from("outreach_drafts").update(patch).eq("id", plan.draftId).eq("workspace_id", workspaceId);
+  if (plan.blockEmail && !plan.auto) {
+    await sb.from("outreach_blocklist").upsert({
+      workspace_id: workspaceId,
+      kind: "email",
+      value: plan.blockEmail,
+      reason: "abgemeldet",
+    }, { onConflict: "workspace_id,kind,value" });
+  }
+  return true;
+}
+
+/**
+ * Holt nur Antworten auf Outreach-Mails (Posteingang und Spam) und legt sie im Outreach-Postfach ab.
+ * Andere Mails werden gelesen (ohne \\Seen zu setzen), aber nirgends gespeichert. Kein Kontakt, keine Auto-Antwort.
+ */
+async function syncOutreachReplies(sb: Db, workspaceId: string, sinceDays: number, allFolders = false) {
+  const rows = await sb.from("outreach_drafts").select("id, email, subject, message_id, status, contact_id").eq("workspace_id", workspaceId).in("status", ["gesendet", "antwort", "abgemeldet"]).limit(2000);
+  const threads: OutreachThread[] = (rows.data || []).map((r: { id: string; email?: string; subject?: string; message_id?: string; status?: string; contact_id?: string | null }) => ({
+    id: r.id,
+    email: String(r.email || ""),
+    subject: String(r.subject || ""),
+    messageId: String(r.message_id || ""),
+    status: String(r.status || ""),
+    contactId: r.contact_id || null,
+  }));
+  if (!threads.length) return { ok: true, checked: 0, stored: 0 };
+  const folders = await sb.from("mail_folders").select("imap_path, role").eq("workspace_id", workspaceId);
+  // Normal: Posteingang und Spam. Nachholen (allFolders): alle Ordner außer Gesendet/Entwürfe, nur lesen.
+  const paths = ["INBOX", ...((folders.data || []) as { imap_path: string; role?: string }[])
+    .filter((f) => allFolders
+      ? !/(^|\.)(sent|drafts|entwürfe|gesendet)/i.test(f.imap_path) && f.role !== "sent" && f.role !== "drafts"
+      : f.role === "junk" || f.role === "trash" || /(^|\.)(junk|spam|trash|deleted messages|papierkorb|gelöschte elemente)$/i.test(f.imap_path))
+    .map((f) => f.imap_path)];
+  const deadline = Date.now() + 40000;
+  let checked = 0;
+  let stored = 0;
+  const found: { draftId: string; auto: boolean; from: string }[] = [];
+  const errors: string[] = [];
+  const perFolder: Record<string, number> = {};
+  for (const path of [...new Set(paths)]) {
+    if (Date.now() > deadline) break;
+    const cur = await sb.from("outreach_mail_cursor").select("last_uid").eq("workspace_id", workspaceId).eq("imap_path", path).maybeSingle();
+    const lastUid = Number(cur.data?.last_uid || 0);
+    const spec = lastUid > 0 && !sinceDays && !allFolders
+      ? { afterUid: lastUid, limit: 150, deadline }
+      : { sinceDays: sinceDays || 3, limit: 300, deadline };
+    let mails: { uid: number; flags: string; header: string; text: string }[] = [];
+    try {
+      mails = await imapFetchNew(path, spec);
+    } catch (e) {
+      errors.push(`${path}: ${e instanceof Error ? e.message : "Fehler"}`.slice(0, 160));
+      continue;
+    }
+    perFolder[path] = mails.length;
+    let maxUid = lastUid;
+    for (const mail of mails) {
+      checked++;
+      maxUid = Math.max(maxUid, mail.uid);
+      const from = mimeHeader(mail.header, "from");
+      const email = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
+      const subject = mimeHeader(mail.header, "subject") || "(ohne Betreff)";
+      const text = mailBodyText(mail.header, mail.text);
+      const plan = replyPlan({ fromEmail: email, subject, text, header: mail.header, drafts: threads, auto: isAutoReply(mail.header, subject) });
+      if (!plan) continue;
+      try {
+        if (await recordReply(sb, workspaceId, plan, { from, to: mimeHeader(mail.header, "to"), subject, text, header: mail.header, uid: mail.uid, folder: path })) {
+          stored++;
+          found.push({ draftId: plan.draftId, auto: plan.auto, from: email });
+          const t = threads.find((x) => x.id === plan.draftId);
+          if (t && !plan.auto) t.status = plan.nextStatus;
+        }
+      } catch { /* eine Mail darf den Abruf nicht stoppen */ }
+    }
+    if (allFolders && path !== "INBOX" && !/(^|\.)(junk|spam|trash|deleted messages|papierkorb|gelöschte elemente)$/i.test(path)) continue;
+    await sb.from("outreach_mail_cursor").upsert({ workspace_id: workspaceId, imap_path: path, last_uid: maxUid, checked_at: new Date().toISOString() }, { onConflict: "workspace_id,imap_path" });
+  }
+  return { ok: true, checked, stored, found, perFolder, errors };
 }

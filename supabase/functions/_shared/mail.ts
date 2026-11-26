@@ -143,7 +143,8 @@ type Sock = { read: () => Promise<string>; write: (s: string) => Promise<void>; 
 
 async function openTls(host: string, port: number): Promise<Sock & { take: (n: number) => Promise<string> }> {
   const conn = await Deno.connectTls({ hostname: host, port });
-  const dec = new TextDecoder();
+  // Binär lesen (ein Zeichen pro Byte), damit IMAP-Literal-Längen {n} in Bytes stimmen. Dekodiert wird später in mime.ts.
+  const dec = { decode: (b: Uint8Array) => { let out = ""; for (let i = 0; i < b.length; i += 8192) out += String.fromCharCode(...b.subarray(i, i + 8192)); return out; } };
   const enc = new TextEncoder();
   let buf = "";
   const pull = async () => {
@@ -220,11 +221,13 @@ async function readFetch(sock: Sock & { take: (n: number) => Promise<string> }, 
   const lines: string[] = [];
   for (;;) {
     let line = await sock.read();
-    const lit = /\{(\d+)\}\s*$/.exec(line);
-    if (lit) {
+    // Eine FETCH-Antwort kann mehrere Literale enthalten (Header und Text). Alle einlesen.
+    for (let guard = 0; guard < 8; guard++) {
+      const lit = /\{(\d+)\}\s*$/.exec(line);
+      if (!lit) break;
       const body = await sock.take(Number(lit[1]));
       const tail = await sock.read();
-      line = line + body + tail;
+      line = line + "\r\n" + body + tail;
     }
     lines.push(line);
     if (line.startsWith(tag + " ")) return lines;
@@ -260,7 +263,7 @@ export function searchUids(lines: string[]): number[] {
     .filter((n) => Number.isFinite(n));
 }
 
-export async function imapFetchNew(folder: string, spec: number | { afterUid?: number; beforeUid?: number; limit?: number; deadline?: number } = {}): Promise<FetchedMail[]> {
+export async function imapFetchNew(folder: string, spec: number | { afterUid?: number; beforeUid?: number; limit?: number; deadline?: number; sinceDays?: number } = {}): Promise<FetchedMail[]> {
   const cfg = mailConfig();
   if (!cfg) throw new Error("E-Mail noch nicht verbunden");
   const opts = typeof spec === "number" ? { afterUid: spec, limit: spec > 0 ? 80 : 200 } : spec;
@@ -280,7 +283,10 @@ export async function imapFetchNew(folder: string, spec: number | { afterUid?: n
     if (!(sel[sel.length - 1] || "").includes(" OK")) throw new Error("Ordner nicht lesbar");
     const afterUid = opts.afterUid || 0;
     const beforeUid = opts.beforeUid || 0;
-    const query = afterUid > 0
+    const sinceDays = (opts as { sinceDays?: number }).sinceDays || 0;
+    const query = sinceDays > 0 && afterUid === 0 && beforeUid === 0
+      ? `UID SEARCH SINCE ${imapSince(sinceDays)}`
+      : afterUid > 0
       ? `UID SEARCH UID ${afterUid + 1}:*`
       : beforeUid > 0
       ? `UID SEARCH UID 1:${beforeUid - 1}`
@@ -293,10 +299,10 @@ export async function imapFetchNew(folder: string, spec: number | { afterUid?: n
     const out: FetchedMail[] = [];
     for (const uid of uids) {
       if (opts.deadline && Date.now() > opts.deadline) break;
-      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)] BODY.PEEK[TEXT]<0.8000>)`);
+      const lines = await run(`UID FETCH ${uid} (FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CONTENT-TYPE CONTENT-TRANSFER-ENCODING AUTO-SUBMITTED X-AUTOREPLY X-AUTORESPOND X-AUTOREPLY-FROM PRECEDENCE)] BODY.PEEK[TEXT]<0.8000>)`);
       const blob = lines.join("\n");
-      const header = /BODY\[HEADER[^\]]*\]\s*([\s\S]*?)(?=BODY\[TEXT\]|b\d+ OK|\* \d+ FETCH|$)/i.exec(blob)?.[1] || blob;
-      const text = /BODY\[TEXT\](?:<\d+>)?\s*([\s\S]*?)(?=b\d+ OK|\)$)/i.exec(blob)?.[1] || "";
+      const header = /BODY\[HEADER[^\]]*\]\s*(?:\{\d+\}\r?\n)?([\s\S]*?)(?=BODY\[TEXT\]|b\d+ OK|\* \d+ FETCH|$)/i.exec(blob)?.[1] || blob;
+      const text = /BODY\[TEXT\](?:<\d+>)?\s*(?:\{\d+\}\r?\n)?([\s\S]*?)(?=\)?\r?\nb\d+ OK|b\d+ OK|\)$)/i.exec(blob)?.[1] || "";
       const flags = /FLAGS \(([^)]*)\)/.exec(blob)?.[1] || "";
       out.push({ uid, flags, header: header.slice(0, 8000), text: text.slice(0, 8000) });
     }

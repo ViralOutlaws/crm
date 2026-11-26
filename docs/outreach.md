@@ -104,3 +104,10 @@ Pages-Deploy für PR #31 (vo-crm-v18) neu angestoßen.
 - „Als Kontakt übernehmen“ (Postfach-Verlauf oder Editor) legt den Kontakt mit Quelle `outreach`, Branche, Adresse und Mailverlauf als Notizen an und verknüpft Entwurf und Gespräche.
 - mail-sync legt für Absender aus `outreach_contacted` oder Outreach-Entwürfen keinen Kontakt an.
 - Frühere Auto-Kontakte (KD-10062 bis KD-10086) tragen `meta.outreach_auto = true`; sie wurden nicht gelöscht.
+
+### Antworten abholen (26.11.2026)
+- Cron `outreach-replies` ruft alle 2 Minuten `mail-sync` mit `{"op":"outreach"}` auf (Header `x-outreach-cron`). Gelesen werden Posteingang, Spam und Papierkorb ab einem eigenen Zeiger (`outreach_mail_cursor`). Gespeichert werden nur Antworten auf Outreach-Mails (Message-ID oder Absender plus Betreff), in `outreach_messages`. Keine anderen Mails, kein Kontakt, keine Auto-Antwort.
+- Abwesenheitsnotizen (Auto-Submitted, X-Autoreply, Precedence, Betreff) bekommen `auto = true`: im Postfach mit Filter „Automatisch“, Status bleibt „Gesendet“, keine Sperre.
+- Öffnen des Postfach-Tabs holt sofort ab (höchstens einmal pro Minute).
+- Nachholen: `{"op":"outreach","sinceDays":3,"allFolders":true}` liest alle Ordner außer Gesendet/Entwürfe.
+- Ursache vorher: Seit der alte Posteingang weg ist, hat niemand `mail-sync` aufgerufen, und der IMAP-Leser brach bei zwei Literalen pro FETCH ab.
