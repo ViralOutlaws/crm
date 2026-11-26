@@ -81,6 +81,15 @@ Deno.serve(async (req) => {
       status: String(row.status || ""),
       contactId: row.contact_id || null,
     }));
+    // Outreach-Empfänger (gesendet oder aus alten Listen) werden nie automatisch zum CRM-Kontakt.
+    const contactedRows = await sb.from("outreach_contacted").select("email, domain").eq("workspace_id", workspaceId).limit(10000);
+    const outreachParties = {
+      emails: new Set<string>([
+        ...(contactedRows.error ? [] : (contactedRows.data || [])).map((r: { email?: string }) => String(r.email || "").toLowerCase()),
+        ...outreachThreads.map((t) => t.email.toLowerCase()),
+      ].filter(Boolean)),
+      domains: new Set<string>((contactedRows.error ? [] : (contactedRows.data || [])).map((r: { domain?: string }) => String(r.domain || "").toLowerCase()).filter(Boolean)),
+    };
     let imported = 0;
     let partial = false;
     for (const path of order) {
@@ -115,7 +124,7 @@ Deno.serve(async (req) => {
           continue;
         }
         try {
-          const got = await storeMail(sb, workspaceId, path, mail, external, suppressed, outreachThreads);
+          const got = await storeMail(sb, workspaceId, path, mail, external, suppressed, outreachThreads, outreachParties);
           if (got) { seen.add(external); imported++; }
           maxUid = Math.max(maxUid, mail.uid);
         } catch { /* eine Mail darf den Sync nicht abbrechen */ }
@@ -134,7 +143,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string, suppressed: Set<string>, outreachThreads: OutreachThread[] = []) {
+async function storeMail(sb: { from: (table: string) => any }, workspaceId: string, folder: string, mail: { uid: number; flags: string; header: string; text: string }, external: string, suppressed: Set<string>, outreachThreads: OutreachThread[] = [], outreachParties: { emails: Set<string>; domains: Set<string> } = { emails: new Set(), domains: new Set() }) {
   const from = headerValue(mail.header, "from");
   const to = headerValue(mail.header, "to");
   const cc = headerValue(mail.header, "cc");
@@ -203,7 +212,10 @@ async function storeMail(sb: { from: (table: string) => any }, workspaceId: stri
       if (linked) linked.status = plan.nextStatus;
     } catch { /* Zuordnung darf den Sync nicht stoppen */ }
   }
-  if (!plan && klass === "anfrage" && !match.id) {
+  const senderDomain = (email.split("@")[1] || "").replace(/^www\./, "");
+  const fromOutreach = outreachParties.emails.has(email) || (!!senderDomain && outreachParties.domains.has(senderDomain));
+  // Antworten auf Outreach legen keinen Kontakt an. Den legt Kim im Outreach-Modul per „Als Kontakt übernehmen“ an.
+  if (!plan && !fromOutreach && klass === "anfrage" && !match.id) {
     const created = await sb.from("contacts").insert({
       workspace_id: workspaceId,
       firma: email || subject.slice(0, 80),

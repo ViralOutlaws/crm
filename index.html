@@ -2233,6 +2233,7 @@ window._loginFallback = function() {
             <option value="instagram">Instagram</option>
             <option value="google">Google</option>
             <option value="kaltakquise">Kaltakquise</option>
+            <option value="outreach">Outreach</option>
             <option value="sonstiges">Sonstiges</option>
           </select>
         </div>
@@ -11336,7 +11337,7 @@ const STAGES=[
   {k:'angebot',l:'Angebot',c:'#d97706'},
   {k:'gewonnen',l:'Gewonnen',c:'#1f9e5a'},
   {k:'verloren',l:'Verloren',c:'#d63030'}];
-const QUELLEN={website:'Website','ki-check':'KI-Check',empfehlung:'Empfehlung',instagram:'Instagram',google:'Google',kaltakquise:'Kaltakquise',sonstiges:'Sonstiges'};
+const QUELLEN={website:'Website','ki-check':'KI-Check',empfehlung:'Empfehlung',instagram:'Instagram',google:'Google',kaltakquise:'Kaltakquise',outreach:'Outreach',sonstiges:'Sonstiges'};
 window.QUELLEN_LABELS=QUELLEN;
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const eur0=n=>Number(n||0).toLocaleString('de-DE',{maximumFractionDigits:0})+' €';

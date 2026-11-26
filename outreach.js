@@ -132,7 +132,7 @@
       { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Ihre Seite auf dem Handy', body: mail1, observations: obs1, status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
       { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Anfragen am Abend', body: mail2, observations: obs2, status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
       { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Termine auf Ihrer Seite', body: mail3, observations: obs3, status: 'entwurf', email: 'mara.holm@praxis-vitalis.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
-      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: 'c-demo', kundennummer: 'KD-10001' },
+      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: null, kundennummer: 'KD-10001' },
       { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Anfragen am Abend', body: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
       { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
     ];
@@ -619,7 +619,7 @@
               ? `<button type="button" class="btn-yellow" onclick="outreachSendNow(['${esc(d.id)}'])" ${state.sending ? 'disabled' : ''}>${ico('mail', 14)} Jetzt senden</button>`
               : `<button type="button" class="btn-yellow" onclick="outreachApprove('${esc(d.id)}')">${ico('check', 14)} Freigeben</button>`}
             <button type="button" class="btn-ghost" onclick="outreachReject('${esc(d.id)}')">Ablehnen</button>
-            <button type="button" class="btn-ghost" onclick="outreachMakeContact('${esc(d.id)}')">${ico('user', 14)} Kontakt anlegen</button>
+            ${contactButton(d)}
             <button type="button" class="btn-ghost" onclick="outreachDelete('${esc(d.id)}')">${ico('trash', 14)} Löschen</button>
           </div>
         </div>
@@ -658,11 +658,17 @@
     </button>`;
   }
 
+  // Outreach-Empfänger landen nicht automatisch in den CRM-Kontakten. Erst Kims Klick übernimmt sie.
+  function contactButton(d) {
+    if (d.contact_id) return `<span class="outreach-meta" title="Im CRM als Kontakt">${ico('user', 14)} Im CRM${d.kundennummer ? ' · ' + esc(d.kundennummer) : ''}</span>`;
+    return `<button type="button" class="btn-ghost" onclick="outreachMakeContact('${esc(d.id)}')" title="Legt einen CRM-Kontakt mit Firma, Ansprechpartner, Adresse, Branche und Mailverlauf an">${ico('user', 14)} Als Kontakt übernehmen</button>`;
+  }
+
   function threadHtml(d) {
     const t = targetOf(d.target_id);
     const msgs = state.messages.filter((m) => m.draft_id === d.id);
     const locked = d.status === 'abgemeldet';
-    return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div></div>${statusPill(d.status)}</div>
+    return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div></div><div class="outreach-row" style="margin:0;align-items:center">${contactButton(d)}${statusPill(d.status)}</div></div>
       ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : 'Antwort'} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
       ${locked ? '<p class="outreach-help">Abgemeldet. Diese Adresse bleibt auf der Sperrliste und wird nicht mehr angeschrieben.</p>' : `
       <div class="outreach-field"><label>Antwort, geht erst mit Senden raus</label><textarea id="outreach-reply" oninput="outreachReplyInput(this.value)">${esc(state.replyText)}</textarea></div>
@@ -925,12 +931,12 @@
     render();
   };
   window.outreachMakeContact = async function (id) {
-    if (state.demo) { toast('Demo: kein Kontakt und keine Kundennummer.'); return; }
+    if (state.demo) { const dd = draftOf(id); if (dd) { dd.contact_id = 'demo-kontakt'; dd.kundennummer = 'KD-DEMO'; } toast('Demo: Kontakt KD-DEMO übernommen.'); render(); return; }
     if (!signedIn()) { toast('Bitte anmelden.', true); return; }
     const sb = await getSupabase();
     const { data, error } = await sb.functions.invoke('outreach-send', { body: { op: 'contact', draftId: id } });
     if (error || (data && data.error)) { toast((data && data.error) || error.message, true); return; }
-    toast(data && data.kundennummer ? 'Kontakt ' + data.kundennummer : 'Kontakt verknüpft.');
+    toast(data && data.kundennummer ? 'Als Kontakt übernommen: ' + data.kundennummer : 'Kontakt verknüpft.');
     const d = draftOf(id);
     if (d && data) { d.contact_id = data.contactId; d.kundennummer = data.kundennummer; }
     render();
