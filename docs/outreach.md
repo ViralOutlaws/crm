@@ -98,3 +98,9 @@ Pages-Deploy für PR #31 (vo-crm-v18) neu angestoßen.
 - **Bereits angeschrieben:** Tabelle `outreach_contacted` (Firma, Domain, E-Mail, OSM-ID, Ort, Datum, Betreff, Quelle). Ein Trigger trägt jede gesendete Mail automatisch ein. Alte Listen (Saley 25.11., Kaltakquise 09./10.11.) sind importiert (`/workspace/outreach-import/import_lists.py`). Recherche, Entwurf und Versand überspringen Treffer über E-Mail, Domain, Firmenname oder OSM-ID. UI: Freigabe → „Bereits angeschrieben“.
 - **Blockliste:** Einträge vom Typ `domain` sperren jetzt die ganze Domain.
 - **Durchsatz:** Cron alle 5 Minuten, 4 Websites pro Lauf (max. 6), bis zu 40 Treffer pro Overpass-Abfrage, maps.mail.ru zuerst (overpass-api.de antwortet aus der Cloud oft 406).
+
+### Kontakte aus Outreach (26.11.2026)
+- Versand legt keinen CRM-Kontakt und keine Kundennummer mehr an. Alles bleibt im Outreach-Modul (Entwurf, `outreach_contacted`, Outreach-Postfach).
+- „Als Kontakt übernehmen“ (Postfach-Verlauf oder Editor) legt den Kontakt mit Quelle `outreach`, Branche, Adresse und Mailverlauf als Notizen an und verknüpft Entwurf und Gespräche.
+- mail-sync legt für Absender aus `outreach_contacted` oder Outreach-Entwürfen keinen Kontakt an.
+- Frühere Auto-Kontakte (KD-10062 bis KD-10086) tragen `meta.outreach_auto = true`; sie wurden nicht gelöscht.
