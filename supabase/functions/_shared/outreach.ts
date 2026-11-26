@@ -403,6 +403,7 @@ function cleanFirm(raw: string): string {
   return String(raw || "")
     .replace(/^\s*(impressum|kontakt|startseite|home|willkommen)\s*[-–—|:]\s*/i, "")
     .replace(/^\s*(webseite|website|homepage) der\s+/i, "")
+    .replace(/^\s*(rechtliche hinweise|angaben gem(ä|ae)(ß|ss) § ?5 tmg|anbieterkennzeichnung|impressum)\s*(der|des|zur|von|:|-|–)?\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -996,6 +997,7 @@ export function branchVoice(branche?: string | null, query?: string | null): Bra
   if (/physio/.test(s)) return { key: "praxis", label: "Physiotherapie-Praxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
   if (/ärzt|aerzt|arzt|praxis|praxen|klinik|doctor|clinic|heilprakt/.test(s)) return { key: "praxis", label: "Arztpraxen", kunden: "Patienten", ziel: "Terminanfragen", akt: "einen Termin anfragen", woanders: "fragen bei der nächsten Praxis an", wegZu: "zur Terminanfrage", wir: "Praxen moderne Websites und KI-Lösungen", betriebNom: "Ihre Praxis", betriebAkk: "Ihre Praxis" };
   if (/ingenieur/.test(s)) return { key: "industrie", label: "Ingenieurbüros", kunden: "Auftraggeber", ziel: "Projektanfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Büro", wegZu: "zur Projektanfrage", wir: "Ingenieurbüros moderne Websites und KI-Lösungen", betriebNom: "Ihr Büro", betriebAkk: "Ihr Büro" };
+  if (/strumpf|textil|lebensmittel|kunststoff|druckerei|verpackung|chemie|^industrie$|man_made=works/.test(s.trim()) || /^\s*industrie\s*$/.test(s)) return { key: "industrie", label: "Industriebetrieben", kunden: "Einkäufer", ziel: "Anfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Anbieter", wegZu: "zur Anfrage", wir: "Industriebetrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Unternehmen", betriebAkk: "Ihr Unternehmen" };
   if (/maschinen|industrie|metall|engineer|fertigung|anlagenbau|man_made=works/.test(s)) return { key: "industrie", label: "Maschinenbau-Unternehmen", kunden: "Einkäufer", ziel: "Projektanfragen", akt: "eine Anfrage stellen", woanders: "schreiben dem nächsten Anbieter", wegZu: "zur Projektanfrage", wir: "Industriebetrieben moderne Websites und KI-Lösungen", betriebNom: "Ihr Unternehmen", betriebAkk: "Ihr Unternehmen" };
   if (/gastro|restaurant|café|cafe|gasthof|gasthaus|bistro|wirtshaus/.test(s)) return { key: "gastro", label: "Restaurants", kunden: "Gäste", ziel: "Reservierungen", akt: "einen Tisch reservieren", woanders: "reservieren beim nächsten Restaurant", wegZu: "zur Reservierung", wir: "Restaurants moderne Websites", betriebNom: "Ihr Restaurant", betriebAkk: "Ihr Restaurant" };
   if (/immobil|makler|estate/.test(s)) return { key: "immobilien", label: "Immobilienbüros", kunden: "Interessenten", ziel: "Anfragen", akt: "eine Anfrage stellen", woanders: "melden sich beim nächsten Makler", wegZu: "zur Anfrage", wir: "Immobilienbüros moderne Websites und KI-Lösungen", betriebNom: "Ihr Büro", betriebAkk: "Ihr Büro" };
