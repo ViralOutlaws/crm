@@ -651,7 +651,8 @@ export function replyPlan(input: {
   text: string;
   header: string;
   drafts: OutreachThread[];
-}): { draftId: string; contactId: string | null; nextStatus: "antwort" | "abgemeldet"; blockEmail: string | null; unread: true } | null {
+  auto?: boolean;
+}): { draftId: string; contactId: string | null; nextStatus: "antwort" | "abgemeldet" | "gesendet"; blockEmail: string | null; unread: true; auto: boolean } | null {
   const open = input.drafts.filter((d) => d.status === "gesendet" || d.status === "antwort" || d.status === "abgemeldet");
   const refs = referencedIds(input.header);
   let hit = open.find((d) => d.messageId && refs.includes(normalizeMessageId(d.messageId)));
@@ -661,6 +662,10 @@ export function replyPlan(input: {
     hit = open.find((d) => d.email.toLowerCase() === from && key.length > 0 && threadKey(d.subject) === key);
   }
   if (!hit) return null;
+  if (input.auto) {
+    // Abwesenheitsnotiz: sichtbar, aber keine echte Antwort und nie eine Sperre.
+    return { draftId: hit.id, contactId: hit.contactId || null, nextStatus: hit.status as "antwort" | "abgemeldet" | "gesendet", blockEmail: null, unread: true, auto: true };
+  }
   const opt = isOptOut(input.text) || hit.status === "abgemeldet";
   return {
     draftId: hit.id,
@@ -668,6 +673,7 @@ export function replyPlan(input: {
     nextStatus: opt ? "abgemeldet" : "antwort",
     blockEmail: opt ? hit.email.toLowerCase() : null,
     unread: true,
+    auto: false,
   };
 }
 

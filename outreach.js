@@ -150,6 +150,7 @@
       { id: 'm1', draft_id: 'd4', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Ihre Seite auf dem Handy', body_text: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), created_at: '2026-11-20T09:00:00.000Z' },
       { id: 'm2', draft_id: 'd5', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Anfragen am Abend', body_text: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), created_at: '2026-11-18T09:00:00.000Z' },
       { id: 'm3', draft_id: 'd5', direction: 'in', from_addr: 'noel.klar@klarwerk.example.test', subject: 'AW: Anfragen am Abend', body_text: 'Guten Tag Kim,\n\ndanke für die Zeilen. Die Anfragen landen bei mir im Postfach. Können Sie kurz sagen, wie so ein Ablauf bei einem kleinen Betrieb aussieht?\n\nViele Grüße\nNoel Klar', created_at: '2026-11-19T14:12:00.000Z' },
+      { id: 'm6', draft_id: 'd4', direction: 'in', auto: true, from_addr: 'ada.seenadel@seenadel.example.test', subject: 'Automatische Antwort: Ihre Seite auf dem Handy', body_text: 'Vielen Dank für Ihre Nachricht. Ich bin bis 30.11. nicht im Büro und melde mich danach.\n\nAda Seenadel', created_at: '2026-11-20T09:01:00.000Z' },
       { id: 'm4', draft_id: 'd6', direction: 'out', from_addr: 'kim@viraloutlaws.de', subject: 'Ihre Seite auf dem Handy', body_text: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), created_at: '2026-11-12T09:00:00.000Z' },
       { id: 'm5', draft_id: 'd6', direction: 'in', from_addr: 'ruth.nord@nordlicht.example.test', subject: 'AW: Nordlicht Demo', body_text: 'Bitte abmelden. Kein Interesse an weiteren Nachrichten.', created_at: '2026-11-12T11:40:00.000Z' },
     ];
@@ -208,6 +209,7 @@
   .bubble{padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:13px;line-height:1.5;white-space:pre-wrap}
   .bubble.out{border-left:3px solid #f5c400;background:rgba(245,196,0,.06)}
   .bubble.in{background:var(--glass-bg,rgba(255,255,255,.4))}
+  .bubble.auto{border-style:dashed;opacity:.85}
   .dot-unread{width:8px;height:8px;border-radius:99px;background:#d63030;display:inline-block}
   #outreach-editor.overlay{z-index:600}
   #outreach-confirm.overlay{z-index:700}
@@ -321,8 +323,17 @@
     return plan;
   }
   function lastReplyAt(d) {
-    const ins = state.messages.filter((m) => m.draft_id === d.id && m.direction === 'in');
+    const ins = state.messages.filter((m) => m.draft_id === d.id && m.direction === 'in' && !m.auto);
     return ins.length ? ins[ins.length - 1].created_at : null;
+  }
+  // Abwesenheitsnotizen / Autoresponder: sichtbar, aber keine echte Antwort.
+  function lastAutoAt(d) {
+    const ins = state.messages.filter((m) => m.draft_id === d.id && m.direction === 'in' && m.auto);
+    return ins.length ? ins[ins.length - 1].created_at : null;
+  }
+  function autoHtml(d) {
+    const a = lastAutoAt(d);
+    return a ? `<div class="outreach-when mute"><i class="outreach-when-dot"></i>Automatische Antwort ${esc(whenText(a))}</div>` : '';
   }
   function whenHtml(d, plan) {
     if (d.status === 'freigegeben') {
@@ -335,10 +346,13 @@
     }
     if (d.status === 'antwort') {
       const r = lastReplyAt(d);
-      return `<div class="outreach-when in"><i class="outreach-when-dot"></i>${r ? 'Antwort ' + esc(whenText(r)) : 'Antwort'}${d.sent_at ? ' · gesendet ' + esc(whenText(d.sent_at)) : ''}</div>`;
+      return `<div class="outreach-when in"><i class="outreach-when-dot"></i>${r ? 'Antwort ' + esc(whenText(r)) : 'Antwort'}${d.sent_at ? ' · gesendet ' + esc(whenText(d.sent_at)) : ''}</div>` + autoHtml(d);
     }
     if (d.status === 'gesendet' || d.status === 'abgemeldet') {
-      return d.sent_at ? `<div class="outreach-when"><i class="outreach-when-dot"></i>Gesendet ${esc(whenText(d.sent_at))}</div>` : '';
+      const r = d.status === 'abgemeldet' ? lastReplyAt(d) : null;
+      return (d.sent_at ? `<div class="outreach-when"><i class="outreach-when-dot"></i>Gesendet ${esc(whenText(d.sent_at))}</div>` : '')
+        + (r ? `<div class="outreach-when in"><i class="outreach-when-dot"></i>Antwort ${esc(whenText(r))}</div>` : '')
+        + autoHtml(d);
     }
     return '';
   }
@@ -733,13 +747,15 @@
   function mailHtml() {
     const q = state.q.trim().toLowerCase();
     const rows = state.drafts.filter((d) => ['gesendet', 'antwort', 'abgemeldet'].includes(d.status)).filter((d) => {
-      if (state.mailFilter !== 'alle' && d.status !== state.mailFilter) return false;
+      if (state.mailFilter === 'auto') { if (!lastAutoAt(d)) return false; }
+      else if (state.mailFilter !== 'alle' && d.status !== state.mailFilter) return false;
       if (!q) return true;
       const t = targetOf(d.target_id);
       const blob = `${d.subject} ${d.email} ${t?.firma || ''}`.toLowerCase();
       return blob.includes(q);
     });
-    const chips = [['alle', 'Alle'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['abgemeldet', 'Abgemeldet']];
+    const autoCount = state.drafts.filter((d) => lastAutoAt(d)).length;
+    const chips = [['alle', 'Alle'], ['gesendet', 'Gesendet'], ['antwort', 'Antwort'], ['auto', 'Automatisch' + (autoCount ? ' (' + autoCount + ')' : '')], ['abgemeldet', 'Abgemeldet']];
     const open = draftOf(state.threadId);
     return `<div class="outreach-row" style="margin-bottom:8px">
       <div class="seg">${chips.map(([id, label]) => `<button type="button" class="${state.mailFilter === id ? 'on' : ''}" onclick="outreachMailFilter('${id}')">${label}</button>`).join('')}</div>
@@ -757,7 +773,7 @@
     return `<button type="button" class="dash-card outreach-draft ${state.threadId === d.id ? 'on' : ''}" onclick="outreachThread('${esc(d.id)}')">
       <span>${d.unread ? '<i class="dot-unread" aria-label="Ungelesen"></i>' : ''}</span>
       <span style="text-align:left"><b>${esc(t?.firma || d.email || '')}</b><span class="outreach-meta" style="display:block">${esc(p?.person || '')} · ${esc(d.subject || '')}</span>${whenHtml(d)}</span>
-      <span class="outreach-row-end">${statusPill(d.status)}</span>
+      <span class="outreach-row-end">${statusPill(d.status)}${lastAutoAt(d) ? '<span class="pill mute">Automatisch</span>' : ''}</span>
     </button>`;
   }
 
@@ -772,7 +788,7 @@
     const msgs = state.messages.filter((m) => m.draft_id === d.id);
     const locked = d.status === 'abgemeldet';
     return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div>${whenHtml(d)}</div><div class="outreach-row" style="margin:0;align-items:center">${contactButton(d)}${statusPill(d.status)}</div></div>
-      ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : 'Antwort'}${m.created_at ? ' ' + esc(whenText(m.created_at)) : ''} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
+      ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}${m.auto ? ' auto' : ''}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : m.auto ? 'Automatische Antwort' : 'Antwort'}${m.created_at ? ' ' + esc(whenText(m.created_at)) : ''} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
       ${locked ? '<p class="outreach-help">Abgemeldet. Diese Adresse bleibt auf der Sperrliste und wird nicht mehr angeschrieben.</p>' : `
       <div class="outreach-field"><label>Antwort, geht erst mit Senden raus</label><textarea id="outreach-reply" oninput="outreachReplyInput(this.value)">${esc(state.replyText)}</textarea></div>
       <div class="outreach-row">
@@ -781,7 +797,18 @@
       </div>`}`;
   }
 
-  window.outreachTab = function (id) { state.tab = id; render(); };
+  window.outreachTab = function (id) { state.tab = id; render(); if (id === 'postfach') fetchReplies(); };
+  // Antworten sofort abholen (sonst holt sie der Cron alle 2 Minuten). Höchstens einmal pro Minute.
+  let lastFetch = 0;
+  async function fetchReplies() {
+    if (state.demo || !signedIn() || Date.now() - lastFetch < 60000) return;
+    lastFetch = Date.now();
+    try {
+      const sb = await getSupabase();
+      const { data } = await sb.functions.invoke('mail-sync', { body: { op: 'outreach' } });
+      if (data && data.stored) { state.loaded = false; await loadLive(); render(); toast(data.stored === 1 ? '1 neue Antwort.' : data.stored + ' neue Antworten.'); }
+    } catch { /* Cron holt sie sonst */ }
+  }
   window.outreachQueue = function (id) { state.queue = id; render(); };
   window.outreachContactedSearch = function (value) {
     state.contactedQ = String(value || '').slice(0, 80);
