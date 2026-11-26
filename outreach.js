@@ -130,11 +130,11 @@
     ];
     state.drafts = [
       { id: 'd1', target_id: 't1', person_id: 'p1', subject: 'Ihre Seite auf dem Handy', body: mail1, observations: obs1, status: 'entwurf', email: 'lena.muster@musterwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
-      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Anfragen am Abend', body: mail2, observations: obs2, status: 'freigegeben', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
+      { id: 'd2', target_id: 't2', person_id: 'p2', subject: 'Anfragen am Abend', body: mail2, observations: obs2, status: 'freigegeben', approved_at: '2026-11-26T09:00:00.000Z', email: 'info@beispielhof.example.test', email_art: 'generisch', guess_ok: false, unread: false },
       { id: 'd3', target_id: 't3', person_id: 'p4', subject: 'Termine auf Ihrer Seite', body: mail3, observations: obs3, status: 'entwurf', email: 'mara.holm@praxis-vitalis.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
-      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: null, kundennummer: 'KD-10001' },
-      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Anfragen am Abend', body: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
-      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
+      { id: 'd4', target_id: 't5', person_id: 'p5', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Seenadel').replaceAll('Musterwerk GmbH', 'Seenadel Studio'), observations: [], status: 'gesendet', sent_at: '2026-11-20T09:00:00.000Z', email: 'ada.seenadel@seenadel.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false, contact_id: null, kundennummer: 'KD-10001' },
+      { id: 'd5', target_id: 't6', person_id: 'p6', subject: 'Anfragen am Abend', body: mail2.replace('Herr Beispiel', 'Herr Klar').replaceAll('Beispielhof', 'Klarwerk OHG'), observations: obs2, status: 'antwort', sent_at: '2026-11-18T09:00:00.000Z', email: 'noel.klar@klarwerk.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: true },
+      { id: 'd6', target_id: 't7', person_id: 'p7', subject: 'Ihre Seite auf dem Handy', body: mail1.replace('Frau Muster', 'Frau Nord').replaceAll('Musterwerk GmbH', 'Nordlicht Demo'), observations: [], status: 'abgemeldet', sent_at: '2026-11-12T09:00:00.000Z', email: 'ruth.nord@nordlicht.example.test', email_art: 'veroeffentlicht', guess_ok: false, unread: false },
     ];
     state.targets.push(
       { id: 't5', firma: 'Seenadel Studio', web: 'https://seenadel.example.test', domain: 'seenadel.example.test', status: 'recherchiert' },
@@ -196,6 +196,13 @@
   .outreach-draft:hover{border-color:rgba(245,196,0,.7)}
   .outreach-draft.on{box-shadow:inset 3px 0 0 #f5c400}
   .outreach-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .pill{white-space:nowrap}
+  .outreach-when{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--gold,#b8860b)}
+  .outreach-when.mute{color:var(--muted);font-weight:500}
+  .outreach-when.in{color:#1f7a45}
+  body.dark-mode .outreach-when.in{color:#8fd7ad}
+  .outreach-when-dot{width:6px;height:6px;border-radius:99px;background:currentColor;flex:none}
+  .outreach-row-end{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
   .mail-split{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:12px;min-height:520px}
   .mail-thread{display:flex;flex-direction:column;gap:10px;min-width:0}
   .bubble{padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:13px;line-height:1.5;white-space:pre-wrap}
@@ -236,6 +243,7 @@
     .outreach-grid,.mail-split{grid-template-columns:1fr}
     .outreach-draft{grid-template-columns:28px minmax(0,1fr)}
     .outreach-actions{grid-column:1 / -1;justify-content:flex-start}
+    .outreach-draft > .outreach-row-end{grid-column:2;align-items:flex-start;flex-direction:row;flex-wrap:wrap}
     .profile-row,.profile-head{grid-template-columns:24px minmax(0,1fr)}
   }`;
   document.head.appendChild(css);
@@ -247,6 +255,92 @@
   function statusPill(status) {
     const cls = status === 'abgemeldet' || status === 'abgelehnt' ? 'stop' : status === 'antwort' ? 'ok' : status === 'gesendet' || status === 'freigegeben' ? 'warn' : 'mute';
     return `<span class="pill ${cls}">${esc(STATUS[status] || status)}</span>`;
+  }
+
+  // Zeiten in Berlin-Zeit: "heute 11:09", "gestern 11:09", "Fr 28.11. 8:00".
+  const TZ = 'Europe/Berlin';
+  function berlinParts(t) {
+    const f = new Intl.DateTimeFormat('de-DE', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' });
+    const o = {};
+    for (const x of f.formatToParts(new Date(t))) o[x.type] = x.value;
+    return { key: `${o.year}-${o.month}-${o.day}`, day: `${o.day}.${o.month}.`, wd: String(o.weekday || '').replace('.', ''), h: Number(o.hour), m: Number(o.minute), time: `${Number(o.hour)}:${o.minute}` };
+  }
+  function whenText(t, now = Date.now()) {
+    if (!t || Number.isNaN(new Date(t).getTime())) return '';
+    const p = berlinParts(t);
+    const today = berlinParts(now).key;
+    const tomorrow = berlinParts(now + 86400000).key;
+    const yesterday = berlinParts(now - 86400000).key;
+    const dayWord = p.key === today ? 'heute' : p.key === tomorrow ? 'morgen' : p.key === yesterday ? 'gestern' : `${p.wd} ${p.day}`;
+    return `${dayWord} ${p.time}`;
+  }
+  // Voraussichtliche Versandzeiten der freigegebenen Mails, gleiche Reihenfolge und Regeln wie claim_outreach_draft:
+  // Fenster (Tage, Von/Bis), Tageslimit, Abstand. Der Cron läuft jeden Minute, real liegt der Takt bei Abstand + ~1 Min.
+  function sendPlan(now = Date.now()) {
+    const st = state.settings || {};
+    const gap = Math.max(1, Number(st.gap_minutes) || 2) + 1;
+    const from = Number.isFinite(Number(st.hour_from)) ? Number(st.hour_from) : 8;
+    const to = Number.isFinite(Number(st.hour_to)) ? Number(st.hour_to) : 18;
+    const days = Array.isArray(st.weekdays) && st.weekdays.length ? st.weekdays.map(Number) : [1, 2, 3, 4, 5];
+    const limit = Math.max(1, Number(st.daily_limit) || 50);
+    const outs = state.messages.filter((m) => m.direction === 'out').map((m) => new Date(m.created_at).getTime()).filter((x) => !Number.isNaN(x));
+    const todayKey = berlinParts(now).key;
+    let count = outs.filter((x) => berlinParts(x).key === todayKey).length;
+    const last = outs.length ? Math.max(...outs) : 0;
+    const queue = state.drafts.filter((d) => d.status === 'freigegeben' && (d.email_art !== 'vermutet' || d.guess_ok))
+      .sort((a, b) => (a.last_error ? 1 : 0) - (b.last_error ? 1 : 0) || String(a.approved_at || '9').localeCompare(String(b.approved_at || '9')) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    const plan = {};
+    let t = Math.max(now + 60000, last ? last + gap * 60000 : 0);
+    let dayKey = berlinParts(t).key;
+    if (dayKey !== todayKey) count = 0;
+    const isoDow = (x) => { const w = new Date(new Date(x).toLocaleString('en-US', { timeZone: TZ })).getDay(); return w === 0 ? 7 : w; };
+    const startOfNextDay = (x) => {
+      // nächster Tag, Startstunde in Berlin
+      const base = x - (x % 60000);
+      const key = berlinParts(base).key;
+      let y = base;
+      for (let i = 0; i < 60; i++) {
+        y += 3600000;
+        const p = berlinParts(y);
+        if (p.key !== key && p.h === from) return y - p.m * 60000;
+      }
+      return base + 86400000;
+    };
+    queue.forEach((d, i) => {
+      for (let guard = 0; guard < 30; guard++) {
+        const p = berlinParts(t);
+        if (p.key !== dayKey) { dayKey = p.key; count = 0; }
+        if (!days.includes(isoDow(t)) || p.h >= to || count >= limit) { t = startOfNextDay(t); continue; }
+        if (p.h < from) { t = t + (from - p.h) * 3600000 - p.m * 60000; continue; }
+        break;
+      }
+      plan[d.id] = { at: t, pos: i + 1, newDay: berlinParts(t).key !== todayKey };
+      count += 1;
+      t += gap * 60000;
+    });
+    return plan;
+  }
+  function lastReplyAt(d) {
+    const ins = state.messages.filter((m) => m.draft_id === d.id && m.direction === 'in');
+    return ins.length ? ins[ins.length - 1].created_at : null;
+  }
+  function whenHtml(d, plan) {
+    if (d.status === 'freigegeben') {
+      if (state.settings && state.settings.paused) return `<div class="outreach-when mute"><i class="outreach-when-dot"></i>Freigegeben · Versand pausiert</div>`;
+      const x = plan && plan[d.id];
+      if (!x) return `<div class="outreach-when mute"><i class="outreach-when-dot"></i>Freigegeben · wartet</div>`;
+      const txt = whenText(x.at);
+      const label = / \d+:00$/.test(txt) && x.newDay ? txt.replace(/ (\d+:\d+)$/, ' ab $1') : txt.replace(/ (\d+:\d+)$/, ' ~$1');
+      return `<div class="outreach-when"><i class="outreach-when-dot"></i>Voraussichtlich ${esc(label)} · Platz ${esc(x.pos)}</div>`;
+    }
+    if (d.status === 'antwort') {
+      const r = lastReplyAt(d);
+      return `<div class="outreach-when in"><i class="outreach-when-dot"></i>${r ? 'Antwort ' + esc(whenText(r)) : 'Antwort'}${d.sent_at ? ' · gesendet ' + esc(whenText(d.sent_at)) : ''}</div>`;
+    }
+    if (d.status === 'gesendet' || d.status === 'abgemeldet') {
+      return d.sent_at ? `<div class="outreach-when"><i class="outreach-when-dot"></i>Gesendet ${esc(whenText(d.sent_at))}</div>` : '';
+    }
+    return '';
   }
 
   function boot() {
@@ -318,7 +412,7 @@
       sb.from('outreach_targets').select('*').order('created_at', { ascending: false }).limit(80),
       sb.from('outreach_people').select('*').limit(240),
       sb.from('outreach_drafts').select('*').order('updated_at', { ascending: false }).limit(160),
-      sb.from('outreach_messages').select('*').order('created_at', { ascending: true }).limit(400),
+      sb.from('outreach_messages').select('*').order('created_at', { ascending: false }).limit(400),
       sb.from('outreach_profiles').select('*').order('sort'),
       sb.from('outreach_areas').select('id, name, state, sort, region').order('sort'),
       sb.from('outreach_coverage').select('profile_id, area_id, searched_at').limit(5000),
@@ -336,7 +430,7 @@
     state.targets = targets.data || [];
     state.people = people.data || [];
     state.drafts = drafts.data || [];
-    state.messages = messages.data || [];
+    state.messages = (messages.data || []).slice().reverse();
     state.profiles = profiles.data || [];
     state.areas = areas.data || [];
     state.coverage = coverage.data || [];
@@ -528,7 +622,7 @@
     </div>
     <p class="outreach-help">${state.settings.paused ? 'Der Versand ist pausiert. Weder der Knopf noch der Hintergrund schicken etwas.' : 'Freigegebene Mails gehen im Hintergrund raus, auch wenn diese Seite zu ist, oder sofort per „Jetzt senden“ (ohne Wartezeit, nach Bestätigung). Montag bis Freitag, 8 bis 18 Uhr Berlin, Abstand ' + esc(state.settings.gap_minutes) + ' Minuten, höchstens ' + esc(state.settings.daily_limit) + ' am Tag. Vermutete Adressen nur mit Häkchen. Ohne Freigabe geht nichts raus.'}</p>
     ${state.sendResult ? `<p class="outreach-help outreach-run-result ${state.sendResult.bad ? 'bad' : ''}" role="status">${esc(state.sendResult.text)}</p>` : ''}
-    ${state.queue === 'angeschrieben' ? contactedHtml() : `<div class="outreach-list" id="outreach-queue">${rows.map(draftRow).join('') || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`}`;
+    ${state.queue === 'angeschrieben' ? contactedHtml() : `<div class="outreach-list" id="outreach-queue">${(() => { const plan = sendPlan(); return rows.map((d) => draftRow(d, plan)).join(''); })() || '<div class="dash-card outreach-card"><p class="outreach-help">Keine Entwürfe in dieser Ansicht.</p></div>'}</div>`}`;
   }
 
   const SOURCE_LABEL = {
@@ -565,12 +659,12 @@
     </div>`;
   }
 
-  function draftRow(d) {
+  function draftRow(d, plan) {
     const t = targetOf(d.target_id);
     const p = personOf(d.person_id);
     return `<article class="dash-card outreach-draft ${state.editorId === d.id ? 'on' : ''}" onclick="outreachEdit('${esc(d.id)}')">
       <input type="checkbox" ${state.picked[d.id] ? 'checked' : ''} onclick="event.stopPropagation();outreachPick('${esc(d.id)}', this.checked)" aria-label="Auswählen">
-      <div><b>${esc(d.subject || 'Ohne Betreff')}</b><div class="outreach-meta">${esc(t?.firma || '')}${p?.person ? ' · ' + esc(p.person) : ''} · ${esc(d.email || '')}</div></div>
+      <div><b>${esc(d.subject || 'Ohne Betreff')}</b><div class="outreach-meta">${esc(t?.firma || '')}${p?.person ? ' · ' + esc(p.person) : ''} · ${esc(d.email || '')}</div>${whenHtml(d, plan)}</div>
       <div class="outreach-actions">${artPill(d.email_art)}${statusPill(d.status)}${d.status === 'freigegeben' ? `<button type="button" class="btn-yellow btn-sm outreach-now" onclick="event.stopPropagation();outreachSendNow(['${esc(d.id)}'])" ${state.sending ? 'disabled' : ''}>${ico('mail', 12)} Jetzt senden</button>` : ''}</div>
     </article>`;
   }
@@ -607,7 +701,8 @@
         <div style="padding:16px 20px 20px">
           <div class="outreach-editor-grid">
             <div>
-              <p class="outreach-help">${esc(t?.firma || '')} · ${esc(d.email || '')} ${artPill(d.email_art)}</p>
+              <p class="outreach-help">${esc(t?.firma || '')} · ${esc(d.email || '')} ${artPill(d.email_art)} ${statusPill(d.status)}</p>
+              ${whenHtml(d, d.status === 'freigegeben' ? sendPlan() : null)}
               ${d.email_art === 'generisch' ? '<p class="outreach-help">Nur eine allgemeine Adresse. Kein Name an dieser Mail.</p>' : ''}
               ${guess ? `<label class="outreach-check"><input type="checkbox" ${d.guess_ok ? 'checked' : ''} onchange="outreachGuessOk('${esc(d.id)}', this.checked)"> Vermutete Adresse bewusst freigeben. Ohne dieses Häkchen geht die Mail nicht raus.</label>` : ''}
               <div class="outreach-field"><label>Betreff</label><input value="${esc(d.subject || '')}" oninput="outreachEditField('${esc(d.id)}','subject', this.value)"></div>
@@ -661,8 +756,8 @@
     const p = personOf(d.person_id);
     return `<button type="button" class="dash-card outreach-draft ${state.threadId === d.id ? 'on' : ''}" onclick="outreachThread('${esc(d.id)}')">
       <span>${d.unread ? '<i class="dot-unread" aria-label="Ungelesen"></i>' : ''}</span>
-      <span style="text-align:left"><b>${esc(t?.firma || d.email || '')}</b><span class="outreach-meta" style="display:block">${esc(p?.person || '')} · ${esc(d.subject || '')}</span></span>
-      ${statusPill(d.status)}
+      <span style="text-align:left"><b>${esc(t?.firma || d.email || '')}</b><span class="outreach-meta" style="display:block">${esc(p?.person || '')} · ${esc(d.subject || '')}</span>${whenHtml(d)}</span>
+      <span class="outreach-row-end">${statusPill(d.status)}</span>
     </button>`;
   }
 
@@ -676,8 +771,8 @@
     const t = targetOf(d.target_id);
     const msgs = state.messages.filter((m) => m.draft_id === d.id);
     const locked = d.status === 'abgemeldet';
-    return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div></div><div class="outreach-row" style="margin:0;align-items:center">${contactButton(d)}${statusPill(d.status)}</div></div>
-      ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : 'Antwort'} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
+    return `<div class="outreach-co-top"><div><b>${esc(t?.firma || d.email)}</b><div class="outreach-meta">${esc(d.email || '')}</div>${whenHtml(d)}</div><div class="outreach-row" style="margin:0;align-items:center">${contactButton(d)}${statusPill(d.status)}</div></div>
+      ${msgs.map((m) => `<div class="bubble ${m.direction === 'out' ? 'out' : 'in'}"><div class="outreach-meta">${m.direction === 'out' ? 'Gesendet' : 'Antwort'}${m.created_at ? ' ' + esc(whenText(m.created_at)) : ''} · ${esc(m.from_addr || '')}</div>${esc(m.body_text || '')}</div>`).join('')}
       ${locked ? '<p class="outreach-help">Abgemeldet. Diese Adresse bleibt auf der Sperrliste und wird nicht mehr angeschrieben.</p>' : `
       <div class="outreach-field"><label>Antwort, geht erst mit Senden raus</label><textarea id="outreach-reply" oninput="outreachReplyInput(this.value)">${esc(state.replyText)}</textarea></div>
       <div class="outreach-row">
